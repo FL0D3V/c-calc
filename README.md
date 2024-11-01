@@ -2,7 +2,7 @@
 A simple calculator implemented in c which parses a math function and tries to execute it.
 
 # build
-Just run the following commands to build and test the demo.
+Just run the following commands to build and test the project.
 <br>
 ```
 make
