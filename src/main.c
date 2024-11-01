@@ -1,14 +1,13 @@
-#include "calc.h"
+#include <stdio.h>
 
+#include "lexer.h"
 
 int main(int argc, char** argv)
 {
   (void) argc;
+  (void) argv;
 
   printf("Hello World!\n");
-  
-  // TODO: Implement
-  calc_init(argv[0]);
 
   return 0;
 }
