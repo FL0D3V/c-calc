@@ -1,12 +1,14 @@
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include "calc.h"
+
 
 int main(int argc, char** argv)
 {
   (void) argc;
-  (void) argv;
 
   printf("Hello World!\n");
+  
+  // TODO: Implement
+  calc_init(argv[0]);
+
   return 0;
 }
