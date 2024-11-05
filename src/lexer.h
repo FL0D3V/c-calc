@@ -1,7 +1,7 @@
-// Used for handling the tokenization of an input text.
+// Used for handling the tokenization and lexing of an input math equation.
 
-#ifndef _TOKENIZER_H_
-#define _TOKENIZER_H_
+#ifndef _LEXER_H_
+#define _LEXER_H_
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,24 +13,47 @@
 #include "darray.h"
 
 
-static size_t seek_spaces(const char* src)
-{
-  size_t srcStart = (size_t)src;
-  while (isspace(*src))
-    src++;
-  return PTR_DIFF(srcStart, src);
-}
-
-
+// All types
 typedef enum {
   TOKENTYPE_NUMBER,
-  TOKENTYPE_COMMA,
+  TOKENTYPE_COMMA,  // TODO: Rethink! Maybe just implement a different number type for REAL numbers.
   TOKENTYPE_OPERATOR,
   TOKENTYPE_LPARAM,
   TOKENTYPE_RPARAM,
 
   TOKENTYPE_COUNT
 } e_token_type;
+
+typedef enum {
+  OPERATION_ADD,
+  OPERATION_SUB,
+  OPERATION_MUL,
+  OPERATION_DIV,
+
+  OPERATION_COUNT
+} e_operation;
+
+
+typedef struct {
+  e_token_type type;
+  union {
+    int literal;
+    e_operation operation;
+  };
+} token_t;
+
+
+typedef struct {
+  token_t* items;
+  size_t count;
+  size_t capacity;
+
+  char* cleanedSrc;
+  size_t cleanedSrcCount;
+} token_list_t;
+
+
+// Enum to string conversion lists
 
 static const char* tokenTypeNames[TOKENTYPE_COUNT] = {
 	[TOKENTYPE_NUMBER] = "Number",
@@ -40,6 +63,47 @@ static const char* tokenTypeNames[TOKENTYPE_COUNT] = {
 	[TOKENTYPE_RPARAM] = "ClosingBrace"
 };
 
+static const char operationChars[OPERATION_COUNT] = {
+  [OPERATION_ADD] = '+',
+	[OPERATION_SUB] = '-',
+	[OPERATION_MUL] = '*',
+	[OPERATION_DIV] = '/'
+};
+
+static const char* operationNames[OPERATION_COUNT] = {
+	[OPERATION_ADD] = "Add",
+	[OPERATION_SUB] = "Subtract",
+	[OPERATION_MUL] = "Multiply",
+	[OPERATION_DIV] = "Divide"
+};
+
+
+// Method definitions
+
+token_list_t tokenize_ex(const char* src, const size_t len, bool debug);
+
+#define tokenize(src, len) tokenize_ex((src), (len), false)
+
+void print_tokens(token_list_t tokens);
+
+#define token_list_free(list)   \
+  do {                          \
+    da_free(list);              \
+    free((list).cleanedSrc);    \
+    (list).cleanedSrc = NULL;   \
+    (list).cleanedSrcCount = 0; \
+  } while(0)
+
+
+// Method implementations
+
+static size_t seek_spaces(const char* src)
+{
+  size_t srcStart = (size_t)src;
+  while (isspace(*src))
+    src++;
+  return PTR_DIFF(srcStart, src);
+}
 
 static bool is_comma(const char c)
 {
@@ -61,30 +125,6 @@ static int brace_to_token_type(const char c)
     return -1;
 }
 
-typedef enum {
-  OPERATION_ADD,
-  OPERATION_SUB,
-  OPERATION_MUL,
-  OPERATION_DIV,
-
-  OPERATION_COUNT
-} e_operation;
-
-static const char operationChars[OPERATION_COUNT] = {
-  [OPERATION_ADD] = '+',
-	[OPERATION_SUB] = '-',
-	[OPERATION_MUL] = '*',
-	[OPERATION_DIV] = '/'
-};
-
-static const char* operationNames[OPERATION_COUNT] = {
-	[OPERATION_ADD] = "Add",
-	[OPERATION_SUB] = "Subtract",
-	[OPERATION_MUL] = "Multiply",
-	[OPERATION_DIV] = "Divide"
-};
-
-
 static bool is_operation(const char c)
 {
   for (int i = 0; i < OPERATION_COUNT; ++i)
@@ -102,28 +142,27 @@ static int char_to_operation(const char c)
 }
 
 
-typedef struct {
-  e_token_type type;
-  union {
-    int literal;
-    e_operation operation;
-  };
-} token_t;
-
-
-typedef struct {
-  token_t* items;
-  size_t count;
-  size_t capacity;
-} token_list_t;
-
-
-#define DIGIT_BUFFER_LEN 256
-
-
-#define tokenize(src, len) (tokenize_ex((src), (len), false))
-
-// Tokenizes a given string like: "100.51 + (4 * 6.7) / 8"
+// Tokenizes and lexes a given string.
+// Example:
+//  In the output every line would represent a single token.
+//  Input:
+//    "10.5 + 2 * (7.2 - 5) / 6"
+//  Output:
+//    Number; Literal=10
+//    Comma
+//    Number; Literal=5
+//    Operator; Operation=Add
+//    Number; Literal=2
+//    Operator; Operation=Multiply
+//    OpenBrace
+//    Number; Literal=7
+//    Comma
+//    Number; Literal=2
+//    Operator; Operation=Subtract
+//    Number; Literal=5
+//    ClosingBrace
+//    Operator; Operation=Divide
+//    Number; Literal=6
 token_list_t tokenize_ex(const char* src, const size_t len, bool debug)
 {
   assert(src && "Given source was NULL!");
@@ -134,15 +173,12 @@ token_list_t tokenize_ex(const char* src, const size_t len, bool debug)
   const size_t srcStart = (size_t)src;
 
   token_list_t tokens = {0};
+
   string_builder_t digitBuff = {0};
+  string_builder_t cleanedSrcBuff = {0};
 
   if (debug)
     printf("\nInput='%s'; Length=%zu\n", src, len);
-
-  // For debugging.
-  string_builder_t cleanedSrc = {0};
-  //char cleanedSrc[len];
-  //size_t cleanedSrcIndex = 0;
 
   while (PTR_DIFF(srcStart, src) < len)
   {
@@ -212,16 +248,17 @@ token_list_t tokenize_ex(const char* src, const size_t len, bool debug)
       return tokens;
     }
 
-    if (debug)
-      sb_append_char(&cleanedSrc, *src);
+    sb_append_char(&cleanedSrcBuff, *src);
 
     src++;
   }
 
   if (debug)
-    printf("Cleaned='%s'; Length=%zu\n", cleanedSrc.items, cleanedSrc.count);
+    printf("Cleaned='%s'; Length=%zu\n", cleanedSrcBuff.items, cleanedSrcBuff.count);
 
-  sb_free(cleanedSrc);
+  tokens.cleanedSrc = cleanedSrcBuff.items;
+  tokens.cleanedSrcCount = cleanedSrcBuff.count;
+  //sb_free(cleanedSrcBuff);
 
   return tokens;
 }
@@ -235,8 +272,9 @@ void print_tokens(token_list_t tokens)
     return;
   }
 
-  printf("\nPrinting tokens:\n");
-  printf("Token-Count=%zu\n", tokens.count);
+  printf("\nPrinting tokens ('%zu' tokens found):\n", tokens.count);
+  printf("Original cleaned input is:\n");
+  printf("%s\n\n", tokens.cleanedSrc);
 
   for (size_t i = 0; i < tokens.count; ++i) {
     printf("Type=%s", tokenTypeNames[tokens.items[i].type]);
