@@ -26,7 +26,7 @@ $(BIN_DIR) $(OBJ_DIR):
 	mkdir -p $@
 
 check: $(EXE)
-	valgrind -s --leak-check=full --show-leak-kinds=all $^
+	valgrind -s --leak-check=full --track-origins=yes --show-leak-kinds=all $^
 
 clean:
 	@$(RM) -rv $(BIN_DIR) $(OBJ_DIR)

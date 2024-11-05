@@ -1,22 +1,15 @@
-#include "lexer.h"
+#include "tokenizer.h"
 
 int main(int argc, char** argv)
 {
   (void) argc;
   (void) argv;
 
-  const char* value = "100 + (4 * 6) / 8";
-  
-  printf("\nInput='%s'; Length=%zu\n", value, strlen(value));
+  const char* value = "  100.53 +  (4 *   6.4) /   8";
 
-  tokenizer_out_t tokens = tokenize(value, strlen(value));
-
-  if (tokens.error) {
-    printf(tokens.error);
-    return EXIT_FAILURE;
-  }
-
+  token_list_t tokens = tokenize_ex(value, strlen(value), true);
   print_tokens(tokens);
 
-  return EXIT_SUCCESS;
+  da_free(tokens);
+  return 0;
 }
