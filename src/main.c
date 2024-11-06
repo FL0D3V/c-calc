@@ -6,11 +6,14 @@ int main(int argc, char** argv)
   (void) argc;
   (void) argv;
 
+  //printf("ARGC: %d\n", argc);
+
   // TODO: Implement basic cli!
   
-  const char* value = "  100.53 +  (4 *   6.4) /   8";
+  const char* input = "  100.53 +  (4 *   6.4) /   8  ";
 
-  token_list_t tokens = tokenize(value, strlen(value));
+  token_list_t tokens = tokenize(input, true);
+
   print_tokens(tokens);
 
   parse(tokens);

@@ -1,11 +1,20 @@
 # c-types
 
-A simple calculator implemented in c which parses a math function and tries to execute it.
+A simple calculator implemented in c which can parse a math expression and execute it.
+It is implemented to check the order of operation explained in the following picture.
 
-**Example input:**
+[PEMDAS](https://static.qumath.in/static/website/old-cdn-static/gurpreet-numbers-seo-03-1614774781.png)
+
+
+## Example
+
+**Input:**
 - '100.53 * 12.5 + (62.2 - 12.5) / 8'
-  This should get tokenized, lexed, parsed and in the execution calculated. Then it should print the answer: '1262.8'
 
+This should get tokenized, lexed, parsed and in the execution calculated.
+
+**Output:**
+- '1262.8'
 
 
 # build

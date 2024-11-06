@@ -7,8 +7,10 @@
 
 
 // All types
+/*typedef struct {
 
-
+} node_t;
+*/
 
 // Enum to string conversion lists
 
