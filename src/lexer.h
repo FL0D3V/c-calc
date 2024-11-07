@@ -13,234 +13,227 @@
 #include "darray.h"
 #include "stringslice.h"
 
+// TODO: Maybe put into its own base-header
+#define UNREACHABLE(message) do { fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
+
+#define t_return_defer() do { isError = true; goto defer; } while (0)
+
+#define COMMA_CHARACTER '.'
+
+#define is_comma(c)     ((c) == '.' || (c) == ',')
+#define is_literal(c)   (isdigit(c) || is_comma(c))
+
+
+#define T_ERROR_INVALID_NUMBER(currPos)              fprintf(stderr, "ERROR:%zu: tokenize: Numbers can only have 1 comma!\n", currPos)
+#define T_ERROR_INVALID_CHARACTER(currPos, currChar) fprintf(stderr, "ERROR:%zu: tokenize: '%c' is not an allowed character!\n", currPos, currChar)
+
 
 typedef enum {
-  TOKENTYPE_NUMBER,
+  TT_LITERAL,
+  TT_OPERATOR,
+  TT_BRACKET,
+  TT_FUNCTION,
 
-  // TODO: Rethink! Maybe just implement a different number type for REAL numbers.
-  TOKENTYPE_COMMA,
-  
-  TOKENTYPE_OPERATOR,
-
-  // TODO: Rethink if the braces should be combined in one token-type and the token should store in the union a new type of the brace (a new enum)
-  TOKENTYPE_LPARAM,
-  TOKENTYPE_RPARAM,
-
-  TOKENTYPE_COUNT
+  TT_COUNT
 } e_token_type;
 
-// TODO: Add more opeartors.
+static_assert(TT_COUNT == 4, "Amount of token-types have changed");
+static const char* tokenTypeNames[TT_COUNT] = {
+	[TT_LITERAL] = "Literal",
+	[TT_OPERATOR] = "Operator",
+  [TT_BRACKET] = "Bracket",
+  [TT_FUNCTION] = "Function"
+};
+
+
 typedef enum {
-  OPERATION_ADD,
-  OPERATION_SUB,
-  OPERATION_MUL,
-  OPERATION_DIV,
+  OP_ADD,
+  OP_SUB,
+  OP_MUL,
+  OP_DIV,
 
-  OPERATION_COUNT
-} e_operation;
+  OP_COUNT,
+  OP_INVALID
+} e_operator_type;
+
+static_assert(OP_COUNT == 4, "Amount of operator-types have changed");
+static const char* operatorTypeNames[OP_COUNT] = {
+	[OP_ADD] = "Add",
+	[OP_SUB] = "Subtract",
+	[OP_MUL] = "Multiply",
+	[OP_DIV] = "Divide",
+};
+
+static e_operator_type char_to_operator_type(const char c)
+{
+  switch (c)
+  {
+    case '+': return OP_ADD;
+    case '-': return OP_SUB;
+    case '*': return OP_MUL;
+    case '/': return OP_DIV;
+    default:  return OP_INVALID;
+  }
+}
+
+#define is_operator(c) (char_to_operator_type(c) != OP_INVALID)
 
 
-// OLD:
-/*typedef struct {
-  e_token_type type;
-  union {
-    int literal;
-    e_operation operation;
-  };
-} token_t;*/
+typedef enum {
+  BT_OPAREN,
+  BT_CPAREN,
+
+  BT_COUNT,
+  BT_INVALID
+} e_bracket_type;
+
+static_assert(BT_COUNT == 2, "Amount of bracket-types have changed");
+static const char* bracketTypeNames[BT_COUNT] = {
+  [BT_OPAREN] = "Open-Paren",
+  [BT_CPAREN] = "Closing-Paren"
+};
+
+static e_bracket_type char_to_bracket_type(const char c)
+{
+  switch (c)
+  {
+    case '(': return BT_OPAREN;
+    case ')': return BT_CPAREN;
+    default:  return BT_INVALID;
+  }
+}
+
+#define is_bracket(c) (char_to_bracket_type(c) != BT_INVALID)
 
 
-// The token implementation with all variations.
-// TODO: Implement different types of numbers (int, float)
+typedef enum {
+  FT_SQRT,
+  FT_POW,
+
+  FT_COUNT,
+  FT_INVALID
+} e_function_type;
+
+static_assert(FT_COUNT == 2, "Amount of function-types have changed");
+static const char* functionTypeNames[FT_COUNT] = {
+  [FT_SQRT] = "Sqrt",
+  [FT_POW] = "Pow"
+};
+
+
+// TODO: Implement function parsing for the tokens.
+
+typedef union {
+  double literal;
+  e_operator_type operator;
+  e_bracket_type bracket;
+  e_function_type function;
+} u_token_as;
+
 typedef struct {
   e_token_type type;
-  union {
-    int literal;
-    e_operation operation;
-  };
+  u_token_as as;
 } token_t;
 
-
-// This is a dynamic array with extras also the cleaned source for pretty printing.
 typedef struct {
   token_t* items;
   size_t count;
   size_t capacity;
-
-  char* cleanedSrc;
-  size_t cleanedSrcCount;
+  
+  bool isError;
 } token_list_t;
 
 
-#define token_list_free(list)   \
-  do {                          \
-    da_free(list);              \
-    free((list).cleanedSrc);    \
-    (list).cleanedSrc = NULL;   \
-    (list).cleanedSrcCount = 0; \
-  } while(0)
+
+#define add_literal_token(tokens, lt)   da_append((tokens), ((token_t) { .type = TT_LITERAL,  .as.literal = (lt) }))
+#define add_operator_token(tokens, op)  da_append((tokens), ((token_t) { .type = TT_OPERATOR, .as.operator = (op) }))
+#define add_bracket_token(tokens, bt)   da_append((tokens), ((token_t) { .type = TT_BRACKET,  .as.bracket = (bt) }))
+#define add_function_token(tokens, ft)  da_append((tokens), ((token_t) { .type = TT_FUNCTION, .as.function = (ft) }))
 
 
 
-// Enum to string conversion lists
-static const char* tokenTypeNames[TOKENTYPE_COUNT] = {
-	[TOKENTYPE_NUMBER] = "Number",
-	[TOKENTYPE_COMMA] = "Comma",
-	[TOKENTYPE_OPERATOR] = "Operator",
-	[TOKENTYPE_LPARAM] = "OpenBrace",
-	[TOKENTYPE_RPARAM] = "ClosingBrace"
-};
-
-static const char operationChars[OPERATION_COUNT] = {
-  [OPERATION_ADD] = '+',
-	[OPERATION_SUB] = '-',
-	[OPERATION_MUL] = '*',
-	[OPERATION_DIV] = '/'
-};
-
-static const char* operationNames[OPERATION_COUNT] = {
-	[OPERATION_ADD] = "Add",
-	[OPERATION_SUB] = "Subtract",
-	[OPERATION_MUL] = "Multiply",
-	[OPERATION_DIV] = "Divide"
-};
-
-
-
-// Util functions
-
-static bool is_comma(const char c)
+void tokenize(token_list_t* tokens, const char* input, bool debug)
 {
-  return c == '.' || c == ',';
-}
+  assert(tokens && "'tokens' was NULL!");
 
-static bool is_brace(const char c)
-{
-  return c == '(' || c == ')';
-}
-
-static int brace_to_token_type(const char c)
-{
-  if (c == '(')
-    return TOKENTYPE_LPARAM;
-  else if (c == ')')
-    return TOKENTYPE_RPARAM;
-  else
-    return -1;
-}
-
-static bool is_operation(const char c)
-{
-  for (int i = 0; i < OPERATION_COUNT; ++i)
-    if (operationChars[i] == c)
-      return true;
-  return false;
-}
-
-static int char_to_operation(const char c)
-{
-  for (int i = 0; i < OPERATION_COUNT; ++i)
-    if (operationChars[i] == c)
-      return (e_operation) i;
-  return -1;
-}
-
-
-// Tokenizes and lexes a given string.
-// Example:
-//  In the output every line would represent a single token.
-//  Input:
-//    "10.5 + 2 * (7.2 - 5) / 6"
-//  Output:
-//    Number; Literal=10
-//    Comma
-//    Number; Literal=5
-//    Operator; Operation=Add
-//    Number; Literal=2
-//    Operator; Operation=Multiply
-//    OpenBrace
-//    Number; Literal=7
-//    Comma
-//    Number; Literal=2
-//    Operator; Operation=Subtract
-//    Number; Literal=5
-//    ClosingBrace
-//    Operator; Operation=Divide
-//    Number; Literal=6
-token_list_t tokenize(const char* input, bool debug)
-{
   string_slice_t ss = {0};
+  string_builder_t cleanedSrcBuff = {0};
+  string_builder_t inputBuff = {0};
+  bool currentLiteralHasComma = false;
+  bool isError = false;
+
   ss_init(&ss, input);
 
-  token_list_t tokens = {0};
-  string_builder_t digitBuff = {0};
-  string_builder_t cleanedSrcBuff = {0};
+  if (debug) printf("DEBUG: Input='%s'; Length=%zu\n", ss.src, ss.len);
 
-  if (debug)
-    printf("DEBUG: Input='%s'; Length=%zu\n", ss.src, ss.len);
+  // TODO: For proper function parsing this propably must be rewritten to first parse all string tokens and then lex them
+  // because currently only character per character gets checked.
 
   while (ss_in_range(&ss))
   {
     ss_seek_spaces(&ss);
     
+    // Checks if the current position is still in range because the input could have
+    // spaces at the end and the seek_spaces method could seek to the end.
     if (!ss_in_range(&ss))
       break;
 
     const char current = ss_get_current(&ss);
 
-    if (isdigit(current))
+    if (is_literal(current))
     {
-      if (debug)
-        printf("DEBUG: > DIGIT FOUND ('%c')\n", current);
-      
-      sb_append_char(&digitBuff, current);
-
-      // Checks if the next is NOT a digit or if the end was reached.
-      if ((ss_can_peek(&ss) && !isdigit(ss_peek(&ss))) || !ss_can_peek(&ss))
+      if (is_comma(current))
       {
-        if (debug)
-          printf("DEBUG: > LITERAL COMPLETE ('%s')\n", digitBuff.items);
-        
-        da_append(&tokens, ((token_t) { .type = TOKENTYPE_NUMBER, .literal = atoi(digitBuff.items) }));
-        sb_free(digitBuff);
+        // ERROR: Invalid literal definition.
+        if (currentLiteralHasComma)
+        {
+          T_ERROR_INVALID_NUMBER(ss_current_pos(&ss));
+          t_return_defer();
+        }
+
+        currentLiteralHasComma = true;
+        sb_append_char(&inputBuff, COMMA_CHARACTER);
+      }
+      else sb_append_char(&inputBuff, current);
+
+      // Checks for completion of the current literal.
+      if ((ss_can_peek(&ss) && !is_literal(ss_peek(&ss))) || !ss_can_peek(&ss))
+      {
+        double literal = strtof(inputBuff.items, NULL);
+
+        if (debug) printf("DEBUG: > LITERAL FOUND ('%.04f')\n", literal);
+
+        add_literal_token(tokens, literal);
+
+        sb_free(inputBuff);
+        currentLiteralHasComma = false;
       }
     }
-    else if (is_comma(current))
+    else if (is_operator(current))
     {
-      if (debug)
-        printf("DEBUG: > COMMA FOUND ('%c')\n", current);
-      
-      da_append(&tokens, ((token_t) { .type = TOKENTYPE_COMMA }));
+      e_operator_type op = char_to_operator_type(current);
+      if (op == OP_INVALID)
+        UNREACHABLE("Invalid operator-type!");
+
+      if (debug) printf("DEBUG: > OPERATOR FOUND ('%c')\n", current);
+
+      add_operator_token(tokens, op);
     }
-    else if (is_operation(current))
+    else if (is_bracket(current))
     {
-      if (debug)
-        printf("DEBUG: > OPERATION FOUND ('%c')\n", current);
+      e_bracket_type bt = char_to_bracket_type(current);
+      if (bt == BT_INVALID)
+        UNREACHABLE("Invalid bracket-type!");
 
-      int operation = char_to_operation(current);
-      assert(operation >= 0 && "This should not happen!");
+      if (debug) printf("DEBUG: > BRACKET FOUND ('%c')\n", current);
 
-      da_append(&tokens, ((token_t) { .type = TOKENTYPE_OPERATOR, .operation = (e_operation)operation }));
-    }
-    else if (is_brace(current))
-    {
-      if (debug)
-        printf("DEBUG: > BRACE FOUND ('%c')\n", current);
-
-      int braceType = brace_to_token_type(current);
-      assert(braceType >= 0 && "This should not happen!");
-
-      da_append(&tokens, ((token_t) { .type = (e_token_type)braceType }));
+      add_bracket_token(tokens, bt);
     }
     else
     {
-      if (iscntrl(current))
-        printf("ERROR:%zu: tokenize: Control characters are not allowed!\n", ss_current_pos(&ss));
-      else
-        printf("ERROR:%zu: tokenize: '%c' is not an allowed character!\n", ss_current_pos(&ss), current);
-      
-      da_free(tokens);
-      return tokens;
+      // ERROR: Invalid character.
+      T_ERROR_INVALID_CHARACTER(ss_current_pos(&ss), current);
+      t_return_defer();
     }
 
     sb_append_char(&cleanedSrcBuff, current);
@@ -248,32 +241,52 @@ token_list_t tokenize(const char* input, bool debug)
     ss_seek(&ss);
   }
 
-  if (debug)
-    printf("DEBUG: Cleaned='%s'; Length=%zu\n", cleanedSrcBuff.items, cleanedSrcBuff.count);
+  if (debug) printf("DEBUG: Cleaned='%s'; Length=%zu\n", cleanedSrcBuff.items, cleanedSrcBuff.count);
 
-  tokens.cleanedSrc = cleanedSrcBuff.items;
-  tokens.cleanedSrcCount = cleanedSrcBuff.count;
-
-  return tokens;
+defer:
+  sb_free(inputBuff);
+  sb_free(cleanedSrcBuff);
+  tokens->isError = isError;
 }
 
 
-void print_tokens(token_list_t tokens)
+void print_tokens(token_list_t* tokens)
 {
-  if (!tokens.items)
+  assert(tokens && "'tokens' was NULL!");
+
+  if (tokens->isError)
   {
-    printf("ERROR: There was an error while tokenizing so there is nothing to print!\n");
+    fprintf(stderr, "ERROR: Can't print the tokens because an error happend!\n");
     return;
   }
 
-  printf("Printing tokens ('%zu' tokens found):\n", tokens.count);
+  printf("Printing tokens ('%zu' tokens found):\n", tokens->count);
+  
+  for (size_t i = 0; i < tokens->count; ++i) {
+    token_t* token = &tokens->items[i];
+    size_t tokenIndex = i + 1;
 
-  for (size_t i = 0; i < tokens.count; ++i) {
-    printf("%zu: Type=%s", i + 1, tokenTypeNames[tokens.items[i].type]);
-    if (tokens.items[i].type == TOKENTYPE_NUMBER)
-      printf("; Literal=%d", tokens.items[i].literal);
-    else if (tokens.items[i].type == TOKENTYPE_OPERATOR)
-      printf("; Operation=%s", operationNames[tokens.items[i].operation]);
+    printf("%zu: %s", tokenIndex, tokenTypeNames[token->type]);
+
+    switch (tokens->items[i].type) {
+      case TT_LITERAL:
+        printf("(%.04f)", token->as.literal);
+        break;
+      case TT_OPERATOR:
+        printf("(%s)", operatorTypeNames[token->as.operator]);
+        break;
+      case TT_BRACKET:
+        printf("(%s)", bracketTypeNames[token->as.bracket]);
+        break;
+      case TT_FUNCTION:
+        printf("(%s)", functionTypeNames[token->as.function]);
+        break;
+      case TT_COUNT:
+      default:
+        UNREACHABLE("Invalid token-type!");
+        break;
+    }
+    
     printf("\n");
   }
 }

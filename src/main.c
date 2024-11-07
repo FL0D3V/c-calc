@@ -3,21 +3,26 @@
 
 int main(int argc, char** argv)
 {
-  (void) argc;
-  (void) argv;
+  const char* program = argv[0];
 
-  //printf("ARGC: %d\n", argc);
+  if (argc != 2)
+  {
+    fprintf(stderr, "ERROR: Invalid usage! Expected 1 argument.\n");
+    fprintf(stderr, "USAGE: \"%s EXPRESSION\"\n", program);
+    fprintf(stderr, "Example: %s \"10.5 + 30 - (2 * 5.2) / 7\"\n", program);
+    return 1;
+  }
 
-  // TODO: Implement basic cli!
+  const char* input = argv[1];
+
+  token_list_t tokens = {0};
   
-  const char* input = "  100.53 +  (4 *   6.4) /   8  ";
+  tokenize(&tokens, input, false);
 
-  token_list_t tokens = tokenize(input, true);
+  print_tokens(&tokens);
+  
+  parse(&tokens);
 
-  print_tokens(tokens);
-
-  parse(tokens);
-
-  token_list_free(tokens);
+  da_free(tokens);
   return 0;
 }

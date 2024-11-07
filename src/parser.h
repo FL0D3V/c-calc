@@ -6,22 +6,7 @@
 #include "lexer.h"
 
 
-// All types
-/*typedef struct {
-
-} node_t;
-*/
-
-// Enum to string conversion lists
-
-
-
-// Method definitions
-void parse(token_list_t tokens);
-
-
-// Method implementations
-void parse(token_list_t tokens)
+void parse(token_list_t* tokens)
 {
   (void) tokens;
 }

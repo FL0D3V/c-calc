@@ -1,5 +1,8 @@
 CC := gcc
-CFLAGS := -Wall -Wextra -Wswitch-enum -std=c11 -pedantic -ggdb
+# debug
+#CFLAGS := -Wall -Wextra -Werror -Wswitch-enum -std=c11 -pedantic -ggdb
+# release
+CFLAGS := -Wall -Wextra -Werror -Wswitch-enum -std=c11 -pedantic
 LDLIBS := 
 LDFLAGS := 
 TARGET := ccalc
@@ -7,6 +10,8 @@ TARGET := ccalc
 SRC_DIR := src
 OBJ_DIR	:= obj
 BIN_DIR	:= bin
+
+TEST := "  100.53 + (3.5 - 5) + (4 *   6.4) /   8  "
 
 EXE := $(BIN_DIR)/$(TARGET)
 SRC := $(wildcard $(SRC_DIR)/*.c)
@@ -26,7 +31,7 @@ $(BIN_DIR) $(OBJ_DIR):
 	mkdir -p $@
 
 check: $(EXE)
-	valgrind -s --leak-check=full --track-origins=yes --show-leak-kinds=all $^
+	valgrind -s --leak-check=full --track-origins=yes --show-leak-kinds=all $^ $(TEST)
 
 clean:
 	@$(RM) -rv $(BIN_DIR) $(OBJ_DIR)
@@ -34,7 +39,7 @@ clean:
 remake: clean all
 
 run: $(EXE)
-	./$(EXE)
+	./$(EXE) $(TEST)
 
 .PHONY: all check clean
 
