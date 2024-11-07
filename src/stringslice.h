@@ -2,6 +2,7 @@
 #define _STRING_SLICE_H_
 
 #include <ctype.h>
+#include <stdbool.h>
 #include <string.h>
 #include <assert.h>
 

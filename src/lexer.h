@@ -3,19 +3,15 @@
 #ifndef _LEXER_H_
 #define _LEXER_H_
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <string.h>
-#include <assert.h>
-#include <ctype.h>
-
+#include "global.h"
 #include "darray.h"
 #include "stringslice.h"
 
-// TODO: Maybe put into its own base-header
-#define UNREACHABLE(message) do { fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
+#include <stdbool.h>
+#include <string.h>
+#include <ctype.h>
 
+#define t_unreachable_defer(message) do { fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message); t_return_defer(); } while(0)
 #define t_return_defer() do { isError = true; goto defer; } while (0)
 
 #define COMMA_CHARACTER '.'
@@ -24,8 +20,9 @@
 #define is_literal(c)   (isdigit(c) || is_comma(c))
 
 
-#define T_ERROR_INVALID_NUMBER(currPos)              fprintf(stderr, "ERROR:%zu: tokenize: Numbers can only have 1 comma!\n", currPos)
-#define T_ERROR_INVALID_CHARACTER(currPos, currChar) fprintf(stderr, "ERROR:%zu: tokenize: '%c' is not an allowed character!\n", currPos, currChar)
+#define T_ERROR_INVALID_NUMBER(currPos)              fprintf(stderr, "lexer_error:%zu: Numbers can only have 1 comma!\n", currPos)
+#define T_ERROR_INVALID_CHARACTER(currPos, currChar) fprintf(stderr, "lexer_error:%zu: '%c' is not an allowed character!\n", currPos, currChar)
+#define T_ERROR_INVALID_LEXER()                      fprintf(stderr, "lexer_error: Can't print the lexer because an error happend!\n")
 
 
 typedef enum {
@@ -141,20 +138,27 @@ typedef struct {
   size_t capacity;
   
   bool isError;
-} token_list_t;
+} lexer_t;
+
+
+#define lexer_free(lexer) \
+  do {                    \
+    da_free(lexer);       \
+  } while (0)
 
 
 
-#define add_literal_token(tokens, lt)   da_append((tokens), ((token_t) { .type = TT_LITERAL,  .as.literal = (lt) }))
-#define add_operator_token(tokens, op)  da_append((tokens), ((token_t) { .type = TT_OPERATOR, .as.operator = (op) }))
-#define add_bracket_token(tokens, bt)   da_append((tokens), ((token_t) { .type = TT_BRACKET,  .as.bracket = (bt) }))
-#define add_function_token(tokens, ft)  da_append((tokens), ((token_t) { .type = TT_FUNCTION, .as.function = (ft) }))
+#define add_literal_token(lexer, lt)   da_append((lexer), ((token_t) { .type = TT_LITERAL,  .as.literal = (lt) }))
+#define add_operator_token(lexer, op)  da_append((lexer), ((token_t) { .type = TT_OPERATOR, .as.operator = (op) }))
+#define add_bracket_token(lexer, bt)   da_append((lexer), ((token_t) { .type = TT_BRACKET,  .as.bracket = (bt) }))
+#define add_function_token(lexer, ft)  da_append((lexer), ((token_t) { .type = TT_FUNCTION, .as.function = (ft) }))
 
 
 
-void tokenize(token_list_t* tokens, const char* input, bool debug)
+void lexer_tokenize(lexer_t* lexer, const char* input, bool debug)
 {
-  assert(tokens && "'tokens' was NULL!");
+  ASSERT_NULL(lexer);
+  //assert(lexer && "'tokens' was NULL!");
 
   string_slice_t ss = {0};
   string_builder_t cleanedSrcBuff = {0};
@@ -164,7 +168,8 @@ void tokenize(token_list_t* tokens, const char* input, bool debug)
 
   ss_init(&ss, input);
 
-  if (debug) printf("DEBUG: Input='%s'; Length=%zu\n", ss.src, ss.len);
+  if (debug)
+    printf("DEBUG: Input='%s'; Length=%zu\n", ss.src, ss.len);
 
   // TODO: For proper function parsing this propably must be rewritten to first parse all string tokens and then lex them
   // because currently only character per character gets checked.
@@ -201,9 +206,7 @@ void tokenize(token_list_t* tokens, const char* input, bool debug)
       {
         double literal = strtof(inputBuff.items, NULL);
 
-        if (debug) printf("DEBUG: > LITERAL FOUND ('%.04f')\n", literal);
-
-        add_literal_token(tokens, literal);
+        add_literal_token(lexer, literal);
 
         sb_free(inputBuff);
         currentLiteralHasComma = false;
@@ -212,22 +215,20 @@ void tokenize(token_list_t* tokens, const char* input, bool debug)
     else if (is_operator(current))
     {
       e_operator_type op = char_to_operator_type(current);
+
       if (op == OP_INVALID)
-        UNREACHABLE("Invalid operator-type!");
+        t_unreachable_defer("Invalid operator-type!");
 
-      if (debug) printf("DEBUG: > OPERATOR FOUND ('%c')\n", current);
-
-      add_operator_token(tokens, op);
+      add_operator_token(lexer, op);
     }
     else if (is_bracket(current))
     {
       e_bracket_type bt = char_to_bracket_type(current);
+
       if (bt == BT_INVALID)
-        UNREACHABLE("Invalid bracket-type!");
+        t_unreachable_defer("Invalid bracket-type!");
 
-      if (debug) printf("DEBUG: > BRACKET FOUND ('%c')\n", current);
-
-      add_bracket_token(tokens, bt);
+      add_bracket_token(lexer, bt);
     }
     else
     {
@@ -241,34 +242,36 @@ void tokenize(token_list_t* tokens, const char* input, bool debug)
     ss_seek(&ss);
   }
 
-  if (debug) printf("DEBUG: Cleaned='%s'; Length=%zu\n", cleanedSrcBuff.items, cleanedSrcBuff.count);
+  if (debug)
+    printf("DEBUG: Cleaned='%s'; Length=%zu\n", cleanedSrcBuff.items, cleanedSrcBuff.count);
 
 defer:
   sb_free(inputBuff);
   sb_free(cleanedSrcBuff);
-  tokens->isError = isError;
+  lexer->isError = isError;
 }
 
 
-void print_tokens(token_list_t* tokens)
+void lexer_print(lexer_t* lexer)
 {
-  assert(tokens && "'tokens' was NULL!");
-
-  if (tokens->isError)
+  ASSERT_NULL(lexer);
+  //assert(tokens && "'tokens' was NULL!");
+  
+  if (lexer->isError)
   {
-    fprintf(stderr, "ERROR: Can't print the tokens because an error happend!\n");
+    T_ERROR_INVALID_LEXER();
     return;
   }
 
-  printf("Printing tokens ('%zu' tokens found):\n", tokens->count);
+  printf("Printing tokens ('%zu' tokens found):\n", lexer->count);
   
-  for (size_t i = 0; i < tokens->count; ++i) {
-    token_t* token = &tokens->items[i];
+  for (size_t i = 0; i < lexer->count; ++i) {
+    token_t* token = &lexer->items[i];
     size_t tokenIndex = i + 1;
 
     printf("%zu: %s", tokenIndex, tokenTypeNames[token->type]);
 
-    switch (tokens->items[i].type) {
+    switch (token->type) {
       case TT_LITERAL:
         printf("(%.04f)", token->as.literal);
         break;
