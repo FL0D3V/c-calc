@@ -1,5 +1,38 @@
+#include "tokenizer.h"
 #include "lexer.h"
 #include "parser.h"
+
+static const char* validateInput(int argc, char** argv);
+static void printUsage(const char* program);
+static bool handle(const char* input);
+
+
+int main(int argc, char** argv)
+{
+  const char* input = validateInput(argc, argv);
+  
+  if (!input)
+    return 1;
+
+  bool result = handle(input);
+  
+  return result ? 0 : 1;
+}
+
+
+static const char* validateInput(int argc, char** argv)
+{
+  const char* program = argv[0];
+  
+  if (argc != 2)
+  {
+    printUsage(program);
+    return NULL;
+  }
+  
+  return argv[1];
+}
+
 
 static void printUsage(const char* program)
 {
@@ -9,29 +42,29 @@ static void printUsage(const char* program)
 }
 
 
-int main(int argc, char** argv)
+static bool handle(const char* input)
 {
-  const char* program = argv[0];
+  // Tokenize input
+  token_list_t tokens = {0};
+  tokenize_input(&tokens, input);
+  print_tokens(&tokens);
+  
+  // Lexing of the tokens
+  lexer_t lexer = {0};
+  lex_tokens(&lexer, &tokens);
 
-  if (argc != 2)
-  {
-    printUsage(program);
-    return 1;
+  token_list_free(tokens);
+  
+  if (lexer.isError) {
+    lexer_free(lexer);
+    return false;
   }
 
-  const char* input = argv[1];
+  print_lexed_tokens(&lexer);
 
-  lexer_t lexer = {0};
-  
-  lexer_tokenize(&lexer, input, false);
-
-  if (lexer.isError)
-    return 1;
-
-  lexer_print(&lexer);
-  
+  // Parsing of the lexed tokens
   parse(&lexer);
 
   lexer_free(lexer);
-  return 0;
+  return true;
 }

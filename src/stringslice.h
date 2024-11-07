@@ -42,10 +42,17 @@ void ss_init(string_slice_t* slice, const char* src)
   slice->current_ptr = (size_t)src;
 }
 
-char ss_get_current(string_slice_t* slice)
+#define ss_get_current(slice) ss_get_current_ex((slice), __FILE__, __LINE__)
+
+char ss_get_current_ex(string_slice_t* slice, const char* file, size_t line)
 {
   _SS_ASSERT_IF_NOT_VALID(slice);
-  assert(_SS_IS_IN_RANGE(slice) && "Out of range!");
+
+  if (!_SS_IS_IN_RANGE(slice)) {
+    fprintf(stderr, "%s:%zu: Out of range!\n", file, line);
+    abort();
+  }
+
   return *((char*)slice->current_ptr);
 }
 
@@ -61,10 +68,17 @@ bool ss_can_peek(string_slice_t* slice)
   return _SS_IS_NEXT_IN_RANGE(slice);
 }
 
-char ss_peek(string_slice_t* slice)
+#define ss_peek(slice) ss_peek_ex((slice), __FILE__, __LINE__)
+
+char ss_peek_ex(string_slice_t* slice, const char* file, size_t line)
 {
   _SS_ASSERT_IF_NOT_VALID(slice);
-  assert(_SS_IS_NEXT_IN_RANGE(slice) && "Peeked after the end!");
+
+  if (!_SS_IS_NEXT_IN_RANGE(slice)) {
+    fprintf(stderr, "%s:%zu: Peeked after the end!\n", file, line);
+    abort();
+  }
+
   return *(((char*)slice->current_ptr) + 1);
 }
 

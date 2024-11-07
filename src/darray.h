@@ -29,8 +29,8 @@ size_t ptr_diff(const void* start, const void* curr)
   do {                    \
     free((da).items);     \
     (da).items = NULL;    \
-    (da).count = 0;       \
     (da).capacity = 0;    \
+    (da).count = 0;       \
   } while(0)
 
 
@@ -54,7 +54,7 @@ size_t ptr_diff(const void* start, const void* curr)
   } while (0)
 
 // Append several items to a dynamic array
-#define nob_da_append_many(da, new_items, new_items_count)                                      \
+#define da_append_many(da, new_items, new_items_count)                                      \
     do {                                                                                        \
       if ((da)->count + new_items_count > (da)->capacity) {                                     \
         if ((da)->capacity == 0) {                                                              \
@@ -80,15 +80,15 @@ size_t ptr_diff(const void* start, const void* curr)
 // This is just a dynamic list of an arbitrary type.
 typedef struct {
   void* items;
-  size_t count;
   size_t capacity;
+  size_t count;
 } darray_t;
 
 
 typedef struct {
-    char *items;
-    size_t count;
+    char* items;
     size_t capacity;
+    size_t count;
 } string_builder_t;
 
 
@@ -101,8 +101,8 @@ typedef struct {
 #define sb_append_cstr(sb, cstr)      \
     do {                              \
         const char *s = (cstr);       \
-        size_t n = strlen(s);         \
-        da_append_many(sb, s, n);     \
+        size_t len = strlen(s);       \
+        da_append_many(sb, s, len);   \
     } while (0)
 
 // Append a single NULL character at the end of a string builder. So then you can
@@ -111,5 +111,29 @@ typedef struct {
 
 // Free the memory allocated by a string builder
 #define sb_free(sb) da_free(sb)
+
+
+typedef struct {
+  string_builder_t* items;
+  size_t capacity;
+  size_t count;
+} string_list_t;
+
+
+#define sl_append(sl, cstr)       \
+    do {                          \
+      string_builder_t sb = {0};  \
+      sb_append_cstr(&sb, cstr);  \
+      da_append(sl, sb);          \
+    } while(0)
+
+#define sl_append_null(sl) sl_append(sl, "")
+
+#define sl_free(sl)                             \
+    do {                                        \
+      for (size_t i = 0; i < (sl).count; ++i)   \
+        sb_free((sl).items[i]);                 \
+      da_free(sl);                              \
+    } while(0)
 
 #endif // _DARRAY_H_
