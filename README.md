@@ -3,7 +3,7 @@
 A simple calculator implemented in c which can parse a math expression and execute it.
 It also checks the order of operation explained in the following picture.
 
-[PEMDAS](https://static.qumath.in/static/website/old-cdn-static/gurpreet-numbers-seo-03-1614774781.png)
+![PEMDAS](https://static.qumath.in/static/website/old-cdn-static/gurpreet-numbers-seo-03-1614774781.png)
 
 
 ## Tokenizer and Lexer Output
