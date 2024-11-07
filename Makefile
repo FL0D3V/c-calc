@@ -11,7 +11,7 @@ SRC_DIR := src
 OBJ_DIR	:= obj
 BIN_DIR	:= bin
 
-TEST := "  100.53 + (3.5 - 5) + (4 *   6.4) /   8  "
+TEST := "  100,53 + (3.5 - 5) + (4 *   6,4) /   8.3  "
 
 EXE := $(BIN_DIR)/$(TARGET)
 SRC := $(wildcard $(SRC_DIR)/*.c)

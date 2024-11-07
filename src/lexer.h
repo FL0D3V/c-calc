@@ -118,7 +118,11 @@ static const char* functionTypeNames[FT_COUNT] = {
 };
 
 
-// TODO: Implement function parsing for the tokens.
+typedef struct {
+  const char** items;
+  size_t capacity;
+  size_t count;
+} token_list_t;
 
 typedef union {
   double literal;
@@ -134,12 +138,15 @@ typedef struct {
 
 typedef struct {
   token_t* items;
-  size_t count;
   size_t capacity;
+  size_t count;
   
   bool isError;
 } lexer_t;
 
+
+
+#define token_list_free(tokens) da_free(tokens)
 
 #define lexer_free(lexer) \
   do {                    \
@@ -158,7 +165,6 @@ typedef struct {
 void lexer_tokenize(lexer_t* lexer, const char* input, bool debug)
 {
   ASSERT_NULL(lexer);
-  //assert(lexer && "'tokens' was NULL!");
 
   string_slice_t ss = {0};
   string_builder_t cleanedSrcBuff = {0};
@@ -255,7 +261,6 @@ defer:
 void lexer_print(lexer_t* lexer)
 {
   ASSERT_NULL(lexer);
-  //assert(tokens && "'tokens' was NULL!");
   
   if (lexer->isError)
   {
@@ -267,10 +272,9 @@ void lexer_print(lexer_t* lexer)
   
   for (size_t i = 0; i < lexer->count; ++i) {
     token_t* token = &lexer->items[i];
-    size_t tokenIndex = i + 1;
 
-    printf("%zu: %s", tokenIndex, tokenTypeNames[token->type]);
-
+    printf(tokenTypeNames[token->type]);
+    
     switch (token->type) {
       case TT_LITERAL:
         printf("(%.04f)", token->as.literal);
