@@ -149,6 +149,7 @@ e_bracket_type cstr_to_bracket_type(const char* cstr)
 
 
 // Reference: https://en.wikipedia.org/wiki/List_of_mathematical_constants
+// TODO: Implement more constants.
 typedef enum {
   MC_PI,
   MC_TAU,
@@ -183,6 +184,8 @@ const char* mathConstantTypeNames[MC_COUNT] = {
   [MC_GAUSS_CONSTANT]  = "Gauss's constant",
 };
 
+// TODO: Rethink! Implement array of all constants with their corresponding calculated values.
+
 e_math_constant_type cstr_to_math_constant_type(const char* cstr)
 {
   if (!cstr)
@@ -199,6 +202,7 @@ e_math_constant_type cstr_to_math_constant_type(const char* cstr)
 
 
 
+// TODO: Implement more functions.
 typedef enum {
   FT_SQRT,
   FT_SIN,

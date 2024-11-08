@@ -2,31 +2,35 @@
 #include "lexer.h"
 #include "parser.h"
 
-static const char* validateInput(int argc, char** argv);
-static void printUsage(const char* program);
-static bool handle(const char* input);
+static const char* validate_cli_input(int argc, char** argv);
+static void print_usage(const char* program);
+static bool handle_input(const char* input);
 
 
 int main(int argc, char** argv)
 {
-  const char* input = validateInput(argc, argv);
+  // TODO: Implement full CLI interface mode if the user does not run the program with a math expression directly.
+  // This could then be used to support variables and solving for variables and store full math expressions with variables in memory for later
+  // solving. Could be used to store a few base expressions into variables and then using them to calulate more complex expressions.
+
+  const char* input = validate_cli_input(argc, argv);
   
   if (!input)
     return 1;
 
-  bool result = handle(input);
+  bool result = handle_input(input);
   
   return result ? 0 : 1;
 }
 
 
-static const char* validateInput(int argc, char** argv)
+static const char* validate_cli_input(int argc, char** argv)
 {
   const char* program = argv[0];
   
   if (argc != 2)
   {
-    printUsage(program);
+    print_usage(program);
     return NULL;
   }
   
@@ -34,7 +38,7 @@ static const char* validateInput(int argc, char** argv)
 }
 
 
-static void printUsage(const char* program)
+static void print_usage(const char* program)
 {
   fprintf(stderr, "ERROR: Invalid usage! Expected 1 argument.\n");
   fprintf(stderr, "USAGE: \"%s EXPRESSION\"\n", program);
@@ -42,7 +46,7 @@ static void printUsage(const char* program)
 }
 
 
-static bool handle(const char* input)
+static bool handle_input(const char* input)
 {
   // Tokenize input
   token_list_t tokens = {0};
@@ -55,6 +59,7 @@ static bool handle(const char* input)
 
   token_list_free(tokens);
   
+  // Check for occurred errors to prematurely stop execution.
   if (lexer.isError) {
     lexer_free(lexer);
     return false;
@@ -63,7 +68,7 @@ static bool handle(const char* input)
   print_lexed_tokens(&lexer);
 
   // Parsing of the lexed tokens
-  parse(&lexer);
+  parse_lexer(&lexer);
 
   lexer_free(lexer);
   return true;

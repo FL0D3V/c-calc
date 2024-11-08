@@ -11,7 +11,7 @@ SRC_DIR := src
 OBJ_DIR	:= obj
 BIN_DIR	:= bin
 
-TEST := "  100.53 + sqrt(3.5 - EN) + (44.23 *   6.4^2) /   8.3 + ln(10) - PI "
+TEST := "  100.53 + sqrt(3.5 - EN) + (44.23 *   6.4^2) /   8.3 + ln(10) - PI + ln(5^EC)"
 
 EXE := $(BIN_DIR)/$(TARGET)
 SRC := $(wildcard $(SRC_DIR)/*.c)

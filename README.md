@@ -19,49 +19,56 @@ First 'make' the project and then run the following command for a simple test:
 
 **Input**:
 ```
-./bin/ccalc "  100.53 + sqrt(3.5 - EN) + (44.23 *   6.4^2) /   8.3 + ln(10) - PI "
+./bin/ccalc "  100.53 + sqrt(3.5 - EN) + (44.23 *   6.4^2) /   8.3 + ln(10) - PI + ln(5^EC)"
 ```
 
 **Tokenizer Output:**
 ```
-Printing tokenenized input ('25' tokens found):
-TOKEN('100.53'); CURSOR(2)
-TOKEN('+'); CURSOR(8)
-TOKEN('sqrt'); CURSOR(11)
-TOKEN('('); CURSOR(14)
-TOKEN('3.5'); CURSOR(16)
-TOKEN('-'); CURSOR(19)
-TOKEN('EN'); CURSOR(22)
-TOKEN(')'); CURSOR(23)
-TOKEN('+'); CURSOR(25)
-TOKEN('('); CURSOR(27)
-TOKEN('44.23'); CURSOR(29)
-TOKEN('*'); CURSOR(34)
-TOKEN('6.4'); CURSOR(39)
-TOKEN('^'); CURSOR(41)
-TOKEN('2'); CURSOR(43)
-TOKEN(')'); CURSOR(43)
-TOKEN('/'); CURSOR(45)
-TOKEN('8.3'); CURSOR(50)
-TOKEN('+'); CURSOR(53)
-TOKEN('ln'); CURSOR(56)
-TOKEN('('); CURSOR(57)
-TOKEN('10'); CURSOR(59)
-TOKEN(')'); CURSOR(60)
-TOKEN('-'); CURSOR(62)
-TOKEN('PI'); CURSOR(65)
+Printing tokenenized input ('32' tokens found):
+Token('100.53')
+Token('+')
+Token('sqrt')
+Token('(')
+Token('3.5')
+Token('-')
+Token('EN')
+Token(')')
+Token('+')
+Token('(')
+Token('44.23')
+Token('*')
+Token('6.4')
+Token('^')
+Token('2')
+Token(')')
+Token('/')
+Token('8.3')
+Token('+')
+Token('ln')
+Token('(')
+Token('10')
+Token(')')
+Token('-')
+Token('PI')
+Token('+')
+Token('ln')
+Token('(')
+Token('5')
+Token('^')
+Token('EC')
+Token(')')
 ```
 
 **Lexer Output:**
 ```
-Printing lexed tokens ('25' tokens found):
+Printing lexed tokens ('32' tokens found):
 Literal(100.5300)
 Operator(Add)
 Function(sqrt)
 Bracket(Open-Paren)
 Literal(3.5000)
 Operator(Subtract)
-MathConstant(Euler's number)
+Constant(Euler's number)
 Bracket(Closing-Paren)
 Operator(Add)
 Bracket(Open-Paren)
@@ -79,7 +86,14 @@ Bracket(Open-Paren)
 Literal(10.0000)
 Bracket(Closing-Paren)
 Operator(Subtract)
-MathConstant(Pi)
+Constant(Pi)
+Operator(Add)
+Function(ln)
+Bracket(Open-Paren)
+Literal(5.0000)
+Operator(Pow)
+Constant(Euler's constant)
+Bracket(Closing-Paren)
 ```
 
 

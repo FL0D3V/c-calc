@@ -6,6 +6,7 @@
 #include "global.h"
 #include "darray.h"
 #include "stringslice.h"
+#include "tokenizer.h"
 
 
 #define l_return_defer()              do { isError = true; goto defer; } while (0)
@@ -17,11 +18,16 @@
 #define L_ERROR_GIVEN_LEXER_INVALID()         fprintf(stderr, "lexer_error: Can't print the lexer because an error happend!\n")
 
 
+// TODO: Implement variables and variable assigning
+// Variables could look like e.g.: 'a', 'b', 'out1'
+// Variable assigning could look like: ':='
+// Also 'solve' could be a function which allows for using the '=' operator inside and variables for more complex expressions
+
 typedef enum {
   TT_LITERAL,
+  TT_MATH_CONSTANT,
   TT_OPERATOR,
   TT_BRACKET,
-  TT_MATH_CONSTANT,
   TT_FUNCTION,
 
   TT_COUNT
@@ -30,23 +36,24 @@ typedef enum {
 static_assert(TT_COUNT == 5, "Amount of token-types have changed");
 const char* tokenTypeNames[TT_COUNT] = {
 	[TT_LITERAL] = "Literal",
-	[TT_OPERATOR] = "Operator",
+  [TT_MATH_CONSTANT] = "Constant",
+  [TT_OPERATOR] = "Operator",
   [TT_BRACKET] = "Bracket",
-  [TT_MATH_CONSTANT] = "MathConstant",
   [TT_FUNCTION] = "Function",
 };
 
 
 typedef union {
   double literal;
+  e_math_constant_type constant;
   e_operator_type operator;
   e_bracket_type bracket;
-  e_math_constant_type mathConstant;
   e_function_type function;
 } u_token_as;
 
 typedef struct {
   e_token_type type;
+  size_t cursor;
   u_token_as as;
 } token_t;
 
@@ -65,11 +72,11 @@ typedef struct {
   } while (0)
 
 
-#define add_literal_token(lexer, lt)        da_append((lexer), ((token_t) { .type = TT_LITERAL,       .as.literal      = (lt) }))
-#define add_operator_token(lexer, op)       da_append((lexer), ((token_t) { .type = TT_OPERATOR,      .as.operator     = (op) }))
-#define add_bracket_token(lexer, bt)        da_append((lexer), ((token_t) { .type = TT_BRACKET,       .as.bracket      = (bt) }))
-#define add_math_constant_token(lexer, mc)  da_append((lexer), ((token_t) { .type = TT_MATH_CONSTANT, .as.mathConstant = (mc) }))
-#define add_function_token(lexer, ft)       da_append((lexer), ((token_t) { .type = TT_FUNCTION,      .as.function     = (ft) }))
+#define add_literal_token(lexer, lt, curr)        da_append((lexer), ((token_t) { .type = TT_LITERAL,       .as.literal  = (lt), .cursor = (curr) }))
+#define add_math_constant_token(lexer, mc, curr)  da_append((lexer), ((token_t) { .type = TT_MATH_CONSTANT, .as.constant = (mc), .cursor = (curr) }))
+#define add_operator_token(lexer, op, curr)       da_append((lexer), ((token_t) { .type = TT_OPERATOR,      .as.operator = (op), .cursor = (curr) }))
+#define add_bracket_token(lexer, bt, curr)        da_append((lexer), ((token_t) { .type = TT_BRACKET,       .as.bracket  = (bt), .cursor = (curr) }))
+#define add_function_token(lexer, ft, curr)       da_append((lexer), ((token_t) { .type = TT_FUNCTION,      .as.function = (ft), .cursor = (curr) }))
 
 
 
@@ -92,7 +99,7 @@ void lex_tokens(lexer_t* lexer, token_list_t* tokens)
       if (op == OP_INVALID)
         t_unreachable_defer("Invalid operator-type!");
 
-      add_operator_token(lexer, op);
+      add_operator_token(lexer, op, currentToken->cursor);
       continue;
     }
     
@@ -103,7 +110,7 @@ void lex_tokens(lexer_t* lexer, token_list_t* tokens)
       if (bt == BT_INVALID)
         t_unreachable_defer("Invalid bracket-type!");
 
-      add_bracket_token(lexer, bt);
+      add_bracket_token(lexer, bt, currentToken->cursor);
       continue;
     }
 
@@ -114,7 +121,7 @@ void lex_tokens(lexer_t* lexer, token_list_t* tokens)
       if (mc == MC_INVALID)
         l_unreachable_defer("Invalid math-constant-type!");
 
-      add_math_constant_token(lexer, mc);
+      add_math_constant_token(lexer, mc, currentToken->cursor);
       continue;
     }
 
@@ -125,7 +132,7 @@ void lex_tokens(lexer_t* lexer, token_list_t* tokens)
       if (ft == FT_INVALID)
         l_unreachable_defer("Invalid function-type!");
 
-      add_function_token(lexer, ft);
+      add_function_token(lexer, ft, currentToken->cursor);
       continue;
     }
     
@@ -136,7 +143,8 @@ void lex_tokens(lexer_t* lexer, token_list_t* tokens)
       case 0:
       {
         double literal = strtof(currentTokenString, NULL);
-        add_literal_token(lexer, literal);
+
+        add_literal_token(lexer, literal, currentToken->cursor);
         continue;
       }
       case -1:
@@ -189,7 +197,7 @@ void print_lexed_tokens(lexer_t* lexer)
         printf("(%s)", bracketTypeNames[token->as.bracket]);
         break;
       case TT_MATH_CONSTANT:
-        printf("(%s)", mathConstantTypeNames[token->as.mathConstant]);
+        printf("(%s)", mathConstantTypeNames[token->as.constant]);
         break;
       case TT_FUNCTION:
         printf("(%s)", functionTypeNames[token->as.function]);
