@@ -6,17 +6,17 @@
 #include "stringslice.h"
 
 
+#define t_return_defer()              goto defer
+#define t_unreachable_defer(message)  do { fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message); t_return_defer(); } while(0)
+
+
 typedef struct {
   char* items;
   size_t capacity;
   size_t count;
-
-  // TODO: Rethink! Could be used to store the current cursor position of the original input string for this token.
-  // To know exacly where an input error could have happend in the original input string, you could use the cursor plus the offset
-  // in the current token string.
+  
   size_t cursor;
 } input_token_t;
-
 
 typedef struct {
   input_token_t* items;
@@ -39,7 +39,6 @@ typedef struct {
 static bool next_cstr_token(string_slice_t* ss, string_builder_t* tokenBuff)
 {
   sb_free(*tokenBuff);
-  //ss_seek_spaces(ss);
 
   if (!ss_in_range(ss))
     return false;
@@ -66,7 +65,6 @@ void tokenize_input(token_list_t* tokens, const char* input)
 
   string_slice_t ss = {0};
   string_builder_t inputBuff = {0};
-  //bool isDirty = false;
   
   ss_init(&ss, input);
   
@@ -74,32 +72,13 @@ void tokenize_input(token_list_t* tokens, const char* input)
   {
     ss_seek_spaces(&ss);
     
+    // Because 'ss_seek_spaces' can seek to the end.
     if (!ss_in_range(&ss))
       break;
 
-    /*if (c_is_literal(current))
-    {
-      if (isDirty)
-      {
-        token_list_append(tokens, inputBuff.items, currentPos - inputBuff.count);
-        sb_free(inputBuff);
-        isDirty = false;
-      }
-
-      sb_append_char(&inputBuff, current);
-
-      // Checks for completion of the current literal.
-      if ((ss_can_peek(&ss) && !c_is_literal(ss_peek(&ss))) || !ss_can_peek(&ss))
-      {
-        token_list_append(tokens, inputBuff.items, currentPos - inputBuff.count);
-        sb_free(inputBuff);
-      }
-    }*/
     if (next_cstr_token(&ss, &inputBuff))
     {
-      size_t currentPos = ss_current_pos(&ss);
-
-      token_list_append(tokens, inputBuff.items, currentPos - inputBuff.count);
+      token_list_append(tokens, inputBuff.items, ss_current_pos(&ss) - inputBuff.count);
       sb_free(inputBuff);
 
       continue;
@@ -110,48 +89,25 @@ void tokenize_input(token_list_t* tokens, const char* input)
       if (!ss_in_range(&ss))
         break;
     }
-    
-    if (c_is_operator(ss_get_current(&ss)))
+
+    const char current = ss_get_current(&ss);
+    const size_t currentPos = ss_current_pos(&ss);
+
+    if (c_is_operator(current))
     {
-      const char current = ss_get_current(&ss);
-      size_t currentPos = ss_current_pos(&ss);
-
-      /*if (isDirty)
-      {
-        token_list_append(tokens, inputBuff.items, currentPos - inputBuff.count);
-        sb_free(inputBuff);
-        isDirty = false;
-      }*/
-
       sb_append_char(&inputBuff, current);
       token_list_append(tokens, inputBuff.items, currentPos - inputBuff.count);
       sb_free(inputBuff);
     }
-    else if (c_is_bracket(ss_get_current(&ss)))
+    else if (c_is_bracket(current))
     {
-      const char current = ss_get_current(&ss);
-      size_t currentPos = ss_current_pos(&ss);
-
-      /*if (isDirty)
-      {
-        token_list_append(tokens, inputBuff.items, currentPos - inputBuff.count);
-        sb_free(inputBuff);
-        isDirty = false;
-      }*/
-
       sb_append_char(&inputBuff, current);
       token_list_append(tokens, inputBuff.items, currentPos - inputBuff.count);
       sb_free(inputBuff);
     }
     else
     {
-      fprintf(stderr, "UNREACHABLE\n");
-      goto defer;
-
-      // For multi character function parsing
-      //if (!isDirty)
-      //  isDirty = true;
-      //sb_append_char(&inputBuff, current);
+      t_unreachable_defer("Unhandled character!");
     }
 
     ss_seek(&ss);
@@ -170,7 +126,7 @@ void print_tokens(token_list_t* tokens)
 
   for (size_t i = 0; i < tokens->count; i++) {
     input_token_t* currentToken = &tokens->items[i];
-    printf("%zu: TOKEN('%s'); CURSOR(%zu)\n", i + 1, currentToken->items, currentToken->cursor);
+    printf("TOKEN('%s'); CURSOR(%zu)\n", currentToken->items, currentToken->cursor);
   }
 }
 

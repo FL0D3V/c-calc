@@ -64,22 +64,25 @@ lit_check_ret_t cstr_is_literal(const char* cstr)
 }
 
 
+
 typedef enum {
   OP_ADD,
   OP_SUB,
   OP_MUL,
   OP_DIV,
+  OP_POW,
 
   OP_COUNT,
   OP_INVALID
 } e_operator_type;
 
-static_assert(OP_COUNT == 4, "Amount of operator-types have changed");
+static_assert(OP_COUNT == 5, "Amount of operator-types have changed");
 const char* operatorTypeNames[OP_COUNT] = {
 	[OP_ADD] = "Add",
 	[OP_SUB] = "Subtract",
 	[OP_MUL] = "Multiply",
 	[OP_DIV] = "Divide",
+	[OP_POW] = "Pow",
 };
 
 e_operator_type char_to_operator_type(const char c)
@@ -90,6 +93,7 @@ e_operator_type char_to_operator_type(const char c)
     case '-': return OP_SUB;
     case '*': return OP_MUL;
     case '/': return OP_DIV;
+    case '^': return OP_POW;
     default:  return OP_INVALID;
   }
 }
@@ -104,6 +108,7 @@ e_operator_type cstr_to_operator_type(const char* cstr)
 
 #define c_is_operator(c) (char_to_operator_type(c) != OP_INVALID)
 #define cstr_is_operator(cstr) (cstr_to_operator_type(cstr) != OP_INVALID)
+
 
 
 typedef enum {
@@ -143,18 +148,75 @@ e_bracket_type cstr_to_bracket_type(const char* cstr)
 
 
 
+// Reference: https://en.wikipedia.org/wiki/List_of_mathematical_constants
+typedef enum {
+  MC_PI,
+  MC_TAU,
+  MC_PHI,
+  MC_EULERS_NUMBER,
+  MC_EULERS_CONSTANT,
+  MC_OMEGA_CONSTANT,
+  MC_GAUSS_CONSTANT,
+
+  MC_COUNT,
+  MC_INVALID
+} e_math_constant_type;
+
+static_assert(MC_COUNT == 7, "Amount of math-constant-types have changed");
+const char* mathConstantTypeIdentifiers[MC_COUNT] = {
+  [MC_PI]              = "PI",  // Pi
+  [MC_TAU]             = "TAU", // Tau
+  [MC_PHI]             = "PHI", // Phi
+  [MC_EULERS_NUMBER]   = "EN",  // Euler's number
+  [MC_EULERS_CONSTANT] = "EC",  // Euler's constant
+  [MC_OMEGA_CONSTANT]  = "OC",  // Omega constant
+  [MC_GAUSS_CONSTANT]  = "GC",  // Gauss's constant
+};
+
+const char* mathConstantTypeNames[MC_COUNT] = {
+  [MC_PI]              = "Pi",
+  [MC_TAU]             = "Tau",
+  [MC_PHI]             = "Phi",
+  [MC_EULERS_NUMBER]   = "Euler's number",
+  [MC_EULERS_CONSTANT] = "Euler's constant",
+  [MC_OMEGA_CONSTANT]  = "Omega constant",
+  [MC_GAUSS_CONSTANT]  = "Gauss's constant",
+};
+
+e_math_constant_type cstr_to_math_constant_type(const char* cstr)
+{
+  if (!cstr)
+    return MC_INVALID;
+
+  for (size_t i = 0; i < MC_COUNT; ++i)
+    if (strcmp(cstr, mathConstantTypeIdentifiers[i]) == 0)
+      return (e_math_constant_type) i;
+
+  return MC_INVALID;
+}
+
+#define cstr_is_math_constant(cstr) (cstr_to_math_constant_type(cstr) != MC_INVALID)
+
+
+
 typedef enum {
   FT_SQRT,
-  FT_POW,
+  FT_SIN,
+  FT_COS,
+  FT_TAN,
+  FT_LN,
 
   FT_COUNT,
   FT_INVALID
 } e_function_type;
 
-static_assert(FT_COUNT == 2, "Amount of function-types have changed");
+static_assert(FT_COUNT == 5, "Amount of function-types have changed");
 const char* functionTypeNames[FT_COUNT] = {
-  [FT_SQRT] = "Sqrt",
-  [FT_POW] = "Pow"
+  [FT_SQRT] = "sqrt",
+  [FT_SIN] = "sin",
+  [FT_COS] = "cos",
+  [FT_TAN] = "tan",
+  [FT_LN] = "ln",
 };
 
 e_function_type cstr_to_function_type(const char* cstr)
