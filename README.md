@@ -13,13 +13,13 @@ It also checks the order of operation explained in the following picture.
 - Functions: sqrt, sin, cos, tan, ln
 
 
-## Tokenizer and Lexer Output
+## Verbose execution example
 
 First 'make' the project and then run the following command for a simple test:
 
 **Input**:
 ```
-./bin/ccalc "  100.53 + sqrt(3.5 - EN) + (44.23 *   6.4^2) /   8.3 + ln(10) - PI + ln(5^EC)"
+ccalc -vv "  100.53 + sqrt(3.5 - EN) + (44.23 *   6.4^2) /   8.3 + ln(10) - PI + ln(5^EC)"
 ```
 
 **Tokenizer Output:**
