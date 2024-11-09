@@ -24,7 +24,7 @@ First 'make' the project and then run the following command for a simple test:
 
 **Tokenizer Output:**
 ```
-Printing tokenenized input ('32' tokens found):
+Printing tokenenized input ('32' tokens):
 Token('100.53')
 Token('+')
 Token('sqrt')
@@ -61,38 +61,38 @@ Token(')')
 
 **Lexer Output:**
 ```
-Printing lexed tokens ('32' tokens found):
-Literal(100.5300)
+Printing lexed tokens ('32' tokens):
+Number(100.53000)
 Operator(Add)
 Function(sqrt)
 Bracket(Open-Paren)
-Literal(3.5000)
+Number(3.50000)
 Operator(Subtract)
-Constant(Euler's number)
+Constant(2.71828183, Euler's number)
 Bracket(Closing-Paren)
 Operator(Add)
 Bracket(Open-Paren)
-Literal(44.2300)
+Number(44.23000)
 Operator(Multiply)
-Literal(6.4000)
+Number(6.40000)
 Operator(Pow)
-Literal(2.0000)
+Number(2.00000)
 Bracket(Closing-Paren)
 Operator(Divide)
-Literal(8.3000)
+Number(8.30000)
 Operator(Add)
 Function(ln)
 Bracket(Open-Paren)
-Literal(10.0000)
+Number(10.00000)
 Bracket(Closing-Paren)
 Operator(Subtract)
-Constant(Pi)
+Constant(3.14159265, Pi)
 Operator(Add)
 Function(ln)
 Bracket(Open-Paren)
-Literal(5.0000)
+Number(5.00000)
 Operator(Pow)
-Constant(Euler's constant)
+Constant(0.57721566, Euler's constant)
 Bracket(Closing-Paren)
 ```
 

@@ -50,6 +50,7 @@ typedef struct {
     node_t* rhs;
 } node_binop_t;
 
+// TODO: Rethink!
 typedef struct {
   node_t* constant;
 } node_function_t;
@@ -70,6 +71,11 @@ struct node {
 void parse_lexer(lexer_t* lexer)
 {
   ASSERT_NULL(lexer);
+
+  for (size_t i = 0; i < lexer->count; ++i)
+  {
+    UNREACHABLE("Not implemented!");
+  }
 }
 
 #endif // _PARSER_H_

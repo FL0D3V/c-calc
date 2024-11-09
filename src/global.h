@@ -9,38 +9,39 @@
 #include <assert.h>
 
 #define UNREACHABLE(message) do { fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
+#define return_defer() goto defer
 #define ASSERT_NULL(value) assert((value) && #value)
 
 
 #define COMMA_CHARACTER '.'
 
-#define c_is_comma(c)     ((c) == COMMA_CHARACTER)
-#define c_is_literal(c)   (isdigit(c) || c_is_comma(c))
+#define c_is_comma(c)   ((c) == COMMA_CHARACTER)
+#define c_is_number(c)  (isdigit(c) || c_is_comma(c))
 
 typedef struct {
   int ret;
   int cursor;
-} lit_check_ret_t;
+} num_check_t;
 
-#define literal_check_ret_null()          ((lit_check_ret_t) { .ret =  1, .cursor = 0     })
-#define literal_check_ret_success(cur)    ((lit_check_ret_t) { .ret =  0, .cursor = (cur) })
-#define literal_check_ret_comma_err(cur)  ((lit_check_ret_t) { .ret = -1, .cursor = (cur) })
-#define literal_check_ret_invalid(cur)    ((lit_check_ret_t) { .ret = -2, .cursor = (cur) })
+#define num_check_null()          ((num_check_t) { .ret =  1, .cursor = 0     })
+#define num_check_success(cur)    ((num_check_t) { .ret =  0, .cursor = (cur) })
+#define num_check_comma_err(cur)  ((num_check_t) { .ret = -1, .cursor = (cur) })
+#define num_check_invalid(cur)    ((num_check_t) { .ret = -2, .cursor = (cur) })
 
-// Returns an 'lit_check_ret_t'.
+// Returns an 'num_check_t'.
 // The 'ret' value variations:
 //  1: Input was NULL or empty. Cursor will be set to 0.
-//  0: Input IS a valid literal and the cursor will be set to the length of the input.
-// -1: Input has to many commas. Cursor will be set to the error position in the string.
-// -2: Input was NOT a literal. Cursor will be set to the error position in the string.
-lit_check_ret_t cstr_is_literal(const char* cstr)
+//  0: Input IS a valid number and the cursor will be set to the length of the input.
+// -1: Input has too many commas. Cursor will be set to the error position in the string.
+// -2: Input was NOT a number. Cursor will be set to the error position in the string.
+num_check_t cstr_is_number(const char* cstr)
 {
   if (!cstr)
-    return literal_check_ret_null();
+    return num_check_null();
 
   size_t len = strlen(cstr);
   if (len <= 0)
-    return literal_check_ret_null();
+    return num_check_null();
 
   bool commaFound = false;
 
@@ -48,20 +49,83 @@ lit_check_ret_t cstr_is_literal(const char* cstr)
   {
     const char current = cstr[i];
     
-    if (!c_is_literal(current))
-      return literal_check_ret_invalid(i);
+    if (!c_is_number(current))
+      return num_check_invalid(i);
 
     if (c_is_comma(current))
     {
       if (commaFound)
-        return literal_check_ret_comma_err(i);
+        return num_check_comma_err(i);
       else
         commaFound = true;
     }
   }
 
-  return literal_check_ret_success(len);
+  return num_check_success(len);
 }
+
+
+
+// Reference: https://en.wikipedia.org/wiki/List_of_mathematical_constants
+// TODO: Implement more constants.
+typedef enum {
+  MC_PI,
+  MC_TAU,
+  MC_PHI,
+  MC_EULERS_NUMBER,
+  MC_EULERS_CONSTANT,
+  MC_OMEGA_CONSTANT,
+  MC_GAUSS_CONSTANT,
+
+  MC_COUNT,
+  MC_INVALID
+} e_math_constant_type;
+
+static_assert(MC_COUNT == 7, "Amount of math-constant-types have changed");
+const char* mathConstantTypeIdentifiers[MC_COUNT] = {
+  [MC_PI]              = "PI",  // Pi
+  [MC_TAU]             = "TAU", // Tau
+  [MC_PHI]             = "PHI", // Phi
+  [MC_EULERS_NUMBER]   = "EN",  // Euler's number
+  [MC_EULERS_CONSTANT] = "EC",  // Euler's constant
+  [MC_OMEGA_CONSTANT]  = "OC",  // Omega constant
+  [MC_GAUSS_CONSTANT]  = "GC",  // Gauss's constant
+};
+
+// A double can store 15 decimal digits.
+const double mathConstantTypeValues[MC_COUNT] = {
+  [MC_PI]              = 3.141592653589793, // Ratio of a circle's circumference to its diameter.
+  [MC_TAU]             = 6.283185307179586, // Ratio of a circle's circumference to its radius. Equivalent to 2 PI.
+  [MC_PHI]             = 1.618033988749894, // The golden ration "(1 + sqrt(5)) / 5"
+  [MC_EULERS_NUMBER]   = 2.718281828459045,
+  [MC_EULERS_CONSTANT] = 0.577215664901532,
+  [MC_OMEGA_CONSTANT]  = 0.567143290409783,
+  [MC_GAUSS_CONSTANT]  = 0.834626841674073,
+};
+
+const char* mathConstantTypeNames[MC_COUNT] = {
+  [MC_PI]              = "Pi",
+  [MC_TAU]             = "Tau",
+  [MC_PHI]             = "Phi",
+  [MC_EULERS_NUMBER]   = "Euler's number",
+  [MC_EULERS_CONSTANT] = "Euler's constant",
+  [MC_OMEGA_CONSTANT]  = "Omega constant",
+  [MC_GAUSS_CONSTANT]  = "Gauss's constant",
+};
+
+e_math_constant_type cstr_to_math_constant_type(const char* cstr)
+{
+  if (!cstr)
+    return MC_INVALID;
+
+  for (size_t i = 0; i < MC_COUNT; ++i)
+    if (strcmp(cstr, mathConstantTypeIdentifiers[i]) == 0)
+      return (e_math_constant_type) i;
+
+  return MC_INVALID;
+}
+
+#define cstr_is_math_constant(cstr) (cstr_to_math_constant_type(cstr) != MC_INVALID)
 
 
 
@@ -148,60 +212,6 @@ e_bracket_type cstr_to_bracket_type(const char* cstr)
 
 
 
-// Reference: https://en.wikipedia.org/wiki/List_of_mathematical_constants
-// TODO: Implement more constants.
-typedef enum {
-  MC_PI,
-  MC_TAU,
-  MC_PHI,
-  MC_EULERS_NUMBER,
-  MC_EULERS_CONSTANT,
-  MC_OMEGA_CONSTANT,
-  MC_GAUSS_CONSTANT,
-
-  MC_COUNT,
-  MC_INVALID
-} e_math_constant_type;
-
-static_assert(MC_COUNT == 7, "Amount of math-constant-types have changed");
-const char* mathConstantTypeIdentifiers[MC_COUNT] = {
-  [MC_PI]              = "PI",  // Pi
-  [MC_TAU]             = "TAU", // Tau
-  [MC_PHI]             = "PHI", // Phi
-  [MC_EULERS_NUMBER]   = "EN",  // Euler's number
-  [MC_EULERS_CONSTANT] = "EC",  // Euler's constant
-  [MC_OMEGA_CONSTANT]  = "OC",  // Omega constant
-  [MC_GAUSS_CONSTANT]  = "GC",  // Gauss's constant
-};
-
-const char* mathConstantTypeNames[MC_COUNT] = {
-  [MC_PI]              = "Pi",
-  [MC_TAU]             = "Tau",
-  [MC_PHI]             = "Phi",
-  [MC_EULERS_NUMBER]   = "Euler's number",
-  [MC_EULERS_CONSTANT] = "Euler's constant",
-  [MC_OMEGA_CONSTANT]  = "Omega constant",
-  [MC_GAUSS_CONSTANT]  = "Gauss's constant",
-};
-
-// TODO: Rethink! Implement array of all constants with their corresponding calculated values.
-
-e_math_constant_type cstr_to_math_constant_type(const char* cstr)
-{
-  if (!cstr)
-    return MC_INVALID;
-
-  for (size_t i = 0; i < MC_COUNT; ++i)
-    if (strcmp(cstr, mathConstantTypeIdentifiers[i]) == 0)
-      return (e_math_constant_type) i;
-
-  return MC_INVALID;
-}
-
-#define cstr_is_math_constant(cstr) (cstr_to_math_constant_type(cstr) != MC_INVALID)
-
-
-
 // TODO: Implement more functions.
 typedef enum {
   FT_SQRT,
@@ -217,10 +227,10 @@ typedef enum {
 static_assert(FT_COUNT == 5, "Amount of function-types have changed");
 const char* functionTypeNames[FT_COUNT] = {
   [FT_SQRT] = "sqrt",
-  [FT_SIN] = "sin",
-  [FT_COS] = "cos",
-  [FT_TAN] = "tan",
-  [FT_LN] = "ln",
+  [FT_SIN]  = "sin",
+  [FT_COS]  = "cos",
+  [FT_TAN]  = "tan",
+  [FT_LN]   = "ln",
 };
 
 e_function_type cstr_to_function_type(const char* cstr)

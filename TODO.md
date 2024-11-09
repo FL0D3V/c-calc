@@ -6,6 +6,7 @@
 - [X] Lexer: Is an extension to the tokenizer which adds additional meta data to the tokens like what type of token and extra values like converted value literal or operator type.
 - [ ] Parser: Converts the lexed tokens to an AST (abstract syntax tree) for checking e.g. the "order of operations" of the math equation.
 - [ ] Executing the parsed AST.
+- [X] Simple user-friendly CLI.
 - [ ] Complex CLI interface with the possibility to enter multiple math expressions without having to restart the program.
 
 ## Missing Extras

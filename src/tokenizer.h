@@ -105,10 +105,7 @@ void tokenize_input(token_list_t* tokens, const char* input)
       token_list_append(tokens, inputBuff.items, currentPos - inputBuff.count);
       sb_free(inputBuff);
     }
-    else
-    {
-      t_unreachable_defer("Unhandled character!");
-    }
+    else t_unreachable_defer("Unhandled character!");
 
     ss_seek(&ss);
   }
@@ -122,7 +119,7 @@ void print_tokens(token_list_t* tokens)
 {
   ASSERT_NULL(tokens);
 
-  printf("Printing tokenenized input ('%zu' tokens found):\n", tokens->count);
+  printf("Printing tokenenized input ('%zu' tokens):\n", tokens->count);
 
   for (size_t i = 0; i < tokens->count; i++) {
     input_token_t* currentToken = &tokens->items[i];
