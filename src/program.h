@@ -7,6 +7,7 @@
 #include "parser.h"
 
 // The current version of the program.
+#define PROGRAM_LICENCE "MIT"
 #define CURRENT_VERSION version(0, 1, 0)
 
 
@@ -56,9 +57,9 @@ static const char* longProgFuncTypeIdentifier[PFT_COUNT] = {
 #define long_full_identifier(index)  LONG_PREFIX, longProgFuncTypeIdentifier[(index)]
 
 static const char* progFuncTypeDescriptions[PFT_COUNT] = {
-  [PFT_VERBOSE] = "Executes a given math expression verbose. This means all steps from tokenization, lexing and parsing will get printed.",
-  [PFT_HELP]    = "Shows the help menu.",
-  [PFT_VERSION] = "Shows the current program version."
+  [PFT_VERBOSE] = "Executes the math expression and prints every step while running (tokenization, lexing, parsing).",
+  [PFT_HELP]    = "Display this help and exit.",
+  [PFT_VERSION] = "Output version information and exit."
 };
 
 static e_program_function_type cstr_to_program_function_type(const char* cstr)
@@ -138,7 +139,7 @@ int handle_program(program_t* program);
 // All program definitions.
 static void print_usage(e_program_function_flags flags, const char* programName, int argc, char** argv);
 static void print_help(const char* programName);
-static void print_current_version();
+static void print_current_version(const char* programName);
 static int handle_math_input(const char* input, bool verbose);
 
 
@@ -214,7 +215,7 @@ int handle_program(program_t* program)
   // Checking if the version function was called.
   if (is_only_bit_set(program->funcFlags, PFF_VERSION))
   {
-    print_current_version();
+    print_current_version(program->programName);
     return EXIT_SUCCESS;
   }
 
@@ -284,9 +285,17 @@ static void print_help(const char* programName)
 }
 
 
-static void print_current_version()
+static void print_current_version(const char* programName)
 {
-  printf("Current program version: " VERSION_FORMAT "\n", VERSION_ARGS(CURRENT_VERSION));
+  ASSERT_NULL(programName);
+
+  printf("%s " VERSION_FORMAT "\n", programName, VERSION_ARGS(CURRENT_VERSION));
+  printf("Copyright (c) 2024 FloDev.\n");
+  printf("License " PROGRAM_LICENCE ": <https://github.com/FL0D3V/c-calc/blob/main/LICENSE>.\n");
+  printf("This is free software: you are free to change and redistribute it.\n");
+  printf("There is NO WARRANTY, to the extent permitted by law.\n");
+  printf("\n");
+  printf("Written by Florian Maier <https://github.com/FL0D3V>.\n");
 }
 
 
