@@ -8,7 +8,7 @@
 
 // The current version of the program.
 #define PROGRAM_LICENCE "MIT"
-#define CURRENT_VERSION version(0, 1, 0)
+#define CURRENT_VERSION version(0, 0, 1)  // MAJOR, MINOR, REVISION/PATCH
 
 
 // This is usefull for: "PF_VERBOSE | PF_HELP"
@@ -49,15 +49,21 @@ static const char* longProgFuncTypeIdentifier[PFT_COUNT] = {
   [PFT_VERSION] = "version",
 };
 
+// TODO: Rethink:
+// '-e' [EXPRESSION]
+// For executing a given math expression.
+// This could be usefull when implementing a full CLI and allowing for multiple inputs in the same session with
+// variable storage and other features.
+
 #define IDENTIFIER_STRING_ARGS "%s%s"
 #define _IDENTIFIER_STRING_ARGS_COL(col) "%s%" col "s"
-#define IDENTIFIER_STRING_ARGS_COL_S _IDENTIFIER_STRING_ARGS_COL("-4")
-#define IDENTIFIER_STRING_ARGS_COL_L _IDENTIFIER_STRING_ARGS_COL("-10")
+#define IDENTIFIER_STRING_ARGS_COL_S _IDENTIFIER_STRING_ARGS_COL("-5")
+#define IDENTIFIER_STRING_ARGS_COL_L _IDENTIFIER_STRING_ARGS_COL("-15")
 #define short_full_identifier(index) SHORT_PREFIX, shortProgFuncTypeIdentifier[(index)]
 #define long_full_identifier(index)  LONG_PREFIX, longProgFuncTypeIdentifier[(index)]
 
 static const char* progFuncTypeDescriptions[PFT_COUNT] = {
-  [PFT_VERBOSE] = "Executes the math expression and prints every step while running (tokenization, lexing, parsing).",
+  [PFT_VERBOSE] = "Execute the given expression with verbose logging and exit.",
   [PFT_HELP]    = "Display this help and exit.",
   [PFT_VERSION] = "Output version information and exit."
 };
@@ -326,10 +332,21 @@ static int handle_math_input(const char* input, bool verbose)
     print_lexed_tokens(&lexer);
 
   // Parsing of the lexed tokens
-  // TODO: Implement!
-  //parse_lexer(&lexer);
-
+  node_t* rootNode = parse_lexer(&lexer);
   lexer_free(lexer);
+
+  if (verbose)
+    print_node_ln(rootNode);
+
+  // TODO: Evaluate parsed expression.
+  node_t* finalNode = eval(rootNode);
+  
+  print_node_ln(finalNode);
+
+  // TODO: Implement!
+  //node_free(rootNode);
+  //node_free(finalNode);
+
   return EXIT_SUCCESS;
 }
 

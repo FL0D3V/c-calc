@@ -3,7 +3,7 @@ CC := gcc
 #CFLAGS := -Wall -Wextra -Werror -Wswitch-enum -std=c11 -pedantic -ggdb
 # release
 CFLAGS := -Wall -Wextra -Werror -Wswitch-enum -std=c11 -pedantic
-LDLIBS := 
+LDLIBS := -lm
 LDFLAGS := 
 TARGET := ccalc
 
