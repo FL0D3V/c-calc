@@ -305,6 +305,10 @@ static void print_current_version(const char* programName)
 }
 
 
+// TODO: Remove later!
+static void test_ast_eval();
+
+
 static int handle_math_input(const char* input, bool verbose)
 {
   if (verbose)
@@ -331,23 +335,126 @@ static int handle_math_input(const char* input, bool verbose)
   if (verbose)
     print_lexed_tokens(&lexer);
 
-  // Parsing of the lexed tokens
-  node_t* rootNode = parse_lexer(&lexer);
-  lexer_free(lexer);
 
-  if (verbose)
-    print_node_ln(rootNode);
+  // TODO: Remove!
+  printf("\n");
+  test_ast_eval();
+
+  // TODO: Implement parser
+  
+  // Parsing of the lexed tokens
+  //node_t* rootNode = parse_lexer(&lexer);
+  //lexer_free(lexer);
+
+  //if (verbose)
+  //print_node_ln(rootNode);
 
   // TODO: Evaluate parsed expression.
-  node_t* finalNode = eval(rootNode);
+  //node_t* finalNode = eval(rootNode);
   
-  print_node_ln(finalNode);
+  //printf("= %.05lf\n", finalNode->as.constant);
 
   // TODO: Implement!
   //node_free(rootNode);
   //node_free(finalNode);
 
   return EXIT_SUCCESS;
+}
+
+
+// INFO: Just for testing! Remove later!
+static void test_ast_eval()
+{
+  printf("AST testing:\n\n");
+
+  // IN: "1 + 2 + (PI ^ 2) / 3"
+  // AST: add(1.00000, add(2.00000, divide(paren(pow(3.14159, 2.00000)), 3.00000)))
+  // = 6,28986
+  node_t* test1 =
+    node_binop(0, NO_ADD,
+      node_constant(0, 1),
+      node_binop(0, NO_ADD,
+        node_constant(0, 2),
+        node_binop(0, NO_DIV,
+          node_bracket(0, NB_PAREN,
+            node_binop(0, NO_POW,
+              node_constant(0, mathConstantTypeValues[MC_PI]),
+              node_constant(0, 2)
+            )
+          ),
+          node_constant(0, 3)
+        )
+      )
+    );
+
+  printf("Input = 1 + 2 + (PI ^ 2) / 3\n");
+  print_node_ln(test1);
+  node_t* test1_eval = eval(test1);
+  printf("= %.05lf\n", test1_eval->as.constant);
+  printf("\n");
+
+
+  // IN: "ln(10)"
+  // AST: ln(10)
+  // = 2.30258
+  node_t* test2 =
+    node_func(0, NF_LN, node_constant(0, 10));
+  
+  printf("Input = ln(10)\n");
+  print_node_ln(test2);
+  node_t* test2_eval = eval(test2);
+  printf("= %.05lf\n", test2_eval->as.constant);
+  printf("\n");
+
+
+  // IN: "100.53 + sqrt(3.5 - EN) + (44.23 * 6.4^2) / 8.3 + ln(10) - PI + ln(5^EC)"
+  // AST: add(100.53000, add(sqrt(substract(3.50000, 2.71828)), add(divide(parenthesis(multiply(44.23000, pow(6.40000, 2.00000))), 8.30000), substract(ln(10.00000), add(3.14159, ln(pow(5.00000, 0.57722)))))))
+  // = 317.91853
+  node_t* test3 =
+    node_binop(0, NO_ADD,
+      node_constant(0, 100.53),
+      node_binop(0, NO_ADD,
+        node_func(0, NF_SQRT,
+          node_binop(0, NO_SUB,
+            node_constant(0, 3.5),
+            node_constant(0, mathConstantTypeValues[MC_EULERS_NUMBER])
+          )
+        ),
+        node_binop(0, NO_ADD,
+          node_binop(0, NO_DIV,
+            node_bracket(0, NB_PAREN,
+              node_binop(0, NO_MUL,
+                node_constant(0, 44.23),
+                node_binop(0, NO_POW,
+                  node_constant(0, 6.4),
+                  node_constant(0, 2)
+                )
+              )
+            ),
+            node_constant(0, 8.3)
+          ),
+          node_binop(0, NO_SUB,
+            node_func(0, NF_LN,
+              node_constant(0, 10)
+            ),
+            node_binop(0, NO_ADD,
+              node_constant(0, mathConstantTypeValues[MC_PI]),
+              node_func(0, NF_LN,
+                node_binop(0, NO_POW,
+                  node_constant(0, 5),
+                  node_constant(0, mathConstantTypeValues[MC_EULERS_CONSTANT])
+                )
+              )
+            )
+          )
+        )
+      )
+    );
+
+  printf("Input = 100.53 + sqrt(3.5 - EN) + (44.23 * 6.4^2) / 8.3 + ln(10) - PI + ln(5^EC)\n");
+  print_node_ln(test3);
+  node_t* test3_eval = eval(test3);
+  printf("= %.05lf\n", test3_eval->as.constant);
 }
 
 #endif // _PROGRAM_H_

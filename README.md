@@ -96,6 +96,54 @@ Constant(0.57721566, Euler's constant)
 Bracket(Closing-Paren)
 ```
 
+**Parsed AST:**
+```
+add(
+  100.53000,
+  add(
+    sqrt(
+      substract(
+        3.50000,
+        2.71828
+      )
+    ),
+    add(
+      divide(
+        parenthesis(
+          multiply(
+            44.23000,
+            pow(
+              6.40000,
+              2.00000
+            )
+          )
+        ),
+        8.30000
+      ),
+      substract(
+        ln(
+          10.00000
+        ),
+        add(
+          3.14159,
+          ln(
+            pow(
+              5.00000,
+              0.57722
+            )
+          )
+        )
+      )
+    )
+  )
+)
+```
+
+**Calculated output:**
+```
+= 317.91853
+```
+
 
 ## Example
 

@@ -75,7 +75,7 @@ typedef enum {
 
 static_assert(NB_COUNT == 1, "Amount of bracket-node-types have changed");
 const char* nodeBracketTypeNames[NB_COUNT] = {
-  [NB_PAREN] = "paren",
+  [NB_PAREN] = "parenthesis",
 };
 
 
@@ -107,12 +107,13 @@ typedef union {
 
 struct node {
     e_node_type type;
+    // TODO: Rethink if needed!
     size_t cursor;
     u_node_as as;
 };
 
 
-
+// TODO: Implement arena allocator!
 node_t* base_node(size_t cursor, e_node_type type)
 {
   node_t* node = (node_t*) malloc(sizeof(node_t));
@@ -181,6 +182,7 @@ void node_free(node_t* node)
 }
 
 
+// TODO: Print indented!
 void print_node(node_t* node)
 {
   ASSERT_NULL(node);
@@ -341,11 +343,6 @@ node_t* parse_lexer(lexer_t* lexer)
   // - A stack for checking nested expressions in brackets. Also if the brackets are used correctly.
   // - - 2 Open '(' should have 2 Closing ')' after.
   // - After a constant MUST come an operator, function, or bracket
-  
-  // Example:
-  //   IN:  1 + 2 + (PI ^ 2) / 3
-  //   OUT: add(1, add(2, divide(bracket(pow(PI, 2)), 3))
-
 
   //for (size_t i = 0; i < lexer->count; ++i)
   //{
@@ -353,25 +350,7 @@ node_t* parse_lexer(lexer_t* lexer)
   //}
 
   // TODO: Return root node!
-  //return NULL;
-  
-  // TODO: Remove! Just for testing.
-  return
-    node_binop(0, NO_ADD,
-      node_constant(0, 1),
-      node_binop(0, NO_ADD,
-        node_constant(0, 2),
-        node_binop(0, NO_DIV,
-          node_bracket(0, NB_PAREN,
-            node_binop(0, NO_POW,
-              node_constant(0, mathConstantTypeValues[MC_PI]),
-              node_constant(0, 2)
-            )
-          ),
-          node_constant(0, 3)
-        )
-      )
-    );
+  return NULL;  
 }
 
 #endif // _PARSER_H_
