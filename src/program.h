@@ -247,7 +247,7 @@ static void print_usage(e_program_function_flags flags, const char* programName,
   for (int i = 0; i < argc; ++i)
   {
     if (i >= argc - 1) fprintf(stderr, "%s", *argv++);
-    else fprintf(stderr, "%s ", *argv++);
+    else fprintf(stderr, "%s", *argv++);
   }
   fprintf(stderr, "'\n");
 
@@ -268,15 +268,30 @@ static void print_help(const char* programName)
 
   printf("Usage: %s [OPTION]... [EXPRESSION]\n", programName);
   printf("Execute simple to more complex math expressions in the terminal.\n");
-  printf("This calculator supports decimals, multiple operators, simple math functions\n");
-  printf("like 'sqrt' or 'sin', brackets ('(', ')') and multiple math constants like 'Pi'.\n");
-  // Add more description here.
-  
+  printf("\n");
+
+  printf("Supported operators:\n");
+  printf("  ");
+  for (size_t i = 0; i < OP_COUNT; ++i)
+  {
+    printf("%c", operatorTypeIdentifiers[i]);
+    if (i < OP_COUNT - 1)
+      printf(", ");
+  }
+  printf("\n\n");
+
+  printf("Supported functions (usage, description):\n");
+  for (size_t i = 0; i < FT_COUNT; ++i)
+    printf("  %s%-10s%s\n", functionTypeNames[i], "(x)", functionTypeDescriptions[i]);
+  printf("\n");
+
+  printf("Supported constants (usage, description):\n");
+  for (size_t i = 0; i < MC_COUNT; ++i)
+    printf("  %-6s%s\n", mathConstantTypeIdentifiers[i], mathConstantTypeNames[i]);
   printf("\n");
   
   printf("Example usage:\n");
   printf("  %s \"10.5 + 30 - sqrt(PI * 5.2) / 8\"\n", programName);
-  
   printf("\n");
   
   printf("The options below may be used for printing the expression execution verbose\n");
@@ -336,8 +351,7 @@ static int handle_math_input(const char* input, bool verbose)
     print_lexed_tokens(&lexer);
 
 
-  // TODO: Remove!
-  printf("\n");
+  // TODO: Remove! Just for testing.
   test_ast_eval();
 
   // TODO: Implement parser
@@ -347,12 +361,12 @@ static int handle_math_input(const char* input, bool verbose)
   //lexer_free(lexer);
 
   //if (verbose)
-  //print_node_ln(rootNode);
+  //print_node(rootNode, true);
 
   // TODO: Evaluate parsed expression.
   //node_t* finalNode = eval(rootNode);
   
-  //printf("= %.05lf\n", finalNode->as.constant);
+  //printf("= " DOUBLE_PRINT_FORMAT "\n", finalNode->as.constant);
 
   // TODO: Implement!
   //node_free(rootNode);
@@ -388,9 +402,9 @@ static void test_ast_eval()
     );
 
   printf("Input = 1 + 2 + (PI ^ 2) / 3\n");
-  print_node_ln(test1);
+  print_node(test1, true);
   node_t* test1_eval = eval(test1);
-  printf("= %.05lf\n", test1_eval->as.constant);
+  printf("= " DOUBLE_PRINT_FORMAT "\n", test1_eval->as.constant);
   printf("\n");
 
 
@@ -401,9 +415,9 @@ static void test_ast_eval()
     node_func(0, NF_LN, node_constant(0, 10));
   
   printf("Input = ln(10)\n");
-  print_node_ln(test2);
+  print_node(test2, true);
   node_t* test2_eval = eval(test2);
-  printf("= %.05lf\n", test2_eval->as.constant);
+  printf("= " DOUBLE_PRINT_FORMAT "\n", test2_eval->as.constant);
   printf("\n");
 
 
@@ -452,9 +466,9 @@ static void test_ast_eval()
     );
 
   printf("Input = 100.53 + sqrt(3.5 - EN) + (44.23 * 6.4^2) / 8.3 + ln(10) - PI + ln(5^EC)\n");
-  print_node_ln(test3);
+  print_node(test3, true);
   node_t* test3_eval = eval(test3);
-  printf("= %.05lf\n", test3_eval->as.constant);
+  printf("= " DOUBLE_PRINT_FORMAT "\n", test3_eval->as.constant);
 }
 
 #endif // _PROGRAM_H_

@@ -182,40 +182,58 @@ void node_free(node_t* node)
 }
 
 
-// TODO: Print indented!
-void print_node(node_t* node)
+#define _PRINT_DEPTH_SPACES(indented, deph) \
+    do {                                    \
+      if (indented)                         \
+        for (size_t i = 0; i < (deph); ++i) \
+          printf(" ");                      \
+    } while(0)
+
+void print_node_ex(node_t* node, bool indented, size_t deph)
 {
   ASSERT_NULL(node);
 
   switch (node->type) {
     case NT_CONSTANT:
-      // TODO: Does not print correctly after around 5 decimal digits currently!
-      printf("%.05lf", node->as.constant);
+      _PRINT_DEPTH_SPACES(indented, deph);
+      printf(DOUBLE_PRINT_FORMAT, node->as.constant);
       break;
     case NT_BINOP:
       if (node->as.binop.type >= NO_COUNT)
-        UNREACHABLE("Invalid node-binop-type!");
-
+        UNREACHABLE("Invalid binop-node-type!");
+      
+      _PRINT_DEPTH_SPACES(indented, deph);
       printf("%s(", nodeBinopTypeNames[node->as.binop.type]);
-      print_node(node->as.binop.lhs);
-      printf(", ");
-      print_node(node->as.binop.rhs);
+      if (indented) printf("\n");
+      print_node_ex(node->as.binop.lhs, indented, deph + 1);
+      printf(",%s", indented ? "\n" : " ");
+      print_node_ex(node->as.binop.rhs, indented, deph + 1);
+      if (indented) printf("\n");
+      _PRINT_DEPTH_SPACES(indented, deph);
       printf(")");
       break;
     case NT_FUNCTION:
       if (node->as.func.type >= NF_COUNT)
-        UNREACHABLE("Invalid node-func-type!");
-
+        UNREACHABLE("Invalid func-node-type!");
+      
+      _PRINT_DEPTH_SPACES(indented, deph);
       printf("%s(", nodeFunctionTypeNames[node->as.func.type]);
-      print_node(node->as.func.arg);
+      if (indented) printf("\n");
+      print_node_ex(node->as.func.arg, indented, deph + 1);
+      if (indented) printf("\n");
+      _PRINT_DEPTH_SPACES(indented, deph);
       printf(")");
       break;
     case NT_BRACKET:
       if (node->as.bracket.type >= NB_COUNT)
-        UNREACHABLE("Invalid node-bracket-type!");
+        UNREACHABLE("Invalid bracket-node-type!");
 
+      _PRINT_DEPTH_SPACES(indented, deph);
       printf("%s(", nodeBracketTypeNames[node->as.bracket.type]);
-      print_node(node->as.bracket.arg);
+      if (indented) printf("\n");
+      print_node_ex(node->as.bracket.arg, indented, deph + 1);
+      if (indented) printf("\n");
+      _PRINT_DEPTH_SPACES(indented, deph);
       printf(")");
       break;
     case NT_COUNT:
@@ -224,7 +242,7 @@ void print_node(node_t* node)
   }
 }
 
-#define print_node_ln(node) (print_node(node), printf("\n"))
+#define print_node(node, indented) (printf("Printing parsed AST:\n"), print_node_ex(node, indented, 0), printf("\n"))
 
 
 node_t* eval(node_t* expr)

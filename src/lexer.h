@@ -189,11 +189,10 @@ void print_lexed_tokens(lexer_t* lexer)
 
     switch (token->type) {
       case TT_NUMBER:
-        // TODO: Does not print correctly after around 5 decimal digits currently!
-        printf("(%.05lf)", token->as.number);
+        printf("(" DOUBLE_PRINT_FORMAT ")", token->as.number);
         break;
       case TT_MATH_CONSTANT:
-        printf("(%.08lf, %s)", mathConstantTypeValues[token->as.constant], mathConstantTypeNames[token->as.constant]);
+        printf("(" DOUBLE_PRINT_FORMAT ", %s)", mathConstantTypeValues[token->as.constant], mathConstantTypeNames[token->as.constant]);
         break;
       case TT_OPERATOR:
         printf("(%s)", operatorTypeNames[token->as.operator]);

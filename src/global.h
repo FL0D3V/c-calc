@@ -9,6 +9,10 @@
 #include <assert.h>
 
 
+// TODO: Does currently not print correctly after around 5 decimal digits!
+#define DOUBLE_PRINT_FORMAT "%.05lf"
+
+
 // String functions
 void cstr_chop_till_last_delim(char** cstr, char delimiter)
 {
@@ -203,17 +207,23 @@ const char* operatorTypeNames[OP_COUNT] = {
 	[OP_POW] = "Pow",
 };
 
+const char operatorTypeIdentifiers[OP_COUNT] = {
+  [OP_ADD] = '+',
+  [OP_SUB] = '-',
+  [OP_MUL] = '*',
+  [OP_DIV] = '/',
+  [OP_POW] = '^'
+};
+
 e_operator_type char_to_operator_type(const char c)
 {
-  switch (c)
+  for (size_t i = 0; i < OP_COUNT; ++i)
   {
-    case '+': return OP_ADD;
-    case '-': return OP_SUB;
-    case '*': return OP_MUL;
-    case '/': return OP_DIV;
-    case '^': return OP_POW;
-    default:  return OP_INVALID;
+    if (operatorTypeIdentifiers[i] == c)
+      return (e_operator_type) i;
   }
+
+  return OP_INVALID;
 }
 
 e_operator_type cstr_to_operator_type(const char* cstr)
@@ -226,6 +236,90 @@ e_operator_type cstr_to_operator_type(const char* cstr)
 
 #define c_is_operator(c) (char_to_operator_type(c) != OP_INVALID)
 #define cstr_is_operator(cstr) (cstr_to_operator_type(cstr) != OP_INVALID)
+
+
+
+// TODO: Implement parameter count for each function to support multiple arguments.
+typedef enum {
+  FT_SQRT,
+  FT_EXP,
+  
+  FT_SIN,
+  FT_ASIN,
+  FT_SINH,
+
+  FT_COS,
+  FT_ACOS,
+  FT_COSH,
+
+  FT_TAN,
+  FT_ATAN,
+  FT_TANH,
+  
+  FT_LN,
+  FT_LOG10,
+
+  FT_COUNT,
+  FT_INVALID
+} e_function_type;
+
+static_assert(FT_COUNT == 13, "Amount of function-types have changed");
+
+const char* functionTypeNames[FT_COUNT] = {
+  // Other
+  [FT_SQRT]   = "sqrt",
+  [FT_EXP]    = "exp",
+  // Sin
+  [FT_SIN]    = "sin",
+  [FT_ASIN]   = "asin",
+  [FT_SINH]   = "sinh",
+  // Cos
+  [FT_COS]    = "cos",
+  [FT_ACOS]   = "acos",
+  [FT_COSH]   = "cosh",
+  // Tan
+  [FT_TAN]    = "tan",
+  [FT_ATAN]   = "atan",
+  [FT_TANH]   = "tanh",
+  // Log
+  [FT_LN]     = "ln",
+  [FT_LOG10]  = "log10"
+};
+
+const char* functionTypeDescriptions[FT_COUNT] = {
+  // Other
+  [FT_SQRT]   = "Returns the square root of x.",
+  [FT_EXP]    = "Returns the value of e raised to the x'th power.",
+  // Sin
+  [FT_SIN]    = "Returns the sine of a radian angle x.",
+  [FT_ASIN]   = "Returns the arc sine of x in radians.",
+  [FT_SINH]   = "Returns the hyperbolic sine of x.",
+  // Cos
+  [FT_COS]    = "Returns the cosine of a radian angle x.",
+  [FT_ACOS]   = "Returns the arc cosine of x in radians.",
+  [FT_COSH]   = "Returns the hyperbolic cosine of x.",
+  // Tan
+  [FT_TAN]    = "Returns the tangent of a given angle x.",
+  [FT_ATAN]   = "Returns the arc tangent of x in radians.",
+  [FT_TANH]   = "Returns the hyperbolic tangent of x.",
+  // Log
+  [FT_LN]     = "Returns the natural logarithm (base-e logarithm) of x.",
+  [FT_LOG10]  = "Returns the common logarithm (base-10 logarithm) of x."
+};
+
+e_function_type cstr_to_function_type(const char* cstr)
+{
+  if (!cstr)
+    return FT_INVALID;
+
+  for (size_t i = 0; i < FT_COUNT; ++i)
+    if (strcmp(cstr, functionTypeNames[i]) == 0)
+      return (e_function_type) i;
+
+  return FT_INVALID;
+}
+
+#define cstr_is_function(cstr) (cstr_to_function_type(cstr) != FT_INVALID)
 
 
 
@@ -263,42 +357,5 @@ e_bracket_type cstr_to_bracket_type(const char* cstr)
 
 #define c_is_bracket(c) (char_to_bracket_type(c) != BT_INVALID)
 #define cstr_is_bracket(cstr) (cstr_to_bracket_type(cstr) != BT_INVALID)
-
-
-
-// TODO: Implement more functions.
-typedef enum {
-  FT_SQRT,
-  FT_SIN,
-  FT_COS,
-  FT_TAN,
-  FT_LN,
-
-  FT_COUNT,
-  FT_INVALID
-} e_function_type;
-
-static_assert(FT_COUNT == 5, "Amount of function-types have changed");
-const char* functionTypeNames[FT_COUNT] = {
-  [FT_SQRT] = "sqrt",
-  [FT_SIN]  = "sin",
-  [FT_COS]  = "cos",
-  [FT_TAN]  = "tan",
-  [FT_LN]   = "ln",
-};
-
-e_function_type cstr_to_function_type(const char* cstr)
-{
-  if (!cstr)
-    return FT_INVALID;
-
-  for (size_t i = 0; i < FT_COUNT; ++i)
-    if (strcmp(cstr, functionTypeNames[i]) == 0)
-      return (e_function_type) i;
-
-  return FT_INVALID;
-}
-
-#define cstr_is_function(cstr) (cstr_to_function_type(cstr) != FT_INVALID)
 
 #endif // _GLOBAL_H_
