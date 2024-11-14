@@ -358,8 +358,25 @@ static int handle_math_input(const char* input, bool verbose)
   // TODO: Remove! Just for testing.
   test_ast_eval();
 
-  // TODO: Implement parser
 
+  // Parsing the lexed tokens.
+  node_arena_t nodeArena = {0};
+  node_t* rootNode = parse_lexer(&nodeArena, &lexer);
+  lexer_free(lexer);
+
+  // TODO: This will currently fail because the parser itself is not implemented at the momement!
+  if (!rootNode)
+  {
+    node_arena_free(&nodeArena);
+    return EXIT_FAILURE;
+  }
+
+  if (verbose)
+    print_node(rootNode, true);
+
+  printf("Result = " DOUBLE_PRINT_FORMAT "\n", eval(&nodeArena, rootNode)->as.constant);
+
+  node_arena_free(&nodeArena);
   return EXIT_SUCCESS;
 }
 
@@ -367,116 +384,134 @@ static int handle_math_input(const char* input, bool verbose)
 // INFO: Just for testing! Remove later!
 static void test_ast_eval()
 {
+  node_arena_t arena = {0};
+
   printf("AST testing:\n\n");
 
-  // IN: "1 + 2 + (PI ^ 2) / 3"
-  // AST: add(1.00000, add(2.00000, divide(paren(pow(3.14159, 2.00000)), 3.00000)))
-  // = 6,28986
-  node_t* test1 =
-    node_binop(0, NO_ADD,
-      node_constant(0, 1),
-      node_binop(0, NO_ADD,
-        node_constant(0, 2),
-        node_binop(0, NO_DIV,
-          node_bracket(0, NB_PAREN,
-            node_binop(0, NO_POW,
-              node_constant(0, mathConstantTypeValues[MC_PI]),
-              node_constant(0, 2)
-            )
-          ),
-          node_constant(0, 3)
-        )
-      )
-    );
-
-  printf("Input = 1 + 2 + (PI ^ 2) / 3\n");
-  print_node(test1, true);
-  node_t* test1_eval = eval(test1);
-  printf("= " DOUBLE_PRINT_FORMAT "\n", test1_eval->as.constant);
-  printf("\n");
-
-
-  // IN: "ln(10)"
-  // AST: ln(10)
-  // = 2.30258
-  node_t* test2 =
-    node_func(0, NF_LN, node_constant(0, 10));
-  
-  printf("Input = ln(10)\n");
-  print_node(test2, true);
-  node_t* test2_eval = eval(test2);
-  printf("= " DOUBLE_PRINT_FORMAT "\n", test2_eval->as.constant);
-  printf("\n");
-
-
-  // IN: "100.53 + sqrt(3.5 - EN) + (44.23 * 6.4^2) / 8.3 + ln(10) - PI + ln(5^EC)"
-  // AST: add(100.53000, add(sqrt(substract(3.50000, 2.71828)), add(divide(parenthesis(multiply(44.23000, pow(6.40000, 2.00000))), 8.30000), substract(ln(10.00000), add(3.14159, ln(pow(5.00000, 0.57722)))))))
-  // = 317.91853
-  node_t* test3 =
-    node_binop(0, NO_ADD,
-      node_constant(0, 100.53),
-      node_binop(0, NO_ADD,
-        node_func(0, NF_SQRT,
-          node_binop(0, NO_SUB,
-            node_constant(0, 3.5),
-            node_constant(0, mathConstantTypeValues[MC_EULERS_NUMBER])
-          )
-        ),
-        node_binop(0, NO_ADD,
-          node_binop(0, NO_DIV,
-            node_bracket(0, NB_PAREN,
-              node_binop(0, NO_MUL,
-                node_constant(0, 44.23),
-                node_binop(0, NO_POW,
-                  node_constant(0, 6.4),
-                  node_constant(0, 2)
-                )
+  // TEST 1
+  {
+    // IN: "1 + 2 + (PI ^ 2) / 3"
+    // AST: add(1.00000, add(2.00000, divide(paren(pow(3.14159, 2.00000)), 3.00000)))
+    // = 6,28986
+    node_t* test1 =
+      node_binop(&arena, 0, NO_ADD,
+        node_constant(&arena, 0, 1),
+        node_binop(&arena, 0, NO_ADD,
+          node_constant(&arena, 0, 2),
+          node_binop(&arena, 0, NO_DIV,
+            node_bracket(&arena, 0, NB_PAREN,
+              node_binop(&arena, 0, NO_POW,
+                node_constant(&arena, 0, mathConstantTypeValues[MC_PI]),
+                node_constant(&arena, 0, 2)
               )
             ),
-            node_constant(0, 8.3)
+            node_constant(&arena, 0, 3)
+          )
+        )
+      );
+
+    printf("Input = 1 + 2 + (PI ^ 2) / 3\n");
+    print_node(test1, true);
+    printf("= " DOUBLE_PRINT_FORMAT "\n", eval(&arena, test1)->as.constant);
+    printf("\n");
+
+    node_arena_free(&arena);
+  }
+
+
+  // TEST 2
+  {
+    // IN: "ln(10)"
+    // AST: ln(10)
+    // = 2.30258
+    node_t* test2 =
+      node_func(&arena, 0, NF_LN,
+        node_constant(&arena, 0, 10));
+    
+    printf("Input = ln(10)\n");
+    print_node(test2, true);
+    printf("= " DOUBLE_PRINT_FORMAT "\n", eval(&arena, test2)->as.constant);
+    printf("\n");
+
+    node_arena_free(&arena);
+  }
+
+
+  // TEST 3
+  {
+    // IN: "100.53 + sqrt(3.5 - EN) + (44.23 * 6.4^2) / 8.3 + ln(10) - PI + ln(5^EC)"
+    // AST: add(100.53000, add(sqrt(substract(3.50000, 2.71828)), add(divide(parenthesis(multiply(44.23000, pow(6.40000, 2.00000))), 8.30000), substract(ln(10.00000), add(3.14159, ln(pow(5.00000, 0.57722)))))))
+    // = 317.91853
+    node_t* test3 =
+      node_binop(&arena, 0, NO_ADD,
+        node_constant(&arena, 0, 100.53),
+        node_binop(&arena, 0, NO_ADD,
+          node_func(&arena, 0, NF_SQRT,
+            node_binop(&arena, 0, NO_SUB,
+              node_constant(&arena, 0, 3.5),
+              node_constant(&arena, 0, mathConstantTypeValues[MC_EULERS_NUMBER])
+            )
           ),
-          node_binop(0, NO_SUB,
-            node_func(0, NF_LN,
-              node_constant(0, 10)
+          node_binop(&arena, 0, NO_ADD,
+            node_binop(&arena, 0, NO_DIV,
+              node_bracket(&arena, 0, NB_PAREN,
+                node_binop(&arena, 0, NO_MUL,
+                  node_constant(&arena, 0, 44.23),
+                  node_binop(&arena, 0, NO_POW,
+                    node_constant(&arena, 0, 6.4),
+                    node_constant(&arena, 0, 2)
+                  )
+                )
+              ),
+              node_constant(&arena, 0, 8.3)
             ),
-            node_binop(0, NO_ADD,
-              node_constant(0, mathConstantTypeValues[MC_PI]),
-              node_func(0, NF_LN,
-                node_binop(0, NO_POW,
-                  node_constant(0, 5),
-                  node_constant(0, mathConstantTypeValues[MC_EULERS_CONSTANT])
+            node_binop(&arena, 0, NO_SUB,
+              node_func(&arena, 0, NF_LN,
+                node_constant(&arena, 0, 10)
+              ),
+              node_binop(&arena, 0, NO_ADD,
+                node_constant(&arena, 0, mathConstantTypeValues[MC_PI]),
+                node_func(&arena, 0, NF_LN,
+                  node_binop(&arena, 0, NO_POW,
+                    node_constant(&arena, 0, 5),
+                    node_constant(&arena, 0, mathConstantTypeValues[MC_EULERS_CONSTANT])
+                  )
                 )
               )
             )
           )
         )
-      )
-    );
+      );
 
-  printf("Input = 100.53 + sqrt(3.5 - EN) + (44.23 * 6.4^2) / 8.3 + ln(10) - PI + ln(5^EC)\n");
-  print_node(test3, true);
-  node_t* test3_eval = eval(test3);
-  printf("= " DOUBLE_PRINT_FORMAT "\n", test3_eval->as.constant);
-  printf("\n");
+    printf("Input = 100.53 + sqrt(3.5 - EN) + (44.23 * 6.4^2) / 8.3 + ln(10) - PI + ln(5^EC)\n");
+    print_node(test3, true);
+    printf("= " DOUBLE_PRINT_FORMAT "\n", eval(&arena, test3)->as.constant);
+    printf("\n");
+
+    node_arena_free(&arena);
+  }
 
 
-  // IN: "10.5 * exp(4)"
-  // AST: mult(10.5, exp(4))
-  // = 573.28058
-  node_t* test4 =
-    node_binop(0, NO_MUL,
-      node_constant(0, 10.5),
-      node_func(0, NF_EXP,
-        node_constant(0, 4)
-      )
-    );
-  
-  printf("Input = 10.5 * exp(4)\n");
-  print_node(test4, true);
-  node_t* test4_eval = eval(test4);
-  printf("= " DOUBLE_PRINT_FORMAT "\n", test4_eval->as.constant);
-  printf("\n");
+  // TEST 4
+  {
+    // IN: "10.5 * exp(4)"
+    // AST: mult(10.5, exp(4))
+    // = 573.28058
+    node_t* test4 =
+      node_binop(&arena, 0, NO_MUL,
+        node_constant(&arena, 0, 10.5),
+        node_func(&arena, 0, NF_EXP,
+          node_constant(&arena, 0, 4)
+        )
+      );
+    
+    printf("Input = 10.5 * exp(4)\n");
+    print_node(test4, true);
+    printf("= " DOUBLE_PRINT_FORMAT "\n", eval(&arena, test4)->as.constant);
+    printf("\n");
 
+    node_arena_free(&arena);
+  }
 }
 
 #endif // _PROGRAM_H_

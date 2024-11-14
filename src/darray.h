@@ -54,7 +54,7 @@ size_t ptr_diff(const void* start, const void* curr)
   } while (0)
 
 // Append several items to a dynamic array
-#define da_append_many(da, new_items, new_items_count)                                      \
+#define da_append_many(da, new_items, new_items_count)                                          \
     do {                                                                                        \
       if ((da)->count + new_items_count > (da)->capacity) {                                     \
         if ((da)->capacity == 0) {                                                              \

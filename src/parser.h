@@ -7,6 +7,7 @@
 
 #include "global.h"
 #include "lexer.h"
+#include "darray.h"
 
 
 typedef enum {
@@ -137,73 +138,129 @@ struct node {
 };
 
 
-// TODO: Implement arena allocator!
-node_t* base_node(size_t cursor, e_node_type type)
+
+// TODO: Check why there are memory errors when this number is f.e. 2..20..!
+#define NODE_REGION_DEFAULT_CAPACITY 128
+
+typedef struct node_region node_region_t;
+
+struct node_region {
+  node_region_t* next;
+  size_t capacity;
+  size_t count;
+  // The region will get allocated with the size of the region + the size of a node * capacity.
+  // So this is just the starting pointer to the additional memory allocated with the size of capacity.
+  node_t data[];
+};
+
+typedef struct {
+  node_region_t* begin;
+} node_arena_t;
+
+static node_region_t* new_node_region(size_t capacity)
 {
-  node_t* node = (node_t*) malloc(sizeof(node_t));
-  node->type = type;
-  node->cursor = cursor;
-  return node;
+  // Allocates the size of a region + the size of a node * capacity.
+  // Thats why the node array is at the end because it just stores the starting
+  // pointer to the extra space (size of node * capacity).
+  size_t size_bytes = sizeof(node_region_t) + sizeof(node_t) * capacity;
+  node_region_t* region = (node_region_t*) malloc(size_bytes);
+  assert(region && "Not enough memory!");
+  region->next = NULL;
+  region->count = 0;
+  region->capacity = capacity;
+  return region;
 }
 
-node_t* node_constant(size_t cursor, double constant)
+static void free_node_region(node_region_t* region)
 {
-  node_t* node = base_node(cursor, NT_CONSTANT);
+  free(region);
+}
+
+node_t* node_arena_alloc(node_arena_t* arena)
+{
+  ASSERT_NULL(arena);
+
+  node_region_t* region = NULL;
+  
+  if (!arena->begin) {
+    arena->begin = new_node_region(NODE_REGION_DEFAULT_CAPACITY);
+    region = arena->begin;
+  } else {
+    node_region_t* tmp = arena->begin;
+  
+    // TODO: Fix memory bug!
+    while (tmp->count + 1 < tmp->capacity && tmp->next) {
+      tmp = tmp->next;
+    }
+    
+    ASSERT_NULL(tmp);
+
+    if (tmp->count + 1 < tmp->capacity) {
+      region = tmp;
+    } else {
+      tmp->next = new_node_region(NODE_REGION_DEFAULT_CAPACITY);
+      region = tmp->next;
+    }
+  }
+  
+  ASSERT_NULL(region);
+  return &region->data[region->count++];
+}
+
+void node_arena_free(node_arena_t* arena)
+{
+  ASSERT_NULL(arena);
+  node_region_t* region = arena->begin;
+  while (region) {
+    node_region_t* tmp = region;
+    region = region->next;
+    free_node_region(tmp);
+  }
+  arena->begin = NULL;
+}
+
+
+
+node_t* base_node(node_arena_t* arena, size_t cursor, e_node_type type)
+{
+  node_t* newNode = node_arena_alloc(arena);
+  newNode->type = type;
+  newNode->cursor = cursor;
+  return newNode;
+}
+
+node_t* node_constant(node_arena_t* arena, size_t cursor, double constant)
+{
+  node_t* node = base_node(arena, cursor, NT_CONSTANT);
   node->as.constant = constant;
   return node;
 }
 
-node_t* node_binop(size_t cursor, e_node_binop_type type, node_t* lhs, node_t* rhs)
+node_t* node_binop(node_arena_t* arena, size_t cursor, e_node_binop_type type, node_t* lhs, node_t* rhs)
 {
-  node_t* node = base_node(cursor, NT_BINOP);
+  node_t* node = base_node(arena, cursor, NT_BINOP);
   node->as.binop.type = type;
   node->as.binop.lhs = lhs;
   node->as.binop.rhs = rhs;
   return node;
 }
 
-node_t* node_func(size_t cursor, e_node_func_type type, node_t* arg)
+node_t* node_func(node_arena_t* arena, size_t cursor, e_node_func_type type, node_t* arg)
 {
-  node_t* node = base_node(cursor, NT_FUNCTION);
+  node_t* node = base_node(arena, cursor, NT_FUNCTION);
   node->as.func.type = type;
   node->as.func.arg = arg;
   return node;
 }
 
-node_t* node_bracket(size_t cursor, e_node_bracket_type type, node_t* arg)
+node_t* node_bracket(node_arena_t* arena, size_t cursor, e_node_bracket_type type, node_t* arg)
 {
-  node_t* node = base_node(cursor, NT_BRACKET);
+  node_t* node = base_node(arena, cursor, NT_BRACKET);
   node->as.bracket.type = type;
   node->as.bracket.arg = arg;
   return node;
 }
 
-
-
-void node_free(node_t* node)
-{
-  if (!node)
-    return;
-
-  switch (node->type) {
-    case NT_CONSTANT:
-      free(node);
-      break;
-    case NT_BINOP:
-      node_free(node->as.binop.lhs);
-      node_free(node->as.binop.rhs);
-      break;
-    case NT_FUNCTION:
-      node_free(node->as.func.arg);
-      break;
-    case NT_BRACKET:
-      node_free(node->as.bracket.arg);
-      break;
-    case NT_COUNT:
-    default:
-      UNREACHABLE("Invalid node-type!");
-  }
-}
 
 
 #define _PRINT_DEPTH_SPACES(indented, deph) \
@@ -269,8 +326,9 @@ void print_node_ex(node_t* node, bool indented, size_t deph)
 #define print_node(node, indented) (printf("Printing parsed AST:\n"), print_node_ex(node, indented, 0), printf("\n"))
 
 
-node_t* eval(node_t* expr)
+node_t* eval(node_arena_t* arena, node_t* expr)
 {
+  ASSERT_NULL(arena);
   ASSERT_NULL(expr);
 
   switch (expr->type) {
@@ -279,40 +337,40 @@ node_t* eval(node_t* expr)
     case NT_BINOP:
       switch (expr->as.binop.type) {
         case NO_ADD: {
-          node_t* lhs = eval(expr->as.binop.lhs);
+          node_t* lhs = eval(arena, expr->as.binop.lhs);
           if (!lhs) return NULL;
-          node_t* rhs = eval(expr->as.binop.rhs);
+          node_t* rhs = eval(arena, expr->as.binop.rhs);
           if (!rhs) return NULL;
-          return node_constant(expr->cursor, lhs->as.constant + rhs->as.constant);
+          return node_constant(arena, expr->cursor, lhs->as.constant + rhs->as.constant);
         }
         case NO_SUB: {
-          node_t* lhs = eval(expr->as.binop.lhs);
+          node_t* lhs = eval(arena, expr->as.binop.lhs);
           if (!lhs) return NULL;
-          node_t* rhs = eval(expr->as.binop.rhs);
+          node_t* rhs = eval(arena, expr->as.binop.rhs);
           if (!rhs) return NULL;
-          return node_constant(expr->cursor, lhs->as.constant - rhs->as.constant);
+          return node_constant(arena, expr->cursor, lhs->as.constant - rhs->as.constant);
         }
         case NO_MUL: {
-          node_t* lhs = eval(expr->as.binop.lhs);
+          node_t* lhs = eval(arena, expr->as.binop.lhs);
           if (!lhs) return NULL;
-          node_t* rhs = eval(expr->as.binop.rhs);
+          node_t* rhs = eval(arena, expr->as.binop.rhs);
           if (!rhs) return NULL;
-          return node_constant(expr->cursor, lhs->as.constant * rhs->as.constant);
+          return node_constant(arena, expr->cursor, lhs->as.constant * rhs->as.constant);
         }
         case NO_DIV: {
-          node_t* lhs = eval(expr->as.binop.lhs);
+          node_t* lhs = eval(arena, expr->as.binop.lhs);
           if (!lhs) return NULL;
-          node_t* rhs = eval(expr->as.binop.rhs);
+          node_t* rhs = eval(arena, expr->as.binop.rhs);
           if (!rhs) return NULL;
           // TODO: Rethink if DIVIDE BY ZERO should be checked!
-          return node_constant(expr->cursor, lhs->as.constant / rhs->as.constant);
+          return node_constant(arena, expr->cursor, lhs->as.constant / rhs->as.constant);
         }
         case NO_POW: {
-          node_t* lhs = eval(expr->as.binop.lhs);
+          node_t* lhs = eval(arena, expr->as.binop.lhs);
           if (!lhs) return NULL;
-          node_t* rhs = eval(expr->as.binop.rhs);
+          node_t* rhs = eval(arena, expr->as.binop.rhs);
           if (!rhs) return NULL;
-          return node_constant(expr->cursor, pow(lhs->as.constant, rhs->as.constant));
+          return node_constant(arena, expr->cursor, pow(lhs->as.constant, rhs->as.constant));
         }
         case NO_COUNT:
         default:
@@ -322,69 +380,69 @@ node_t* eval(node_t* expr)
     case NT_FUNCTION:
       switch (expr->as.func.type) {
         case NF_SQRT: {
-          node_t* func = eval(expr->as.func.arg);
+          node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
-          return node_constant(expr->cursor, sqrt(func->as.constant));
+          return node_constant(arena, expr->cursor, sqrt(func->as.constant));
         }
         case NF_EXP: {
-          node_t* func = eval(expr->as.func.arg);
+          node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
-          return node_constant(expr->cursor, exp(func->as.constant));
+          return node_constant(arena, expr->cursor, exp(func->as.constant));
         }
         case NF_SIN: {
-          node_t* func = eval(expr->as.func.arg);
+          node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
-          return node_constant(expr->cursor, sin(func->as.constant));
+          return node_constant(arena, expr->cursor, sin(func->as.constant));
         }
         case NF_ASIN: {
-          node_t* func = eval(expr->as.func.arg);
+          node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
-          return node_constant(expr->cursor, asin(func->as.constant));
+          return node_constant(arena, expr->cursor, asin(func->as.constant));
         }
         case NF_SINH: {
-          node_t* func = eval(expr->as.func.arg);
+          node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
-          return node_constant(expr->cursor, sinh(func->as.constant));
+          return node_constant(arena, expr->cursor, sinh(func->as.constant));
         }
         case NF_COS: {
-          node_t* func = eval(expr->as.func.arg);
+          node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
-          return node_constant(expr->cursor, cos(func->as.constant));
+          return node_constant(arena, expr->cursor, cos(func->as.constant));
         }
         case NF_ACOS: {
-          node_t* func = eval(expr->as.func.arg);
+          node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
-          return node_constant(expr->cursor, acos(func->as.constant));
+          return node_constant(arena, expr->cursor, acos(func->as.constant));
         }
         case NF_COSH: {
-          node_t* func = eval(expr->as.func.arg);
+          node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
-          return node_constant(expr->cursor, cosh(func->as.constant));
+          return node_constant(arena, expr->cursor, cosh(func->as.constant));
         }
         case NF_TAN: {
-          node_t* func = eval(expr->as.func.arg);
+          node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
-          return node_constant(expr->cursor, tan(func->as.constant));
+          return node_constant(arena, expr->cursor, tan(func->as.constant));
         }
         case NF_ATAN: {
-          node_t* func = eval(expr->as.func.arg);
+          node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
-          return node_constant(expr->cursor, atan(func->as.constant));
+          return node_constant(arena, expr->cursor, atan(func->as.constant));
         }
         case NF_TANH: {
-          node_t* func = eval(expr->as.func.arg);
+          node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
-          return node_constant(expr->cursor, tanh(func->as.constant));
+          return node_constant(arena, expr->cursor, tanh(func->as.constant));
         }
         case NF_LN: {
-          node_t* func = eval(expr->as.func.arg);
+          node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
-          return node_constant(expr->cursor, log(func->as.constant));
+          return node_constant(arena, expr->cursor, log(func->as.constant));
         }
         case NF_LOG10: {
-          node_t* func = eval(expr->as.func.arg);
+          node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
-          return node_constant(expr->cursor, log10(func->as.constant));
+          return node_constant(arena, expr->cursor, log10(func->as.constant));
         }
         case NF_COUNT:
         default:
@@ -394,9 +452,9 @@ node_t* eval(node_t* expr)
     case NT_BRACKET:
       switch(expr->as.bracket.type) {
         case NB_PAREN: {
-          node_t* bracket = eval(expr->as.bracket.arg);
+          node_t* bracket = eval(arena, expr->as.bracket.arg);
           if (!bracket) return NULL;
-          return node_constant(expr->cursor, bracket->as.constant);
+          return node_constant(arena, expr->cursor, bracket->as.constant);
         }
         case NB_COUNT:
         default:
@@ -411,15 +469,15 @@ node_t* eval(node_t* expr)
 
 
 
-node_t* parse_lexer(lexer_t* lexer)
+node_t* parse_lexer(node_arena_t* arena, lexer_t* lexer)
 {
+  ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
 
   if (lexer->isError)
     return NULL;
 
   // TODO:
-  // - Memory allocation
   // - Operation order checking (operators +,-,*,/,^ and brackets '(', ')')
   // - - Order: Brackets -> Exponents -> Multiplication -> Division -> Addition -> Substraction
   // - A stack for checking nested expressions in brackets. Also if the brackets are used correctly.
