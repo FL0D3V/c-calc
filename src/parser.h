@@ -49,21 +49,45 @@ const char* nodeBinopTypeNames[NO_COUNT] = {
 
 typedef enum {
   NF_SQRT,
+  NF_EXP,
+
   NF_SIN,
+  NF_ASIN,
+  NF_SINH,
+  
   NF_COS,
+  NF_ACOS,
+  NF_COSH,
+  
   NF_TAN,
+  NF_ATAN,
+  NF_TANH,
+  
   NF_LN,
+  NF_LOG10,
 
   NF_COUNT
 } e_node_func_type;
 
-static_assert(NF_COUNT == 5, "Amount of function-node-types have changed");
+static_assert(NF_COUNT == 13, "Amount of function-node-types have changed");
 const char* nodeFunctionTypeNames[NF_COUNT] = {
-  [NF_SQRT] = "sqrt",
-  [NF_SIN] = "sin",
-  [NF_COS] = "cos",
-  [NF_TAN] = "tan",
-  [NF_LN] = "ln"
+  [NF_SQRT]  = "sqrt",
+  [NF_EXP]   = "exp",
+
+  [NF_SIN]   = "sin",
+  [NF_ASIN]  = "asin",
+  [NF_SINH]  = "sinh",
+
+  [NF_COS]   = "cos",
+  [NF_ACOS]  = "acos",
+  [NF_COSH]  = "cosh",
+  
+  [NF_TAN]   = "tan",
+  [NF_ATAN]  = "atan",
+  [NF_TANH]  = "tanh",
+  
+  [NF_LN]    = "ln",
+  [NF_LOG10] = "log10"
 };
 
 
@@ -302,27 +326,67 @@ node_t* eval(node_t* expr)
           if (!func) return NULL;
           return node_constant(expr->cursor, sqrt(func->as.constant));
         }
+        case NF_EXP: {
+          node_t* func = eval(expr->as.func.arg);
+          if (!func) return NULL;
+          return node_constant(expr->cursor, exp(func->as.constant));
+        }
         case NF_SIN: {
           node_t* func = eval(expr->as.func.arg);
           if (!func) return NULL;
           return node_constant(expr->cursor, sin(func->as.constant));
+        }
+        case NF_ASIN: {
+          node_t* func = eval(expr->as.func.arg);
+          if (!func) return NULL;
+          return node_constant(expr->cursor, asin(func->as.constant));
+        }
+        case NF_SINH: {
+          node_t* func = eval(expr->as.func.arg);
+          if (!func) return NULL;
+          return node_constant(expr->cursor, sinh(func->as.constant));
         }
         case NF_COS: {
           node_t* func = eval(expr->as.func.arg);
           if (!func) return NULL;
           return node_constant(expr->cursor, cos(func->as.constant));
         }
+        case NF_ACOS: {
+          node_t* func = eval(expr->as.func.arg);
+          if (!func) return NULL;
+          return node_constant(expr->cursor, acos(func->as.constant));
+        }
+        case NF_COSH: {
+          node_t* func = eval(expr->as.func.arg);
+          if (!func) return NULL;
+          return node_constant(expr->cursor, cosh(func->as.constant));
+        }
         case NF_TAN: {
           node_t* func = eval(expr->as.func.arg);
           if (!func) return NULL;
           return node_constant(expr->cursor, tan(func->as.constant));
+        }
+        case NF_ATAN: {
+          node_t* func = eval(expr->as.func.arg);
+          if (!func) return NULL;
+          return node_constant(expr->cursor, atan(func->as.constant));
+        }
+        case NF_TANH: {
+          node_t* func = eval(expr->as.func.arg);
+          if (!func) return NULL;
+          return node_constant(expr->cursor, tanh(func->as.constant));
         }
         case NF_LN: {
           node_t* func = eval(expr->as.func.arg);
           if (!func) return NULL;
           return node_constant(expr->cursor, log(func->as.constant));
         }
-        case NO_COUNT:
+        case NF_LOG10: {
+          node_t* func = eval(expr->as.func.arg);
+          if (!func) return NULL;
+          return node_constant(expr->cursor, log10(func->as.constant));
+        }
+        case NF_COUNT:
         default:
           UNREACHABLE("Invalid function-node-type!");
       }

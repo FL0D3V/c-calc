@@ -1,16 +1,56 @@
-# c-types
+# c-calc
 
-A simple calculator implemented in c which can parse a math expression and execute it.
-It also checks the order of operation explained in the following picture.
+A simple terminal calculator written in C that can parse a given mathematical expression and evaluate it according to the rules of mathematics.
+
+
+## Math rules
+
+### Order of operations
 
 ![PEMDAS](https://static.qumath.in/static/website/old-cdn-static/gurpreet-numbers-seo-03-1614774781.png)
 
-**This calculator currently supports:**
-- Decimal number input
-- Operators: +, -, *, /, ^
-- Brackets: (, )
-- Math constants: Pi, Tau, Phi, Euler's number, Euler's constant, Omega constant, Gauss's constant
-- Functions: sqrt, sin, cos, tan, ln
+
+## Whats supported?
+
+**Supported operators:**
+**+**, **-**, **\***, **/**, **^**
+
+**Supported functions:**
+- **sqrt(x)**
+  Returns the square root of x.
+- **exp(x)**
+  Returns the value of e raised to the x'th power.
+- **sin(x)**
+  Returns the sine of a radian angle x.
+- **asin(x)**
+  Returns the arc sine of x in radians.
+- **sinh(x)**
+  Returns the hyperbolic sine of x.
+- **cos(x)**
+  Returns the cosine of a radian angle x.
+- **acos(x)**
+  Returns the arc cosine of x in radians.
+- **cosh(x)**
+  Returns the hyperbolic cosine of x.
+- **tan(x)**
+  Returns the tangent of a given angle x.
+- **atan(x)**
+  Returns the arc tangent of x in radians.
+- **tanh(x)**
+  Returns the hyperbolic tangent of x.
+- **ln(x)**
+  Returns the natural logarithm (base-e logarithm) of x.
+- **log10(x)**
+  Returns the common logarithm (base-10 logarithm) of x.
+
+**Implemented constants:**
+- Pi
+- Tau
+- Phi
+- Euler's number
+- Euler's constant
+- Omega constant
+- Gauss's constant
 
 
 ## Verbose execution example
@@ -139,24 +179,13 @@ add(
 )
 ```
 
-**Calculated output:**
+**Evaluated result:**
 ```
 = 317.91853
 ```
 
 
-## Example
-
-**Input:**
-- '100.53 * 12.5 + (62.2 - 12.5) / 8'
-
-This should get tokenized, lexed, parsed and in the execution calculated.
-
-**Output:**
-- '1262.8'
-
-
-# build
+## build
 
 Just run the following commands to build and test the demo.
 

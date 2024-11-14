@@ -6,9 +6,15 @@
 #include "lexer.h"
 #include "parser.h"
 
-// The current version of the program.
+#define COPYRIGHT_CREATOR "Florian Maier"
+#define COPYRIGHT_YEAR "2024"
+#define PROGRAM_LICENCE_LINK "https://github.com/FL0D3V/c-calc/blob/main/LICENSE"
 #define PROGRAM_LICENCE "MIT"
-#define CURRENT_VERSION version(0, 0, 1)  // MAJOR, MINOR, REVISION/PATCH
+#define FULL_DOCUMENTATION_LINK "https://github.com/FL0D3V/c-calc"
+#define WRITTEN_BY "Florian Maier"
+#define CREATOR_LINK "https://github.com/FL0D3V"
+#define CURRENT_PROGRAM_VERSION version(0, 0, 1)  // MAJOR, MINOR, REVISION/PATCH
+
 
 
 // This is usefull for: "PF_VERBOSE | PF_HELP"
@@ -121,7 +127,7 @@ static void program_init(program_t* prog, int argc, char** argv)
 {
   prog->funcFlags = PFF_ERROR;
 
-  // Store only the current program name without path: './bin/ccalc' -> 'ccalc'
+  // Store only the current program name without path: './bin/PROGRAM_NAME' -> 'PROGRAM_NAME'
   cstr_chop_till_last_delim(argv, '/');
   prog->programName = *argv;
   
@@ -268,6 +274,8 @@ static void print_help(const char* programName)
 
   printf("Usage: %s [OPTION]... [EXPRESSION]\n", programName);
   printf("Execute simple to more complex math expressions in the terminal.\n");
+  printf("Example usage:\n");
+  printf("  %s \"10.5 + 30 - sqrt(PI * 5.2) / 8\"\n", programName);
   printf("\n");
 
   printf("Supported operators:\n");
@@ -280,20 +288,16 @@ static void print_help(const char* programName)
   }
   printf("\n\n");
 
-  printf("Supported functions (usage, description):\n");
+  printf("Supported functions [USAGE(x), DESCRIPTION]:\n");
   for (size_t i = 0; i < FT_COUNT; ++i)
-    printf("  %s%-10s%s\n", functionTypeNames[i], "(x)", functionTypeDescriptions[i]);
+    printf("  %-10s%s\n", functionTypeNames[i], functionTypeDescriptions[i]);
   printf("\n");
 
-  printf("Supported constants (usage, description):\n");
+  printf("Supported math-constants [USAGE, NAME]:\n");
   for (size_t i = 0; i < MC_COUNT; ++i)
     printf("  %-6s%s\n", mathConstantTypeIdentifiers[i], mathConstantTypeNames[i]);
   printf("\n");
-  
-  printf("Example usage:\n");
-  printf("  %s \"10.5 + 30 - sqrt(PI * 5.2) / 8\"\n", programName);
-  printf("\n");
-  
+
   printf("The options below may be used for printing the expression execution verbose\n");
   printf("or for example getting the current version.\n");
 
@@ -302,7 +306,7 @@ static void print_help(const char* programName)
   
   printf("\n");
   
-  printf("Full documentation <https://github.com/FL0D3V/c-calc>\n");
+  printf("Full documentation <" FULL_DOCUMENTATION_LINK ">\n");
 }
 
 
@@ -310,13 +314,13 @@ static void print_current_version(const char* programName)
 {
   ASSERT_NULL(programName);
 
-  printf("%s " VERSION_FORMAT "\n", programName, VERSION_ARGS(CURRENT_VERSION));
-  printf("Copyright (c) 2024 FloDev.\n");
-  printf("License " PROGRAM_LICENCE ": <https://github.com/FL0D3V/c-calc/blob/main/LICENSE>.\n");
+  printf("%s " VERSION_FORMAT "\n", programName, VERSION_ARGS(CURRENT_PROGRAM_VERSION));
+  printf("Copyright (c) " COPYRIGHT_YEAR " " COPYRIGHT_CREATOR ".\n");
+  printf("License " PROGRAM_LICENCE ": <" PROGRAM_LICENCE_LINK ">.\n");
   printf("This is free software: you are free to change and redistribute it.\n");
   printf("There is NO WARRANTY, to the extent permitted by law.\n");
   printf("\n");
-  printf("Written by Florian Maier <https://github.com/FL0D3V>.\n");
+  printf("Written by " WRITTEN_BY " <" CREATOR_LINK ">.\n");
 }
 
 
@@ -355,22 +359,6 @@ static int handle_math_input(const char* input, bool verbose)
   test_ast_eval();
 
   // TODO: Implement parser
-  
-  // Parsing of the lexed tokens
-  //node_t* rootNode = parse_lexer(&lexer);
-  //lexer_free(lexer);
-
-  //if (verbose)
-  //print_node(rootNode, true);
-
-  // TODO: Evaluate parsed expression.
-  //node_t* finalNode = eval(rootNode);
-  
-  //printf("= " DOUBLE_PRINT_FORMAT "\n", finalNode->as.constant);
-
-  // TODO: Implement!
-  //node_free(rootNode);
-  //node_free(finalNode);
 
   return EXIT_SUCCESS;
 }
@@ -469,6 +457,26 @@ static void test_ast_eval()
   print_node(test3, true);
   node_t* test3_eval = eval(test3);
   printf("= " DOUBLE_PRINT_FORMAT "\n", test3_eval->as.constant);
+  printf("\n");
+
+
+  // IN: "10.5 * exp(4)"
+  // AST: mult(10.5, exp(4))
+  // = 573.28058
+  node_t* test4 =
+    node_binop(0, NO_MUL,
+      node_constant(0, 10.5),
+      node_func(0, NF_EXP,
+        node_constant(0, 4)
+      )
+    );
+  
+  printf("Input = 10.5 * exp(4)\n");
+  print_node(test4, true);
+  node_t* test4_eval = eval(test4);
+  printf("= " DOUBLE_PRINT_FORMAT "\n", test4_eval->as.constant);
+  printf("\n");
+
 }
 
 #endif // _PROGRAM_H_
