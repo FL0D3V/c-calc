@@ -139,8 +139,7 @@ struct node {
 
 
 
-// TODO: Check why there are memory errors when this number is f.e. 2..20..!
-#define NODE_REGION_DEFAULT_CAPACITY 128
+#define NODE_REGION_DEFAULT_CAPACITY 1024
 
 typedef struct node_region node_region_t;
 
@@ -148,26 +147,23 @@ struct node_region {
   node_region_t* next;
   size_t capacity;
   size_t count;
-  // The region will get allocated with the size of the region + the size of a node * capacity.
-  // So this is just the starting pointer to the additional memory allocated with the size of capacity.
   node_t data[];
 };
 
 typedef struct {
   node_region_t* begin;
+  node_region_t* end;
 } node_arena_t;
 
-static node_region_t* new_node_region(size_t capacity)
+
+static node_region_t* node_region_alloc(size_t capacity)
 {
-  // Allocates the size of a region + the size of a node * capacity.
-  // Thats why the node array is at the end because it just stores the starting
-  // pointer to the extra space (size of node * capacity).
-  size_t size_bytes = sizeof(node_region_t) + sizeof(node_t) * capacity;
-  node_region_t* region = (node_region_t*) malloc(size_bytes);
+  size_t regionSize = sizeof(node_region_t) + sizeof(node_t) * capacity;
+  node_region_t* region = (node_region_t*) malloc(regionSize);
   assert(region && "Not enough memory!");
   region->next = NULL;
-  region->count = 0;
   region->capacity = capacity;
+  region->count = 0;
   return region;
 }
 
@@ -176,35 +172,28 @@ static void free_node_region(node_region_t* region)
   free(region);
 }
 
-node_t* node_arena_alloc(node_arena_t* arena)
+static node_t* node_arena_alloc(node_arena_t* arena)
 {
   ASSERT_NULL(arena);
-
-  node_region_t* region = NULL;
   
-  if (!arena->begin) {
-    arena->begin = new_node_region(NODE_REGION_DEFAULT_CAPACITY);
-    region = arena->begin;
-  } else {
-    node_region_t* tmp = arena->begin;
-  
-    // TODO: Fix memory bug!
-    while (tmp->count + 1 < tmp->capacity && tmp->next) {
-      tmp = tmp->next;
-    }
-    
-    ASSERT_NULL(tmp);
-
-    if (tmp->count + 1 < tmp->capacity) {
-      region = tmp;
-    } else {
-      tmp->next = new_node_region(NODE_REGION_DEFAULT_CAPACITY);
-      region = tmp->next;
-    }
+  if (!arena->end)
+  {
+    assert(!arena->begin && "Begin was already set!");
+    arena->end = node_region_alloc(NODE_REGION_DEFAULT_CAPACITY);
+    arena->begin = arena->end;
   }
-  
-  ASSERT_NULL(region);
-  return &region->data[region->count++];
+
+  while (arena->end->count + 1 > arena->end->capacity && arena->end->next)
+    arena->end = arena->end->next;
+
+  if (arena->end->count + 1 > arena->end->capacity)
+  {
+    assert(!arena->end->next && "The next after current end was already set!");
+    arena->end->next = node_region_alloc(NODE_REGION_DEFAULT_CAPACITY);
+    arena->end = arena->end->next;
+  }
+
+  return &arena->end->data[arena->end->count++];
 }
 
 void node_arena_free(node_arena_t* arena)
@@ -217,6 +206,7 @@ void node_arena_free(node_arena_t* arena)
     free_node_region(tmp);
   }
   arena->begin = NULL;
+  arena->end = NULL;
 }
 
 

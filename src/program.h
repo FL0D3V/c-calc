@@ -385,6 +385,7 @@ static int handle_math_input(const char* input, bool verbose)
 static void test_ast_eval()
 {
   node_arena_t arena = {0};
+  bool freeAfterEachTest = false;
 
   printf("AST testing:\n\n");
 
@@ -415,7 +416,7 @@ static void test_ast_eval()
     printf("= " DOUBLE_PRINT_FORMAT "\n", eval(&arena, test1)->as.constant);
     printf("\n");
 
-    node_arena_free(&arena);
+    if (freeAfterEachTest) node_arena_free(&arena);
   }
 
 
@@ -433,7 +434,7 @@ static void test_ast_eval()
     printf("= " DOUBLE_PRINT_FORMAT "\n", eval(&arena, test2)->as.constant);
     printf("\n");
 
-    node_arena_free(&arena);
+    if (freeAfterEachTest) node_arena_free(&arena);
   }
 
 
@@ -488,7 +489,7 @@ static void test_ast_eval()
     printf("= " DOUBLE_PRINT_FORMAT "\n", eval(&arena, test3)->as.constant);
     printf("\n");
 
-    node_arena_free(&arena);
+    if (freeAfterEachTest) node_arena_free(&arena);
   }
 
 
@@ -510,8 +511,10 @@ static void test_ast_eval()
     printf("= " DOUBLE_PRINT_FORMAT "\n", eval(&arena, test4)->as.constant);
     printf("\n");
 
-    node_arena_free(&arena);
+    if (freeAfterEachTest) node_arena_free(&arena);
   }
+
+  if (!freeAfterEachTest) node_arena_free(&arena);
 }
 
 #endif // _PROGRAM_H_

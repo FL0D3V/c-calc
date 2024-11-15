@@ -12,36 +12,35 @@ A simple terminal calculator written in C that can parse a given mathematical ex
 
 ## Whats supported?
 
-**Supported operators:**
-**+**, **-**, **\***, **/**, **^**
+**Supported operators:** **+**, **-**, **\***, **/**, **^**
 
 **Supported functions:**
 - **sqrt(x)**
-  Returns the square root of x.
+    Returns the square root of x.
 - **exp(x)**
-  Returns the value of e raised to the x'th power.
+    Returns the value of e raised to the x'th power.
 - **sin(x)**
-  Returns the sine of a radian angle x.
+    Returns the sine of a radian angle x.
 - **asin(x)**
-  Returns the arc sine of x in radians.
+    Returns the arc sine of x in radians.
 - **sinh(x)**
-  Returns the hyperbolic sine of x.
+    Returns the hyperbolic sine of x.
 - **cos(x)**
-  Returns the cosine of a radian angle x.
+    Returns the cosine of a radian angle x.
 - **acos(x)**
-  Returns the arc cosine of x in radians.
+    Returns the arc cosine of x in radians.
 - **cosh(x)**
-  Returns the hyperbolic cosine of x.
+    Returns the hyperbolic cosine of x.
 - **tan(x)**
-  Returns the tangent of a given angle x.
+    Returns the tangent of a given angle x.
 - **atan(x)**
-  Returns the arc tangent of x in radians.
+    Returns the arc tangent of x in radians.
 - **tanh(x)**
-  Returns the hyperbolic tangent of x.
+    Returns the hyperbolic tangent of x.
 - **ln(x)**
-  Returns the natural logarithm (base-e logarithm) of x.
+    Returns the natural logarithm (base-e logarithm) of x.
 - **log10(x)**
-  Returns the common logarithm (base-10 logarithm) of x.
+    Returns the common logarithm (base-10 logarithm) of x.
 
 **Implemented constants:**
 - Pi

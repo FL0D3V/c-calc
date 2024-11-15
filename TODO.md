@@ -15,7 +15,7 @@
 - [ ] Implement ',' for functions with multiple parameters.
 - [X] 'Peek' and 'Seek' functions for the tokenization (not really needed with current implementation of it but propably needed for better tokenization)
 - [X] Handling of float values (not like currently with an extra 'Comma' token but with a different number type literal in the unit f.e.)
-- [ ] Arena Allocator for memory management
+- [X] Arena Allocator implementation in the parser for easy memory management
 - [ ] Variables and variable assignments and storing variables while running for e.g. multi line math expressions.
 - [ ] Solving math expressions with variables and assignments.
 - [ ] Maybe implement custom functions like variables that take one or multiple parameters/variables.
