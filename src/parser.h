@@ -3,18 +3,31 @@
 #ifndef _PARSER_H_
 #define _PARSER_H_
 
-#include <math.h>
-
 #include "global.h"
 #include "lexer.h"
 #include "darray.h"
+
+#include <math.h>
+
+
+#define S_ERROR_NAME "semantic_error"
+#define S_ERROR_EXPECTED_OPAREN(cursor)   fprintf(stderr, S_ERROR_NAME ":%zu: Expected open-parenthesis!\n", (cursor))
+#define S_ERROR_EXPECTED_CPAREN(cursor)   fprintf(stderr, S_ERROR_NAME ":%zu: Expected closing-parenthesis!\n", (cursor))
+#define S_ERROR_EXPECTED_OPERATOR(cursor) fprintf(stderr, S_ERROR_NAME ":%zu: Expected operator!\n", (cursor))
+#define S_ERROR_UNEXPECTED_TOKEN(cursor)  fprintf(stderr, S_ERROR_NAME ":%zu: Unexpected value detected!\n", (cursor))
+#define S_ERROR_EXPECTED_ARG(cursor)      fprintf(stderr, S_ERROR_NAME ":%zu: Expected arguments!\n", (cursor))
+#define S_ERROR_EXPECTED_NUMBER_OR_OPAREN(cursor) \
+    fprintf(stderr, S_ERROR_NAME ":%zu: Expected number or open-parenthesis!\n", (cursor))
+#define E_ERROR_NAME "eval_error"
+#define E_ERROR_DIVIDE_BY_ZERO(cursor)    fprintf(stderr, E_ERROR_NAME ":%zu: Tried to divide by zero!\n", (cursor))
+
 
 
 typedef enum {
     NT_CONSTANT,
     NT_BINOP,
     NT_FUNCTION,
-    NT_BRACKET,
+    NT_PAREN,
 
     NT_COUNT
 } e_node_type;
@@ -24,7 +37,7 @@ const char* nodeTypeNames[NT_COUNT] = {
   [NT_CONSTANT] = "constant",
   [NT_BINOP] = "operator",
   [NT_FUNCTION] = "function",
-  [NT_BRACKET] = "bracket"
+  [NT_PAREN] = "parenthesis"
 };
 
 
@@ -92,25 +105,13 @@ const char* nodeFunctionTypeNames[NF_COUNT] = {
 };
 
 
-typedef enum {
-  NB_PAREN,
-
-  NB_COUNT
-} e_node_bracket_type;
-
-static_assert(NB_COUNT == 1, "Amount of bracket-node-types have changed");
-const char* nodeBracketTypeNames[NB_COUNT] = {
-  [NB_PAREN] = "parenthesis",
-};
-
-
 
 typedef struct node node_t;
 
 typedef struct {
-    e_node_binop_type type;
-    node_t* lhs;
-    node_t* rhs;
+  e_node_binop_type type;
+  node_t* lhs;
+  node_t* rhs;
 } node_binop_t;
 
 typedef struct {
@@ -119,22 +120,20 @@ typedef struct {
 } node_function_t;
 
 typedef struct {
-  e_node_bracket_type type;
   node_t* arg;
-} node_bracket_t;
+} node_paren_t;
 
 typedef union {
   double constant;
   node_binop_t binop;
   node_function_t func;
-  node_bracket_t bracket;
+  node_paren_t paren;
 } u_node_as;
 
 struct node {
-    e_node_type type;
-    // TODO: Rethink if needed!
-    size_t cursor;
-    u_node_as as;
+  e_node_type type;
+  size_t cursor;
+  u_node_as as;
 };
 
 
@@ -243,11 +242,10 @@ node_t* node_func(node_arena_t* arena, size_t cursor, e_node_func_type type, nod
   return node;
 }
 
-node_t* node_bracket(node_arena_t* arena, size_t cursor, e_node_bracket_type type, node_t* arg)
+node_t* node_paren(node_arena_t* arena, size_t cursor, node_t* arg)
 {
-  node_t* node = base_node(arena, cursor, NT_BRACKET);
-  node->as.bracket.type = type;
-  node->as.bracket.arg = arg;
+  node_t* node = base_node(arena, cursor, NT_PAREN);
+  node->as.paren.arg = arg;
   return node;
 }
 
@@ -295,14 +293,11 @@ void print_node_ex(node_t* node, bool indented, size_t deph)
       _PRINT_DEPTH_SPACES(indented, deph);
       printf(")");
       break;
-    case NT_BRACKET:
-      if (node->as.bracket.type >= NB_COUNT)
-        UNREACHABLE("Invalid bracket-node-type!");
-
+    case NT_PAREN:
       _PRINT_DEPTH_SPACES(indented, deph);
-      printf("%s(", nodeBracketTypeNames[node->as.bracket.type]);
+      printf("parenthesis(");
       if (indented) printf("\n");
-      print_node_ex(node->as.bracket.arg, indented, deph + 1);
+      print_node_ex(node->as.paren.arg, indented, deph + 1);
       if (indented) printf("\n");
       _PRINT_DEPTH_SPACES(indented, deph);
       printf(")");
@@ -353,6 +348,11 @@ node_t* eval(node_arena_t* arena, node_t* expr)
           node_t* rhs = eval(arena, expr->as.binop.rhs);
           if (!rhs) return NULL;
           // TODO: Rethink if DIVIDE BY ZERO should be checked!
+          if (rhs->as.constant == 0)
+          {
+            E_ERROR_DIVIDE_BY_ZERO(rhs->cursor);
+            return NULL;
+          }
           return node_constant(arena, expr->cursor, lhs->as.constant / rhs->as.constant);
         }
         case NO_POW: {
@@ -439,24 +439,187 @@ node_t* eval(node_arena_t* arena, node_t* expr)
           UNREACHABLE("Invalid function-node-type!");
       }
       break;
-    case NT_BRACKET:
-      switch(expr->as.bracket.type) {
-        case NB_PAREN: {
-          node_t* bracket = eval(arena, expr->as.bracket.arg);
-          if (!bracket) return NULL;
-          return node_constant(arena, expr->cursor, bracket->as.constant);
-        }
-        case NB_COUNT:
-        default:
-          UNREACHABLE("Invalid bracket-node-type!");
-      }
-      break;
+    case NT_PAREN:
+    {
+      node_t* argEval = eval(arena, expr->as.paren.arg);
+      if (!argEval) return NULL;
+      return node_constant(arena, expr->cursor, argEval->as.constant);
+    }
     case NT_COUNT:
     default:
       UNREACHABLE("Invalid node-type!");
   }
 }
 
+
+
+static bool check_semantics(lexer_t* lexer)
+{
+  ASSERT_NULL(lexer);
+
+  if (lexer->count <= 0)
+    return false;
+  
+  bool isError = false;
+  size_t parenCount = 0;
+
+  for (size_t i = 0; i < lexer->count; ++i)
+  {
+    token_t* tok = &lexer->items[i];
+
+    if (i == 0 &&
+        (tok->type != TT_NUMBER &&
+         tok->type != TT_MATH_CONSTANT &&
+         tok->type != TT_FUNCTION &&
+         (tok->type != TT_PAREN ||
+         tok->as.paren != PT_OPAREN)))
+    {
+      S_ERROR_EXPECTED_NUMBER_OR_OPAREN(tok->cursor);
+      isError = true;
+      continue;
+    }
+
+    if (i > 0 && lexer->items[i - 1].type == TT_FUNCTION &&
+        (tok->type != TT_PAREN || tok->as.paren != PT_OPAREN))
+    {
+      S_ERROR_EXPECTED_OPAREN(tok->cursor);
+      isError = true;
+      continue;
+    }
+
+    switch (tok->type)
+    {
+      case TT_MATH_CONSTANT:
+      case TT_NUMBER:
+      {
+        if (i <= 0)
+          continue;
+
+        token_t* lastTok = &lexer->items[i - 1];
+        
+        if (lastTok->type != TT_OPERATOR &&
+            (lastTok->type != TT_PAREN || lastTok->as.paren != PT_OPAREN))
+        {
+          S_ERROR_EXPECTED_OPERATOR(lastTok->cursor);
+          isError = true;
+          continue;
+        }
+
+        break;
+      }
+      case TT_OPERATOR:
+      {
+        if (i <= 0)
+          continue;
+        
+        token_t* lastTok = &lexer->items[i - 1];
+
+        if (lastTok->type != TT_NUMBER &&
+            lastTok->type != TT_MATH_CONSTANT &&
+            (lastTok->type != TT_PAREN ||
+             lastTok->as.paren != PT_CPAREN))
+        {
+          S_ERROR_EXPECTED_NUMBER_OR_OPAREN(lastTok->cursor);
+          isError = true;
+          continue;
+        }
+        
+        if (i == lexer->count - 1)
+        {
+          S_ERROR_UNEXPECTED_TOKEN(tok->cursor);
+          isError = true;
+          continue;
+        }
+
+        break;
+      }
+      case TT_PAREN:
+      {
+        e_paren_type ptype = tok->as.paren;
+        
+        if (ptype == PT_OPAREN)
+        {
+          parenCount++;
+        }
+        else if (ptype == PT_CPAREN)
+        {
+          if (parenCount == 0)
+          {
+            S_ERROR_UNEXPECTED_TOKEN(tok->cursor);
+            isError = true;
+            continue;
+          }
+
+          if (i <= 0)
+            continue;
+
+          token_t* lastTok = &lexer->items[i - 1];
+
+          if (lastTok->type == TT_OPERATOR)
+          {
+            S_ERROR_UNEXPECTED_TOKEN(lastTok->cursor);
+            isError = true;
+            continue;
+          }
+
+          if (lastTok->type == TT_PAREN &&
+              lastTok->as.paren == PT_OPAREN)
+          {
+            S_ERROR_EXPECTED_ARG(lastTok->cursor);
+            isError = true;
+            continue;
+          }
+
+          parenCount--;
+        }
+        else
+          UNREACHABLE("Not implemented!");
+
+        if (i == lexer->count - 1)
+        {
+          if (parenCount > 0)
+          {
+            S_ERROR_EXPECTED_CPAREN(tok->cursor);
+            isError = true;
+            continue;
+          }
+        }
+
+        break;
+      }
+      case TT_FUNCTION:
+      {
+        if (i <= 0)
+          continue;
+
+        token_t* lastTok = &lexer->items[i - 1];
+
+        if (lastTok->type != TT_OPERATOR &&
+            (lastTok->type != TT_PAREN ||
+             lastTok->as.paren != PT_OPAREN))
+        {
+          S_ERROR_EXPECTED_OPERATOR(lastTok->cursor);
+          isError = true;
+          continue;
+        }
+
+        if (i == lexer->count - 1)
+        {
+          S_ERROR_UNEXPECTED_TOKEN(tok->cursor);
+          isError = true;
+          continue;
+        }
+
+        break;
+      }
+      case TT_COUNT:
+      default:
+        UNREACHABLE("Invalid token-type!");
+    }
+  }
+
+  return isError;
+}
 
 
 node_t* parse_lexer(node_arena_t* arena, lexer_t* lexer)
@@ -473,6 +636,9 @@ node_t* parse_lexer(node_arena_t* arena, lexer_t* lexer)
   // - A stack for checking nested expressions in brackets. Also if the brackets are used correctly.
   // - - 2 Open '(' should have 2 Closing ')' after.
   // - After a constant MUST come an operator, function, or bracket
+
+  if (!check_semantics(lexer))
+    return NULL;
 
   //for (size_t i = 0; i < lexer->count; ++i)
   //{

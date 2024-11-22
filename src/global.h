@@ -106,6 +106,9 @@ num_check_t cstr_is_number(const char* cstr)
   for (size_t i = 0; i < len; ++i)
   {
     const char current = cstr[i];
+
+    if (i == 0 && current == '-')
+      continue;
     
     if (!c_is_number(current))
       return num_check_invalid(i);
@@ -265,7 +268,7 @@ typedef enum {
 
 static_assert(FT_COUNT == 13, "Amount of function-types have changed");
 
-const char* functionTypeNames[FT_COUNT] = {
+const char* functionTypeIdentifiers[FT_COUNT] = {
   // Other
   [FT_SQRT]   = "sqrt",
   [FT_EXP]    = "exp",
@@ -284,6 +287,27 @@ const char* functionTypeNames[FT_COUNT] = {
   // Log
   [FT_LN]     = "ln",
   [FT_LOG10]  = "log10"
+};
+
+const char* functionTypeNames[FT_COUNT] = {
+  // Other
+  [FT_SQRT]   = "Square-Root",
+  [FT_EXP]    = "EN^x",
+  // Sin
+  [FT_SIN]    = "Sinus",
+  [FT_ASIN]   = "Arcus-Sinus",
+  [FT_SINH]   = "Hyperbolic-Sinus",
+  // Cos
+  [FT_COS]    = "Cosinus",
+  [FT_ACOS]   = "Arcus-Cosinus",
+  [FT_COSH]   = "Hyperbolic-Cosinus",
+  // Tan
+  [FT_TAN]    = "Tangents",
+  [FT_ATAN]   = "Arcus-Tangents",
+  [FT_TANH]   = "Hyperbolic-Tangents",
+  // Log
+  [FT_LN]     = "Natural-Logarithm",
+  [FT_LOG10]  = "Logarithm"
 };
 
 const char* functionTypeDescriptions[FT_COUNT] = {
@@ -313,7 +337,7 @@ e_function_type cstr_to_function_type(const char* cstr)
     return FT_INVALID;
 
   for (size_t i = 0; i < FT_COUNT; ++i)
-    if (strcmp(cstr, functionTypeNames[i]) == 0)
+    if (strcmp(cstr, functionTypeIdentifiers[i]) == 0)
       return (e_function_type) i;
 
   return FT_INVALID;
@@ -324,38 +348,38 @@ e_function_type cstr_to_function_type(const char* cstr)
 
 
 typedef enum {
-  BT_OPAREN,
-  BT_CPAREN,
+  PT_OPAREN,
+  PT_CPAREN,
 
-  BT_COUNT,
-  BT_INVALID
-} e_bracket_type;
+  PT_COUNT,
+  PT_INVALID
+} e_paren_type;
 
-static_assert(BT_COUNT == 2, "Amount of bracket-types have changed");
-const char* bracketTypeNames[BT_COUNT] = {
-  [BT_OPAREN] = "Open-Paren",
-  [BT_CPAREN] = "Closing-Paren"
+static_assert(PT_COUNT == 2, "Amount of paren-types have changed");
+const char* parenTypeNames[PT_COUNT] = {
+  [PT_OPAREN] = "Open",
+  [PT_CPAREN] = "Close"
 };
 
-e_bracket_type char_to_bracket_type(const char c)
+e_paren_type char_to_paren_type(const char c)
 {
   switch (c)
   {
-    case '(': return BT_OPAREN;
-    case ')': return BT_CPAREN;
-    default:  return BT_INVALID;
+    case '(': return PT_OPAREN;
+    case ')': return PT_CPAREN;
+    default:  return PT_INVALID;
   }
 }
 
-e_bracket_type cstr_to_bracket_type(const char* cstr)
+e_paren_type cstr_to_paren_type(const char* cstr)
 {
   if (!cstr || strlen(cstr) != 1)
-    return BT_INVALID;
+    return PT_INVALID;
 
-  return char_to_bracket_type(cstr[0]);
+  return char_to_paren_type(cstr[0]);
 }
 
-#define c_is_bracket(c) (char_to_bracket_type(c) != BT_INVALID)
-#define cstr_is_bracket(cstr) (cstr_to_bracket_type(cstr) != BT_INVALID)
+#define c_is_paren(c) (char_to_paren_type(c) != PT_INVALID)
+#define cstr_is_paren(cstr) (cstr_to_paren_type(cstr) != PT_INVALID)
 
 #endif // _GLOBAL_H_

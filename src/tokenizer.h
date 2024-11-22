@@ -44,13 +44,38 @@ static bool next_cstr_token(string_slice_t* ss, string_builder_t* tokenBuff)
     return false;
 
   char current = ss_get_current(ss);
-  while (ss_in_range(ss) && !isspace(current) && !c_is_operator(current) && !c_is_bracket(current))
+
+  // TODO: Implement the usage of negative numbers like e.g. '-5 * 10'.
+  //       This means that the '-' in front of '5' should NOT be an operator.
+
+  do
+  {
+    if (isspace(current) ||
+        c_is_operator(current) ||
+        c_is_paren(current))
+      break;
+
+    sb_append_char(tokenBuff, current);
+    ss_seek(ss);
+
+    if (ss_in_range(ss))
+      current = ss_get_current(ss);
+  } while (ss_in_range(ss));
+
+  /* OLD:
+  while (
+      ss_in_range(ss) &&
+      !isspace(current) &&
+      !c_is_operator(current) &&
+      !c_is_paren(current))
   {
     sb_append_char(tokenBuff, current);
     ss_seek(ss);
+
     if (ss_in_range(ss))
       current = ss_get_current(ss);
   }
+  */
 
   if (tokenBuff->count > 0)
     return true;
@@ -99,7 +124,7 @@ void tokenize_input(token_list_t* tokens, const char* input)
       token_list_append(tokens, inputBuff.items, currentPos - inputBuff.count);
       sb_free(inputBuff);
     }
-    else if (c_is_bracket(current))
+    else if (c_is_paren(current))
     {
       sb_append_char(&inputBuff, current);
       token_list_append(tokens, inputBuff.items, currentPos - inputBuff.count);

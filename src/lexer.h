@@ -28,7 +28,7 @@ typedef enum {
   TT_NUMBER,
   TT_MATH_CONSTANT,
   TT_OPERATOR,
-  TT_BRACKET,
+  TT_PAREN,
   TT_FUNCTION,
 
   TT_COUNT
@@ -39,7 +39,7 @@ const char* tokenTypeNames[TT_COUNT] = {
 	[TT_NUMBER] = "Number",
   [TT_MATH_CONSTANT] = "Constant",
   [TT_OPERATOR] = "Operator",
-  [TT_BRACKET] = "Bracket",
+  [TT_PAREN] = "Parenthesis",
   [TT_FUNCTION] = "Function",
 };
 
@@ -48,7 +48,7 @@ typedef union {
   double number;
   e_math_constant_type constant;
   e_operator_type operator;
-  e_bracket_type bracket;
+  e_paren_type paren;
   e_function_type function;
 } u_token_as;
 
@@ -76,7 +76,7 @@ typedef struct {
 #define add_number_token(lexer, num, curr)        da_append((lexer), ((token_t) { .type = TT_NUMBER,        .as.number   = (num), .cursor = (curr) }))
 #define add_math_constant_token(lexer, mc, curr)  da_append((lexer), ((token_t) { .type = TT_MATH_CONSTANT, .as.constant = (mc),  .cursor = (curr) }))
 #define add_operator_token(lexer, op, curr)       da_append((lexer), ((token_t) { .type = TT_OPERATOR,      .as.operator = (op),  .cursor = (curr) }))
-#define add_bracket_token(lexer, bt, curr)        da_append((lexer), ((token_t) { .type = TT_BRACKET,       .as.bracket  = (bt),  .cursor = (curr) }))
+#define add_paren_token(lexer, pt, curr)          da_append((lexer), ((token_t) { .type = TT_PAREN,         .as.paren    = (pt),  .cursor = (curr) }))
 #define add_function_token(lexer, ft, curr)       da_append((lexer), ((token_t) { .type = TT_FUNCTION,      .as.function = (ft),  .cursor = (curr) }))
 
 
@@ -104,14 +104,14 @@ void lex_tokens(lexer_t* lexer, token_list_t* tokens)
       continue;
     }
     
-    if (cstr_is_bracket(currentTokenString))
+    if (cstr_is_paren(currentTokenString))
     {
-      e_bracket_type bt = cstr_to_bracket_type(currentTokenString);
+      e_paren_type pt = cstr_to_paren_type(currentTokenString);
 
-      if (bt == BT_INVALID)
-        t_unreachable_defer("Invalid bracket-type!");
+      if (pt == PT_INVALID)
+        t_unreachable_defer("Invalid paren-type!");
 
-      add_bracket_token(lexer, bt, currentToken->cursor);
+      add_paren_token(lexer, pt, currentToken->cursor);
       continue;
     }
 
@@ -197,11 +197,11 @@ void print_lexed_tokens(lexer_t* lexer)
       case TT_OPERATOR:
         printf("(%s)", operatorTypeNames[token->as.operator]);
         break;
-      case TT_BRACKET:
-        printf("(%s)", bracketTypeNames[token->as.bracket]);
+      case TT_PAREN:
+        printf("(%s)", parenTypeNames[token->as.paren]);
         break;
       case TT_FUNCTION:
-        printf("(%s)", functionTypeNames[token->as.function]);
+        printf("(%s, %s)", functionTypeIdentifiers[token->as.function], functionTypeNames[token->as.function]);
         break;
       case TT_COUNT:
       default:

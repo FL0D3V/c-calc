@@ -9,6 +9,7 @@
 - [ ] Parser: Converts the lexed tokens to an AST (abstract syntax tree) for checking e.g. the "order of operations" of the math equation.
 - [X] Simple user-friendly CLI.
 - [ ] Complex CLI interface with the possibility to enter multiple math expressions without having to restart the program.
+- [ ] Implement the usage of negative numbers like e.g. '5 * -3'.
 
 ## Missing extras
 
