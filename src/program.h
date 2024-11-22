@@ -330,13 +330,22 @@ static void test_ast_eval();
 
 static int handle_math_input(const char* input, bool verbose)
 {
+  // INFO: Just for testing:
+  test_ast_eval();
+
   if (verbose)
     printf("Executing VERBOSE:\n");
 
   // Tokenize input
   token_list_t tokens = {0};
   tokenize_input(&tokens, input);
-  
+
+  // Check for occurred errors to prematurely stop execution.
+  if (tokens.isError) {
+    token_list_free(tokens);
+    return EXIT_FAILURE;
+  }
+
   if (verbose)
     print_tokens(&tokens);
   
@@ -354,9 +363,6 @@ static int handle_math_input(const char* input, bool verbose)
   if (verbose)
     print_lexed_tokens(&lexer);
 
-  // INFO: Just for testing:
-  test_ast_eval();
-
   // Parsing the lexed tokens.
   node_arena_t nodeArena = {0};
   node_t* rootNode = parse_lexer(&nodeArena, &lexer);
@@ -364,10 +370,7 @@ static int handle_math_input(const char* input, bool verbose)
 
   // TODO: This will currently fail because the parser itself is not implemented at the momement!
   if (!rootNode)
-  {
-    node_arena_free(&nodeArena);
     return EXIT_FAILURE;
-  }
 
   if (verbose)
     print_node(rootNode, true);
@@ -383,6 +386,7 @@ static int handle_math_input(const char* input, bool verbose)
   printf("Result = " DOUBLE_PRINT_FORMAT "\n", evaluatedNode->as.constant);
 
   node_arena_free(&nodeArena);
+
   return EXIT_SUCCESS;
 }
 
@@ -390,6 +394,7 @@ static int handle_math_input(const char* input, bool verbose)
 // INFO: Just for testing! Remove later!
 static void test_ast_eval()
 {
+  // TODO: Remove!
   //return;
 
   node_arena_t arena = {0};
@@ -421,12 +426,12 @@ static void test_ast_eval()
 
     printf("Input = 1 + 2 + (PI ^ 2) / 3\n");
     print_node(test, true);
+    
     node_t* evaluated = eval(&arena, test);
     if (evaluated)
-    {
       printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
-      printf("\n");
-    }
+
+    printf("\n");
 
     if (freeAfterEachTest) node_arena_free(&arena);
   }
@@ -443,12 +448,12 @@ static void test_ast_eval()
     
     printf("Input = ln(10)\n");
     print_node(test, true);
+    
     node_t* evaluated = eval(&arena, test);
     if (evaluated)
-    {
       printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
-      printf("\n");
-    }
+
+    printf("\n");
 
     if (freeAfterEachTest) node_arena_free(&arena);
   }
@@ -502,12 +507,12 @@ static void test_ast_eval()
 
     printf("Input = 100.53 + sqrt(3.5 - EN) + cos(44.23 * 6.4^2) / 8.3 + ln(10) - PI + ln(5^EC)\n");
     print_node(test, true);
+    
     node_t* evaluated = eval(&arena, test);
     if (evaluated)
-    {
       printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
-      printf("\n");
-    }
+
+    printf("\n");
 
     if (freeAfterEachTest) node_arena_free(&arena);
   }
@@ -528,15 +533,98 @@ static void test_ast_eval()
     
     printf("Input = 10.5 * exp(4)\n");
     print_node(test, true);
+    
     node_t* evaluated = eval(&arena, test);
     if (evaluated)
-    {
       printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
-      printf("\n");
-    }
+
+    printf("\n");
 
     if (freeAfterEachTest) node_arena_free(&arena);
   }
+
+
+  // TEST 5
+  {
+    // IN: "10 + 5 / (5 * 0)"
+    // AST: "add(10, divide(5, paren(mult(5, 0))))"
+    // = ERR (Divide by Zero)
+    node_t* test =
+      node_binop(&arena, 3, NO_ADD,
+        node_constant(&arena, 0, 10),
+        node_binop(&arena, 6, NO_DIV,
+          node_constant(&arena, 4, 5),
+          node_paren(&arena, 8,
+            node_binop(&arena, 10, NO_MUL,
+              node_constant(&arena, 9, 5),
+              node_constant(&arena, 11, 0)
+            )
+          )
+        )
+      );
+
+    printf("Input = 10 + 5 / (5 * 0)\n");
+    print_node(test, true);
+
+    node_t* evaluated = eval(&arena, test);
+    if (evaluated)
+      printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
+
+    printf("\n");
+
+    if (freeAfterEachTest) node_arena_free(&arena);
+  }
+
+  
+  // TEST 6
+  {
+    // IN: "(5 * 0)"
+    // AST: "paren(mult(5, 0))"
+    // = 5
+    node_t* test =
+      node_paren(&arena, 0,
+        node_binop(&arena, 0, NO_MUL,
+          node_constant(&arena, 0, 5),
+          node_constant(&arena, 0, 0)
+        )
+      );
+
+    printf("Input = (5 * 0)\n");
+    print_node(test, true);
+
+    node_t* evaluated = eval(&arena, test);
+    if (evaluated)
+      printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
+
+    printf("\n");
+
+    if (freeAfterEachTest) node_arena_free(&arena);
+  }
+
+
+  // TEST 7
+  {
+    // IN: "10 / 0"
+    // AST: "div(10, 0)"
+    // = ERR (Divide by Zero)
+    node_t* test =
+      node_binop(&arena, 2, NO_DIV,
+        node_constant(&arena, 0, 10),
+        node_constant(&arena, 4, 0)
+      );
+
+    printf("Input = 10 / 0\n");
+    print_node(test, true);
+
+    node_t* evaluated = eval(&arena, test);
+    if (evaluated)
+      printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
+
+    printf("\n");
+
+    if (freeAfterEachTest) node_arena_free(&arena);
+  }
+
 
   if (!freeAfterEachTest) node_arena_free(&arena);
 }

@@ -98,7 +98,7 @@ void lex_tokens(lexer_t* lexer, token_list_t* tokens)
       e_operator_type op = cstr_to_operator_type(currentTokenString);
 
       if (op == OP_INVALID)
-        t_unreachable_defer("Invalid operator-type!");
+        l_unreachable_defer("Invalid operator-type!");
 
       add_operator_token(lexer, op, currentToken->cursor);
       continue;
@@ -109,7 +109,7 @@ void lex_tokens(lexer_t* lexer, token_list_t* tokens)
       e_paren_type pt = cstr_to_paren_type(currentTokenString);
 
       if (pt == PT_INVALID)
-        t_unreachable_defer("Invalid paren-type!");
+        l_unreachable_defer("Invalid paren-type!");
 
       add_paren_token(lexer, pt, currentToken->cursor);
       continue;
@@ -180,12 +180,12 @@ void print_lexed_tokens(lexer_t* lexer)
     return;
   }
 
-  printf("Printing lexed tokens ('%zu' tokens):\n", lexer->count);
+  printf("Printing lexed tokens (%zu tokens):\n", lexer->count);
   
   for (size_t i = 0; i < lexer->count; ++i) {
     token_t* token = &lexer->items[i];
 
-    printf(tokenTypeNames[token->type]);
+    printf("%s", tokenTypeNames[token->type]);
 
     switch (token->type) {
       case TT_NUMBER:

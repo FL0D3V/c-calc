@@ -18,7 +18,7 @@
 #define S_ERROR_EXPECTED_ARG(cursor)      fprintf(stderr, S_ERROR_NAME ":%zu: Expected arguments!\n", (cursor))
 #define S_ERROR_EXPECTED_NUMBER_OR_OPAREN(cursor) \
     fprintf(stderr, S_ERROR_NAME ":%zu: Expected number or open-parenthesis!\n", (cursor))
-#define E_ERROR_NAME "eval_error"
+#define E_ERROR_NAME "evaluation_error"
 #define E_ERROR_DIVIDE_BY_ZERO(cursor)    fprintf(stderr, E_ERROR_NAME ":%zu: Tried to divide by zero!\n", (cursor))
 
 
@@ -347,7 +347,6 @@ node_t* eval(node_arena_t* arena, node_t* expr)
           if (!lhs) return NULL;
           node_t* rhs = eval(arena, expr->as.binop.rhs);
           if (!rhs) return NULL;
-          // TODO: Rethink if DIVIDE BY ZERO should be checked!
           if (rhs->as.constant == 0)
           {
             E_ERROR_DIVIDE_BY_ZERO(rhs->cursor);
@@ -372,67 +371,67 @@ node_t* eval(node_arena_t* arena, node_t* expr)
         case NF_SQRT: {
           node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
-          return node_constant(arena, expr->cursor, sqrt(func->as.constant));
+          return node_constant(arena, func->cursor, sqrt(func->as.constant));
         }
         case NF_EXP: {
           node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
-          return node_constant(arena, expr->cursor, exp(func->as.constant));
+          return node_constant(arena, func->cursor, exp(func->as.constant));
         }
         case NF_SIN: {
           node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
-          return node_constant(arena, expr->cursor, sin(func->as.constant));
+          return node_constant(arena, func->cursor, sin(func->as.constant));
         }
         case NF_ASIN: {
           node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
-          return node_constant(arena, expr->cursor, asin(func->as.constant));
+          return node_constant(arena, func->cursor, asin(func->as.constant));
         }
         case NF_SINH: {
           node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
-          return node_constant(arena, expr->cursor, sinh(func->as.constant));
+          return node_constant(arena, func->cursor, sinh(func->as.constant));
         }
         case NF_COS: {
           node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
-          return node_constant(arena, expr->cursor, cos(func->as.constant));
+          return node_constant(arena, func->cursor, cos(func->as.constant));
         }
         case NF_ACOS: {
           node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
-          return node_constant(arena, expr->cursor, acos(func->as.constant));
+          return node_constant(arena, func->cursor, acos(func->as.constant));
         }
         case NF_COSH: {
           node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
-          return node_constant(arena, expr->cursor, cosh(func->as.constant));
+          return node_constant(arena, func->cursor, cosh(func->as.constant));
         }
         case NF_TAN: {
           node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
-          return node_constant(arena, expr->cursor, tan(func->as.constant));
+          return node_constant(arena, func->cursor, tan(func->as.constant));
         }
         case NF_ATAN: {
           node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
-          return node_constant(arena, expr->cursor, atan(func->as.constant));
+          return node_constant(arena, func->cursor, atan(func->as.constant));
         }
         case NF_TANH: {
           node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
-          return node_constant(arena, expr->cursor, tanh(func->as.constant));
+          return node_constant(arena, func->cursor, tanh(func->as.constant));
         }
         case NF_LN: {
           node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
-          return node_constant(arena, expr->cursor, log(func->as.constant));
+          return node_constant(arena, func->cursor, log(func->as.constant));
         }
         case NF_LOG10: {
           node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
-          return node_constant(arena, expr->cursor, log10(func->as.constant));
+          return node_constant(arena, func->cursor, log10(func->as.constant));
         }
         case NF_COUNT:
         default:
@@ -455,6 +454,8 @@ node_t* eval(node_arena_t* arena, node_t* expr)
 
 static bool check_semantics(lexer_t* lexer)
 {
+  // TODO: Implement the usage of negative nubmers like "-5 * 10".
+
   ASSERT_NULL(lexer);
 
   if (lexer->count <= 0)

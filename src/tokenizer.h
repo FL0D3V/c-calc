@@ -6,8 +6,11 @@
 #include "stringslice.h"
 
 
-#define t_return_defer()              goto defer
-#define t_unreachable_defer(message)  do { fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message); t_return_defer(); } while(0)
+#define t_return_defer(tokens)                do { tokens->isError = true; goto defer; } while(0)
+#define t_unreachable_defer(tokens, message)  do { fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message); t_return_defer(tokens); } while(0)
+
+#define T_ERROR_NAME "tokenizer_error"
+#define T_ERROR_NO_INPUT_GIVEN() fprintf(stderr, T_ERROR_NAME ": No input given!\n")
 
 
 typedef struct {
@@ -22,6 +25,8 @@ typedef struct {
   input_token_t* items;
   size_t capacity;
   size_t count;
+
+  bool isError;
 } token_list_t;
 
 
@@ -45,9 +50,6 @@ static bool next_cstr_token(string_slice_t* ss, string_builder_t* tokenBuff)
 
   char current = ss_get_current(ss);
 
-  // TODO: Implement the usage of negative numbers like e.g. '-5 * 10'.
-  //       This means that the '-' in front of '5' should NOT be an operator.
-
   do
   {
     if (isspace(current) ||
@@ -62,21 +64,6 @@ static bool next_cstr_token(string_slice_t* ss, string_builder_t* tokenBuff)
       current = ss_get_current(ss);
   } while (ss_in_range(ss));
 
-  /* OLD:
-  while (
-      ss_in_range(ss) &&
-      !isspace(current) &&
-      !c_is_operator(current) &&
-      !c_is_paren(current))
-  {
-    sb_append_char(tokenBuff, current);
-    ss_seek(ss);
-
-    if (ss_in_range(ss))
-      current = ss_get_current(ss);
-  }
-  */
-
   if (tokenBuff->count > 0)
     return true;
 
@@ -87,6 +74,15 @@ static bool next_cstr_token(string_slice_t* ss, string_builder_t* tokenBuff)
 void tokenize_input(token_list_t* tokens, const char* input)
 {
   ASSERT_NULL(tokens);
+
+  tokens->isError = false;
+
+  if (!input || !strlen(input))
+  {
+    T_ERROR_NO_INPUT_GIVEN();
+    tokens->isError = true;
+    return;
+  }
 
   string_slice_t ss = {0};
   string_builder_t inputBuff = {0};
@@ -103,7 +99,7 @@ void tokenize_input(token_list_t* tokens, const char* input)
 
     if (next_cstr_token(&ss, &inputBuff))
     {
-      token_list_append(tokens, inputBuff.items, ss_current_pos(&ss) - inputBuff.count);
+      token_list_append(tokens, inputBuff.items, ss_current_pos(&ss) - inputBuff.count + 1);
       sb_free(inputBuff);
 
       continue;
@@ -121,16 +117,16 @@ void tokenize_input(token_list_t* tokens, const char* input)
     if (c_is_operator(current))
     {
       sb_append_char(&inputBuff, current);
-      token_list_append(tokens, inputBuff.items, currentPos - inputBuff.count);
+      token_list_append(tokens, inputBuff.items, currentPos - inputBuff.count + 1);
       sb_free(inputBuff);
     }
     else if (c_is_paren(current))
     {
       sb_append_char(&inputBuff, current);
-      token_list_append(tokens, inputBuff.items, currentPos - inputBuff.count);
+      token_list_append(tokens, inputBuff.items, currentPos - inputBuff.count + 1);
       sb_free(inputBuff);
     }
-    else t_unreachable_defer("Unhandled character!");
+    else t_unreachable_defer(tokens, "Unhandled character!");
 
     ss_seek(&ss);
   }
@@ -144,7 +140,7 @@ void print_tokens(token_list_t* tokens)
 {
   ASSERT_NULL(tokens);
 
-  printf("Printing tokenenized input ('%zu' tokens):\n", tokens->count);
+  printf("Printing tokenenized input (%zu tokens):\n", tokens->count);
 
   for (size_t i = 0; i < tokens->count; i++) {
     input_token_t* currentToken = &tokens->items[i];
