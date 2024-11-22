@@ -47,7 +47,7 @@ First 'make' the project and then run the following command for a simple test:
 
 **Input**:
 ```
-ccalc -vv "  100.53 + sqrt(3.5 - EN) + acos(44.23 *   6.4^2) /   8.3 + ln(10) - PI + ln(5^EC)"
+ccalc -vv "  100.53 + sqrt(3.5 - EN) + cos(44.23 *   6.4^2) /   8.3 + ln(10) - PI + ln(5^EC)"
 ```
 
 **Tokenizer Output:**
@@ -129,43 +129,43 @@ Parenthesis(Close)
 **Parsed AST:**
 ```
 add(
-	100.53000,
-	add(
-		sqrt(
-			substract(
-				3.50000,
-				2.71828
-			)
-		),
-		add(
-			divide(
-				cos(
-					multiply(
-						44.23000,
-						pow(
-							6.40000,
-							2.00000
-						)
-					)
-				),
-				8.30000
-			),
-			substract(
-				ln(
-					10.00000
-				),
-				add(
-					3.14159,
-					ln(
-						pow(
-							5.00000,
-							0.57722
-						)
-					)
-				)
-			)
-		)
-	)
+  100.53000,
+  add(
+    sqrt(
+      substract(
+        3.50000,
+        2.71828
+      )
+    ),
+    add(
+      divide(
+        cos(
+          multiply(
+            44.23000,
+            pow(
+              6.40000,
+              2.00000
+            )
+          )
+        ),
+        8.30000
+      ),
+      substract(
+        ln(
+          10.00000
+        ),
+        add(
+          3.14159,
+          ln(
+            pow(
+              5.00000,
+              0.57722
+            )
+          )
+        )
+      )
+    )
+  )
 )
 ```
 
