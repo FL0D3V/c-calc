@@ -1,8 +1,8 @@
 CC := gcc
 # debug
-#CFLAGS := -Wall -Wextra -Werror -Wswitch-enum -std=c11 -pedantic -ggdb
+#CFLAGS := -Wall -Wextra -Werror -Wpedantic -Wswitch-enum -std=c11 -ggdb
 # release
-CFLAGS := -Wall -Wextra -Werror -Wswitch-enum -std=c11 -pedantic
+CFLAGS := -Wall -Wextra -Werror -Wpedantic -Wswitch-enum -std=c11
 LDLIBS := -lm
 LDFLAGS := 
 TARGET := ccalc

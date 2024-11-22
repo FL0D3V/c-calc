@@ -454,7 +454,9 @@ node_t* eval(node_arena_t* arena, node_t* expr)
 
 static bool check_semantics(lexer_t* lexer)
 {
-  // TODO: Implement the usage of negative nubmers like "-5 * 10".
+  // TODO: It must be possible to use '-' & '+' operators infront of everything to change if the expression after
+  //       them is negativ or positiv. The '+' operator though can be ignored because the expression is by default
+  //       positiv.
 
   ASSERT_NULL(lexer);
 
