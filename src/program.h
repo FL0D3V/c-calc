@@ -626,6 +626,32 @@ static void test_ast_eval()
   }
 
 
+  // TEST 8
+  {
+    // IN: "10 / (4)"
+    // AST: "div(10, paren(4))"
+    // = 2.5
+    node_t* test =
+      node_binop(&arena, 2, NO_DIV,
+        node_constant(&arena, 0, 10),
+        node_paren(&arena, 4,
+          node_constant(&arena, 5, 4)
+        )
+      );
+
+    printf("Input = 10 / (4)\n");
+    print_node(test, true);
+
+    node_t* evaluated = eval(&arena, test);
+    if (evaluated)
+      printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
+
+    printf("\n");
+
+    if (freeAfterEachTest) node_arena_free(&arena);
+  }
+
+
   if (!freeAfterEachTest) node_arena_free(&arena);
 }
 

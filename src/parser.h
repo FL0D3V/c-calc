@@ -264,10 +264,13 @@ void print_node_ex(node_t* node, bool indented, size_t deph)
 
   switch (node->type) {
     case NT_CONSTANT:
+    {
       _PRINT_DEPTH_SPACES(indented, deph);
       printf(DOUBLE_PRINT_FORMAT, node->as.constant);
       break;
+    }
     case NT_BINOP:
+    {
       if (node->as.binop.type >= NO_COUNT)
         UNREACHABLE("Invalid binop-node-type!");
       
@@ -281,27 +284,34 @@ void print_node_ex(node_t* node, bool indented, size_t deph)
       _PRINT_DEPTH_SPACES(indented, deph);
       printf(")");
       break;
+    }
     case NT_FUNCTION:
+    {
       if (node->as.func.type >= NF_COUNT)
         UNREACHABLE("Invalid func-node-type!");
       
       _PRINT_DEPTH_SPACES(indented, deph);
       printf("%s(", nodeFunctionTypeNames[node->as.func.type]);
-      if (indented) printf("\n");
-      print_node_ex(node->as.func.arg, indented, deph + 1);
-      if (indented) printf("\n");
-      _PRINT_DEPTH_SPACES(indented, deph);
+      bool isArgTypeConst = node->as.func.arg->type == NT_CONSTANT;
+      if (indented && !isArgTypeConst) printf("\n");
+      print_node_ex(node->as.func.arg, indented, !isArgTypeConst ? deph + 1 : 0);
+      if (indented && !isArgTypeConst) printf("\n");
+      _PRINT_DEPTH_SPACES(indented, !isArgTypeConst ? deph : 0);
       printf(")");
       break;
+    }
     case NT_PAREN:
+    {
       _PRINT_DEPTH_SPACES(indented, deph);
-      printf("parenthesis(");
-      if (indented) printf("\n");
-      print_node_ex(node->as.paren.arg, indented, deph + 1);
-      if (indented) printf("\n");
-      _PRINT_DEPTH_SPACES(indented, deph);
+      printf("paren(");
+      bool isArgTypeConst = node->as.paren.arg->type == NT_CONSTANT;
+      if (indented && !isArgTypeConst) printf("\n");
+      print_node_ex(node->as.paren.arg, indented, !isArgTypeConst ? deph + 1 : 0);
+      if (indented && !isArgTypeConst) printf("\n");
+      _PRINT_DEPTH_SPACES(indented, !isArgTypeConst ? deph : 0);
       printf(")");
       break;
+    }
     case NT_COUNT:
     default:
       UNREACHABLE("Invalid node-type!");
@@ -474,8 +484,7 @@ static bool check_semantics(lexer_t* lexer)
         (tok->type != TT_NUMBER &&
          tok->type != TT_MATH_CONSTANT &&
          tok->type != TT_FUNCTION &&
-         (tok->type != TT_PAREN ||
-         tok->as.paren != PT_OPAREN)))
+         (tok->type != TT_PAREN || tok->as.paren != PT_OPAREN)))
     {
       S_ERROR_EXPECTED_NUMBER_OR_OPAREN(tok->cursor);
       isError = true;
@@ -519,8 +528,7 @@ static bool check_semantics(lexer_t* lexer)
 
         if (lastTok->type != TT_NUMBER &&
             lastTok->type != TT_MATH_CONSTANT &&
-            (lastTok->type != TT_PAREN ||
-             lastTok->as.paren != PT_CPAREN))
+            (lastTok->type != TT_PAREN || lastTok->as.paren != PT_CPAREN))
         {
           S_ERROR_EXPECTED_NUMBER_OR_OPAREN(lastTok->cursor);
           isError = true;
@@ -598,8 +606,7 @@ static bool check_semantics(lexer_t* lexer)
         token_t* lastTok = &lexer->items[i - 1];
 
         if (lastTok->type != TT_OPERATOR &&
-            (lastTok->type != TT_PAREN ||
-             lastTok->as.paren != PT_OPAREN))
+            (lastTok->type != TT_PAREN || lastTok->as.paren != PT_OPAREN))
         {
           S_ERROR_EXPECTED_OPERATOR(lastTok->cursor);
           isError = true;
