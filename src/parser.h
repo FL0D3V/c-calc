@@ -464,10 +464,6 @@ node_t* eval(node_arena_t* arena, node_t* expr)
 
 static bool check_semantics(lexer_t* lexer)
 {
-  // TODO: It must be possible to use '-' & '+' operators infront of everything to change if the expression after
-  //       them is negativ or positiv. The '+' operator though can be ignored because the expression is by default
-  //       positiv.
-
   ASSERT_NULL(lexer);
 
   if (lexer->count <= 0)
@@ -530,6 +526,20 @@ static bool check_semantics(lexer_t* lexer)
             lastTok->type != TT_MATH_CONSTANT &&
             (lastTok->type != TT_PAREN || lastTok->as.paren != PT_CPAREN))
         {
+          if (i < lexer->count - 1)
+          {
+            token_t* nextTok = &lexer->items[i + 1];
+
+            if (lastTok->type == TT_OPERATOR &&
+                tok->type == TT_OPERATOR &&
+                (tok->as.operator == OP_ADD || tok->as.operator == OP_SUB) &&
+                nextTok->type != TT_OPERATOR)
+            {
+              // Checks if the next token should be positive or negative.
+              continue;
+            }
+          }
+
           S_ERROR_EXPECTED_NUMBER_OR_OPAREN(lastTok->cursor);
           isError = true;
           continue;
@@ -650,10 +660,10 @@ node_t* parse_lexer(node_arena_t* arena, lexer_t* lexer)
   if (!check_semantics(lexer))
     return NULL;
 
-  //for (size_t i = 0; i < lexer->count; ++i)
-  //{
-  //  break;
-  //}
+  for (size_t i = 0; i < lexer->count; ++i)
+  {
+    break;
+  }
 
   // TODO: Return root node!
   return NULL;  

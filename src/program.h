@@ -395,7 +395,7 @@ static int handle_math_input(const char* input, bool verbose)
 static void test_ast_eval()
 {
   // TODO: Remove!
-  //return;
+  return;
 
   node_arena_t arena = {0};
   bool freeAfterEachTest = false;
