@@ -109,6 +109,14 @@ typedef struct {
 // use it a NULL-terminated C string
 #define sb_append_null(sb) da_append_many(sb, "", 1)
 
+#define sb_append_buf_with_null_termination(sb, buf, size) do { sb_append_buf(sb, buf, size); sb_append_null(sb); } while (0)
+
+#define sb_clear(sb)                      \
+  do {                                    \
+    memset((sb)->items, 0, (sb)->count);  \
+    (sb)->count = 0;                      \
+  } while (0)
+
 // Free the memory allocated by a string builder
 #define sb_free(sb) da_free(sb)
 

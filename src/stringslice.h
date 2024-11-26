@@ -56,6 +56,20 @@ char ss_get_current_ex(string_slice_t* slice, const char* file, size_t line)
   return *((char*)slice->current_ptr);
 }
 
+#define ss_get_current_ptr(slice) ss_get_current_ptr_ex((slice), __FILE__, __LINE__)
+
+const char* ss_get_current_ptr_ex(string_slice_t* slice, const char* file, size_t line)
+{
+  _SS_ASSERT_IF_NOT_VALID(slice);
+
+  if (!_SS_IS_IN_RANGE(slice)) {
+    fprintf(stderr, "%s:%zu: Out of range!\n", file, line);
+    abort();
+  }
+
+  return (char*)slice->current_ptr;
+}
+
 bool ss_in_range(string_slice_t* slice)
 {
   _SS_ASSERT_IF_NOT_VALID(slice);

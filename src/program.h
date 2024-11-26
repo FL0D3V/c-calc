@@ -333,47 +333,35 @@ static int handle_math_input(const char* input, bool verbose)
   // INFO: Just for testing:
   test_ast_eval();
 
-  if (verbose)
-    printf("Executing VERBOSE:\n");
+  if (verbose) printf("Executing VERBOSE:\n");
 
-  // Tokenize input
-  token_list_t tokens = {0};
-  tokenize_input(&tokens, input);
-
-  // Check for occurred errors to prematurely stop execution.
+  tokenizer_t tokens = tokenizer_execute(input);
+  
   if (tokens.isError) {
-    token_list_free(tokens);
+    tokenizer_free(tokens);
     return EXIT_FAILURE;
   }
 
-  if (verbose)
-    print_tokens(&tokens);
+  if (verbose) tokenizer_print(&tokens);
   
-  // Lexing of the tokens
-  lexer_t lexer = {0};
-  lex_tokens(&lexer, &tokens);
-  token_list_free(tokens);
+  lexer_t lexer = lexer_execute(&tokens);
+  tokenizer_free(tokens);
 
-  // Check for occurred errors to prematurely stop execution.
   if (lexer.isError) {
     lexer_free(lexer);
     return EXIT_FAILURE;
   }
 
-  if (verbose)
-    print_lexed_tokens(&lexer);
+  if (verbose) lexer_print(&lexer);
 
-  // Parsing the lexed tokens.
   node_arena_t nodeArena = {0};
-  node_t* rootNode = parse_lexer(&nodeArena, &lexer);
+  node_t* rootNode = parser_execute(&nodeArena, &lexer);
   lexer_free(lexer);
 
-  // TODO: This will currently fail because the parser itself is not implemented at the momement!
   if (!rootNode)
     return EXIT_FAILURE;
 
-  if (verbose)
-    print_node(rootNode, true);
+  if (verbose) print_node(rootNode, true);
 
   node_t* evaluatedNode = eval(&nodeArena, rootNode);
   
@@ -386,7 +374,6 @@ static int handle_math_input(const char* input, bool verbose)
   printf("Result = " DOUBLE_PRINT_FORMAT "\n", evaluatedNode->as.constant);
 
   node_arena_free(&nodeArena);
-
   return EXIT_SUCCESS;
 }
 

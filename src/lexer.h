@@ -9,8 +9,7 @@
 #include "tokenizer.h"
 
 
-#define l_return_defer()              do { isError = true; goto defer; } while (0)
-#define l_unreachable_defer(message)  do { fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message); l_return_defer(); } while(0)
+#define l_unreachable_defer(message)  do { fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message); goto defer; } while(0)
 
 
 #define L_ERROR_NAME "lexing_error"
@@ -66,11 +65,7 @@ typedef struct {
   bool isError;
 } lexer_t;
 
-
-#define lexer_free(lexer) \
-  do {                    \
-    da_free(lexer);       \
-  } while (0)
+#define lexer_free(lexer) da_free(lexer);
 
 
 #define add_number_token(lexer, num, curr)        da_append((lexer), ((token_t) { .type = TT_NUMBER,        .as.number   = (num), .cursor = (curr) }))
@@ -81,17 +76,19 @@ typedef struct {
 
 
 
-void lex_tokens(lexer_t* lexer, token_list_t* tokens)
+lexer_t lexer_execute(tokenizer_t* tokens)
 {
-  ASSERT_NULL(lexer);
   ASSERT_NULL(tokens);
 
-  bool isError = false;
+  lexer_t lexer = {0};
+  string_builder_t sb = {0};
 
   for (size_t i = 0; i < tokens->count; ++i)
   {
-    input_token_t* currentToken = &tokens->items[i];
-    const char* currentTokenString = currentToken->items;
+    const input_token_t* currentToken = &tokens->items[i];
+    sb_clear(&sb);
+    sb_append_buf_with_null_termination(&sb, currentToken->value, currentToken->length);
+    const char* currentTokenString = sb.items;
 
     if (cstr_is_operator(currentTokenString))
     {
@@ -100,7 +97,7 @@ void lex_tokens(lexer_t* lexer, token_list_t* tokens)
       if (op == OP_INVALID)
         l_unreachable_defer("Invalid operator-type!");
 
-      add_operator_token(lexer, op, currentToken->cursor);
+      add_operator_token(&lexer, op, currentToken->cursor);
       continue;
     }
     
@@ -111,7 +108,7 @@ void lex_tokens(lexer_t* lexer, token_list_t* tokens)
       if (pt == PT_INVALID)
         l_unreachable_defer("Invalid paren-type!");
 
-      add_paren_token(lexer, pt, currentToken->cursor);
+      add_paren_token(&lexer, pt, currentToken->cursor);
       continue;
     }
 
@@ -122,7 +119,7 @@ void lex_tokens(lexer_t* lexer, token_list_t* tokens)
       if (mc == MC_INVALID)
         l_unreachable_defer("Invalid math-constant-type!");
 
-      add_math_constant_token(lexer, mc, currentToken->cursor);
+      add_math_constant_token(&lexer, mc, currentToken->cursor);
       continue;
     }
 
@@ -133,7 +130,7 @@ void lex_tokens(lexer_t* lexer, token_list_t* tokens)
       if (ft == FT_INVALID)
         l_unreachable_defer("Invalid function-type!");
 
-      add_function_token(lexer, ft, currentToken->cursor);
+      add_function_token(&lexer, ft, currentToken->cursor);
       continue;
     }
     
@@ -145,14 +142,14 @@ void lex_tokens(lexer_t* lexer, token_list_t* tokens)
       case 0:
       {
         double number = strtof(currentTokenString, NULL);
-        add_number_token(lexer, number, currentToken->cursor);
+        add_number_token(&lexer, number, currentToken->cursor);
         continue;
       }
       case -1:
       {
         // Too many commas
         L_ERROR_INVALID_NUMBER(currentToken->cursor + numCheck.cursor, currentTokenString);
-        isError = true;
+        lexer.isError = true;
         continue;
       }
       case -2: // Not a number
@@ -162,15 +159,17 @@ void lex_tokens(lexer_t* lexer, token_list_t* tokens)
 
     // ERROR: Invalid token.
     L_ERROR_INVALID_TOKEN(currentToken->cursor, currentTokenString);
-    isError = true;
+    lexer.isError = true;
   }
 
 defer:
-  lexer->isError = isError;
+  sb_free(sb);
+
+  return lexer;
 }
 
 
-void print_lexed_tokens(lexer_t* lexer)
+void lexer_print(const lexer_t* lexer)
 {
   ASSERT_NULL(lexer);
   

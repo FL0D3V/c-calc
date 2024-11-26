@@ -642,7 +642,7 @@ static bool check_semantics(lexer_t* lexer)
 }
 
 
-node_t* parse_lexer(node_arena_t* arena, lexer_t* lexer)
+node_t* parser_execute(node_arena_t* arena, lexer_t* lexer)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);

@@ -382,4 +382,8 @@ e_paren_type cstr_to_paren_type(const char* cstr)
 #define c_is_paren(c) (char_to_paren_type(c) != PT_INVALID)
 #define cstr_is_paren(cstr) (cstr_to_paren_type(cstr) != PT_INVALID)
 
+
+#define c_is_literal(c) c_is_operator(c) || c_is_paren(c)
+
+
 #endif // _GLOBAL_H_
