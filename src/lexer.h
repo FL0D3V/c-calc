@@ -173,7 +173,7 @@ void lexer_print(const lexer_t* lexer)
 {
   ASSERT_NULL(lexer);
   
-  if (lexer->isError)
+  if (lexer->isError || lexer->count == 0)
   {
     L_ERROR_GIVEN_LEXER_INVALID();
     return;

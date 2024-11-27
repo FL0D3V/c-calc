@@ -13,14 +13,15 @@
 #define T_ERROR_GIVEN_TOKENIZER_INVALID() fprintf(stderr, T_ERROR_NAME ": Can't print the tokenizer because an error happend!\n")
 
 
-#define IN_TOK_FMT "%.*s"
-#define IN_TOK_ARG(tok) (int)(tok)->length, (tok)->value
 
 typedef struct {
   const char* value;
   size_t length;
   size_t cursor;
 } input_token_t;
+
+#define IN_TOK_FMT "%.*s"
+#define IN_TOK_ARG(tok) (int)(tok)->length, (tok)->value
 
 typedef struct {
   input_token_t* items;
@@ -31,17 +32,23 @@ typedef struct {
 } tokenizer_t;
 
 
-#define _NEW_INPUT_TOKEN(val, len, cur) ((input_token_t) { .value = (val), .length = (len), .cursor = (cur) })
 #define tokenizer_append(tl, val, len, cur)                   \
     do {                                                      \
-      input_token_t token = _NEW_INPUT_TOKEN(val, len, cur);  \
-      da_append(tl, token);                                   \
+      input_token_t t =                                       \
+      {                                                       \
+        .value = (val),                                       \
+        .length = (len),                                      \
+        .cursor = (cur)                                       \
+      };                                                      \
+      da_append(tl, t);                                       \
     } while(0)
+
 #define tokenizer_free(tl) da_free(tl)
 
 
 
-static bool next_cstr_token(string_slice_t* ss, tokenizer_t* tokens)
+// Tokenizes a collection of characters into a symbol.
+static bool next_symbol(string_slice_t* ss, tokenizer_t* tokens)
 {
   ASSERT_NULL(ss);
   ASSERT_NULL(tokens);
@@ -71,7 +78,8 @@ static bool next_cstr_token(string_slice_t* ss, tokenizer_t* tokens)
 }
 
 
-static bool next_literal_token(string_slice_t* ss, tokenizer_t* tokens)
+// Tokenizes a single character literal if valid.
+static bool next_literal(string_slice_t* ss, tokenizer_t* tokens)
 {
   ASSERT_NULL(ss);
   ASSERT_NULL(tokens);
@@ -110,8 +118,8 @@ tokenizer_t tokenizer_execute(const char* input)
   {
     ss_seek_spaces(&ss);
     
-    if (next_cstr_token(&ss, &tokens)) continue;
-    else if (next_literal_token(&ss, &tokens)) continue;
+    if (next_symbol(&ss, &tokens)) continue;
+    else if (next_literal(&ss, &tokens)) continue;
     else
     {
       t_unreachable("Unhandled character!");
@@ -128,18 +136,15 @@ void tokenizer_print(const tokenizer_t* tokens)
 {
   ASSERT_NULL(tokens);
 
-  if (tokens->isError)
+  if (tokens->isError || tokens->count == 0)
   {
     T_ERROR_GIVEN_TOKENIZER_INVALID();
     return;
   }
 
   printf("Printing tokenenized input (%zu tokens):\n", tokens->count);
-
-  for (size_t i = 0; i < tokens->count; i++) {
-    input_token_t* current = &tokens->items[i];
-    printf("Token('" IN_TOK_FMT "')\n", IN_TOK_ARG(current));
-  }
+  for (size_t i = 0; i < tokens->count; i++)
+    printf("Token('" IN_TOK_FMT "')\n", IN_TOK_ARG(&tokens->items[i]));
 }
 
 #endif // _TOKENIZER_H_

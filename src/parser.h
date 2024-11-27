@@ -114,6 +114,7 @@ typedef struct {
   node_t* rhs;
 } node_binop_t;
 
+// TODO: Rethink! When implementing multiple function args, change arg -> args (dynamic array).
 typedef struct {
   e_node_func_type type;
   node_t* arg;
@@ -157,6 +158,7 @@ typedef struct {
 
 static node_region_t* node_region_alloc(size_t capacity)
 {
+  // size = size-of(REGION) + size-of(DATA in REGION) * capacity
   size_t regionSize = sizeof(node_region_t) + sizeof(node_t) * capacity;
   node_region_t* region = (node_region_t*) malloc(regionSize);
   assert(region && "Not enough memory!");
@@ -326,33 +328,39 @@ node_t* eval(node_arena_t* arena, node_t* expr)
   ASSERT_NULL(arena);
   ASSERT_NULL(expr);
 
-  switch (expr->type) {
+  switch (expr->type)
+  {
     case NT_CONSTANT:
       return expr;
     case NT_BINOP:
-      switch (expr->as.binop.type) {
-        case NO_ADD: {
+      switch (expr->as.binop.type)
+      {
+        case NO_ADD:
+        {
           node_t* lhs = eval(arena, expr->as.binop.lhs);
           if (!lhs) return NULL;
           node_t* rhs = eval(arena, expr->as.binop.rhs);
           if (!rhs) return NULL;
           return node_constant(arena, expr->cursor, lhs->as.constant + rhs->as.constant);
         }
-        case NO_SUB: {
+        case NO_SUB:
+        {
           node_t* lhs = eval(arena, expr->as.binop.lhs);
           if (!lhs) return NULL;
           node_t* rhs = eval(arena, expr->as.binop.rhs);
           if (!rhs) return NULL;
           return node_constant(arena, expr->cursor, lhs->as.constant - rhs->as.constant);
         }
-        case NO_MUL: {
+        case NO_MUL:
+        {
           node_t* lhs = eval(arena, expr->as.binop.lhs);
           if (!lhs) return NULL;
           node_t* rhs = eval(arena, expr->as.binop.rhs);
           if (!rhs) return NULL;
           return node_constant(arena, expr->cursor, lhs->as.constant * rhs->as.constant);
         }
-        case NO_DIV: {
+        case NO_DIV:
+        {
           node_t* lhs = eval(arena, expr->as.binop.lhs);
           if (!lhs) return NULL;
           node_t* rhs = eval(arena, expr->as.binop.rhs);
@@ -364,7 +372,8 @@ node_t* eval(node_arena_t* arena, node_t* expr)
           }
           return node_constant(arena, expr->cursor, lhs->as.constant / rhs->as.constant);
         }
-        case NO_POW: {
+        case NO_POW:
+        {
           node_t* lhs = eval(arena, expr->as.binop.lhs);
           if (!lhs) return NULL;
           node_t* rhs = eval(arena, expr->as.binop.rhs);
@@ -377,68 +386,82 @@ node_t* eval(node_arena_t* arena, node_t* expr)
       }
       break;
     case NT_FUNCTION:
-      switch (expr->as.func.type) {
-        case NF_SQRT: {
+      switch (expr->as.func.type)
+      {
+        case NF_SQRT:
+        {
           node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
           return node_constant(arena, func->cursor, sqrt(func->as.constant));
         }
-        case NF_EXP: {
+        case NF_EXP:
+        {
           node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
           return node_constant(arena, func->cursor, exp(func->as.constant));
         }
-        case NF_SIN: {
+        case NF_SIN:
+        {
           node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
           return node_constant(arena, func->cursor, sin(func->as.constant));
         }
-        case NF_ASIN: {
+        case NF_ASIN:
+        {
           node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
           return node_constant(arena, func->cursor, asin(func->as.constant));
         }
-        case NF_SINH: {
+        case NF_SINH:
+        {
           node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
           return node_constant(arena, func->cursor, sinh(func->as.constant));
         }
-        case NF_COS: {
+        case NF_COS:
+        {
           node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
           return node_constant(arena, func->cursor, cos(func->as.constant));
         }
-        case NF_ACOS: {
+        case NF_ACOS:
+        {
           node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
           return node_constant(arena, func->cursor, acos(func->as.constant));
         }
-        case NF_COSH: {
+        case NF_COSH:
+        {
           node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
           return node_constant(arena, func->cursor, cosh(func->as.constant));
         }
-        case NF_TAN: {
+        case NF_TAN:
+        {
           node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
           return node_constant(arena, func->cursor, tan(func->as.constant));
         }
-        case NF_ATAN: {
+        case NF_ATAN:
+        {
           node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
           return node_constant(arena, func->cursor, atan(func->as.constant));
         }
-        case NF_TANH: {
+        case NF_TANH:
+        {
           node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
           return node_constant(arena, func->cursor, tanh(func->as.constant));
         }
-        case NF_LN: {
+        case NF_LN:
+        {
           node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
           return node_constant(arena, func->cursor, log(func->as.constant));
         }
-        case NF_LOG10: {
+        case NF_LOG10:
+        {
           node_t* func = eval(arena, expr->as.func.arg);
           if (!func) return NULL;
           return node_constant(arena, func->cursor, log10(func->as.constant));
@@ -662,6 +685,8 @@ node_t* parser_execute(node_arena_t* arena, lexer_t* lexer)
 
   for (size_t i = 0; i < lexer->count; ++i)
   {
+    //token_t* tok = &lexer->items[i];
+    // TODO: Implement!
     break;
   }
 
