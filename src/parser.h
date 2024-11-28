@@ -10,7 +10,7 @@
 #include <math.h>
 
 
-#define S_ERROR_NAME "semantic_error"
+#define S_ERROR_NAME "SEMANTIC-ERROR"
 #define S_ERROR_EXPECTED_OPAREN(cursor)   fprintf(stderr, S_ERROR_NAME ":%zu: Expected open-parenthesis!\n", (cursor))
 #define S_ERROR_EXPECTED_CPAREN(cursor)   fprintf(stderr, S_ERROR_NAME ":%zu: Expected closing-parenthesis!\n", (cursor))
 #define S_ERROR_EXPECTED_OPERATOR(cursor) fprintf(stderr, S_ERROR_NAME ":%zu: Expected operator!\n", (cursor))
@@ -18,7 +18,7 @@
 #define S_ERROR_EXPECTED_ARG(cursor)      fprintf(stderr, S_ERROR_NAME ":%zu: Expected arguments!\n", (cursor))
 #define S_ERROR_EXPECTED_NUMBER_OR_OPAREN(cursor) \
     fprintf(stderr, S_ERROR_NAME ":%zu: Expected number or open-parenthesis!\n", (cursor))
-#define E_ERROR_NAME "evaluation_error"
+#define E_ERROR_NAME "EVALUATION-ERROR"
 #define E_ERROR_DIVIDE_BY_ZERO(cursor)    fprintf(stderr, E_ERROR_NAME ":%zu: Tried to divide by zero!\n", (cursor))
 
 
@@ -484,6 +484,17 @@ node_t* eval(node_arena_t* arena, node_t* expr)
 }
 
 
+// TODO: Maybe move helpers to the lexer!
+#define tok_is(tok, t)        ((tok)->type == (t))
+#define tok_not(tok, t)       ((tok)->type != (t))
+
+#define tok_is_paren(tok, pt)           (tok_is(tok, TT_PAREN) && (tok)->as.paren == (pt))
+#define tok_not_specific_paren(tok, pt) (tok_not((tok), TT_PAREN) || (tok)->as.paren != (pt))
+#define tok_is_number_operator(tok)     (tok_is(tok, TT_OPERATOR) && ((tok)->as.operator == OP_ADD || (tok)->as.operator == OP_SUB))
+
+#define lex_at(lexer, idx) (&(lexer)->items[(idx)])
+#define lex_next_in_range(lexer, idx) ((idx) < (lexer)->count - 1)
+
 
 static bool check_semantics(lexer_t* lexer)
 {
@@ -497,21 +508,31 @@ static bool check_semantics(lexer_t* lexer)
 
   for (size_t i = 0; i < lexer->count; ++i)
   {
-    token_t* tok = &lexer->items[i];
-
-    if (i == 0 &&
-        (tok->type != TT_NUMBER &&
-         tok->type != TT_MATH_CONSTANT &&
-         tok->type != TT_FUNCTION &&
-         (tok->type != TT_PAREN || tok->as.paren != PT_OPAREN)))
+    token_t* tok = lex_at(lexer, i);
+    
+    // Checks if the fist token is valid on its position.
+    if (i == 0)
     {
+      if (tok_is(tok, TT_NUMBER))
+        continue;
+
+      if (tok_is_paren(tok, PT_OPAREN))
+        continue;
+
+      if (tok_is_number_operator(tok) &&
+          lex_next_in_range(lexer, i) &&
+          tok_is(lex_at(lexer, i + 1), TT_NUMBER))
+        continue;
+
       S_ERROR_EXPECTED_NUMBER_OR_OPAREN(tok->cursor);
       isError = true;
       continue;
     }
 
-    if (i > 0 && lexer->items[i - 1].type == TT_FUNCTION &&
-        (tok->type != TT_PAREN || tok->as.paren != PT_OPAREN))
+    // Checks if last token was a function initializer and also if the current is an open paren ("FUNC(<-...)").
+    if (i > 0 &&
+        tok_is(lex_at(lexer, i - 1), TT_FUNCTION) &&
+        tok_not_specific_paren(tok, PT_OPAREN))
     {
       S_ERROR_EXPECTED_OPAREN(tok->cursor);
       isError = true;
@@ -523,59 +544,62 @@ static bool check_semantics(lexer_t* lexer)
       case TT_MATH_CONSTANT:
       case TT_NUMBER:
       {
-        if (i <= 0)
+        // First char gets checked before.
+        if (i == 0)
           continue;
 
-        token_t* lastTok = &lexer->items[i - 1];
+        token_t* lastTok = lex_at(lexer, i - 1);
         
-        if (lastTok->type != TT_OPERATOR &&
-            (lastTok->type != TT_PAREN || lastTok->as.paren != PT_OPAREN))
-        {
-          S_ERROR_EXPECTED_OPERATOR(lastTok->cursor);
-          isError = true;
+        if (tok_is(lastTok, TT_OPERATOR) ||
+            tok_is_paren(lastTok, PT_OPAREN))
           continue;
-        }
 
-        break;
+        S_ERROR_EXPECTED_OPERATOR(lastTok->cursor);
+        isError = true;
+        continue;
       }
       case TT_OPERATOR:
       {
-        if (i <= 0)
+        // First char gets checked before.
+        if (i == 0)
           continue;
-        
-        token_t* lastTok = &lexer->items[i - 1];
 
-        if (lastTok->type != TT_NUMBER &&
-            lastTok->type != TT_MATH_CONSTANT &&
-            (lastTok->type != TT_PAREN || lastTok->as.paren != PT_CPAREN))
-        {
-          if (i < lexer->count - 1)
-          {
-            token_t* nextTok = &lexer->items[i + 1];
-
-            if (lastTok->type == TT_OPERATOR &&
-                tok->type == TT_OPERATOR &&
-                (tok->as.operator == OP_ADD || tok->as.operator == OP_SUB) &&
-                nextTok->type != TT_OPERATOR)
-            {
-              // Checks if the next token should be positive or negative.
-              continue;
-            }
-          }
-
-          S_ERROR_EXPECTED_NUMBER_OR_OPAREN(lastTok->cursor);
-          isError = true;
-          continue;
-        }
-        
-        if (i == lexer->count - 1)
+        // Checks if this is the last token (the last must not be an opeartor).
+        if (!lex_next_in_range(lexer, i))
         {
           S_ERROR_UNEXPECTED_TOKEN(tok->cursor);
           isError = true;
           continue;
         }
+        
+        token_t* lastTok = lex_at(lexer, i - 1);
+        token_t* nextTok = lex_at(lexer, i + 1);
 
-        break;
+        // Checks if the last token was a number or a closing paren.
+        if (tok_is(lastTok, TT_NUMBER) ||
+            tok_is_paren(lastTok, PT_CPAREN))
+          continue;
+
+        // Checks for ".. ')' OPERATOR NUMBER ..".
+        if (tok_is_paren(lastTok, PT_CPAREN) &&
+            tok_is(nextTok, TT_NUMBER))
+          continue;
+
+        // Checks for ".. '(' '+'/'-' NUMBER ..".
+        if (tok_is_paren(lastTok, PT_OPAREN) &&
+            tok_is_number_operator(tok) &&
+            tok_is(nextTok, TT_NUMBER))
+          continue;
+
+        // Checks if last token was an operator, the current is a number operator and the next is a number ".. OPERATOR '+'/'-' NUMBER ..".
+        if (tok_is(lastTok, TT_OPERATOR) &&
+            tok_is_number_operator(tok) &&
+            tok_is(nextTok, TT_NUMBER))
+          continue;
+
+        S_ERROR_EXPECTED_NUMBER_OR_OPAREN(lastTok->cursor);
+        isError = true;
+        continue;
       }
       case TT_PAREN:
       {
@@ -593,21 +617,21 @@ static bool check_semantics(lexer_t* lexer)
             isError = true;
             continue;
           }
-
-          if (i <= 0)
+          
+          // First token gets checked before.
+          if (i == 0)
             continue;
 
-          token_t* lastTok = &lexer->items[i - 1];
+          token_t* lastTok = lex_at(lexer, i - 1);
 
-          if (lastTok->type == TT_OPERATOR)
+          if (tok_is(lastTok, TT_OPERATOR))
           {
             S_ERROR_UNEXPECTED_TOKEN(lastTok->cursor);
             isError = true;
             continue;
           }
 
-          if (lastTok->type == TT_PAREN &&
-              lastTok->as.paren == PT_OPAREN)
+          if (tok_is_paren(lastTok, PT_OPAREN))
           {
             S_ERROR_EXPECTED_ARG(lastTok->cursor);
             isError = true;
@@ -619,7 +643,7 @@ static bool check_semantics(lexer_t* lexer)
         else
           UNREACHABLE("Not implemented!");
 
-        if (i == lexer->count - 1)
+        if (!lex_next_in_range(lexer, i))
         {
           if (parenCount > 0)
           {
@@ -633,20 +657,21 @@ static bool check_semantics(lexer_t* lexer)
       }
       case TT_FUNCTION:
       {
-        if (i <= 0)
+        // First character gets checked before.
+        if (i == 0)
           continue;
 
-        token_t* lastTok = &lexer->items[i - 1];
+        token_t* lastTok = lex_at(lexer, i - 1);
 
-        if (lastTok->type != TT_OPERATOR &&
-            (lastTok->type != TT_PAREN || lastTok->as.paren != PT_OPAREN))
+        if (tok_not(lastTok, TT_OPERATOR) &&
+            tok_not_specific_paren(lastTok, PT_OPAREN))
         {
           S_ERROR_EXPECTED_OPERATOR(lastTok->cursor);
           isError = true;
           continue;
         }
 
-        if (i == lexer->count - 1)
+        if (!lex_next_in_range(lexer, i))
         {
           S_ERROR_UNEXPECTED_TOKEN(tok->cursor);
           isError = true;

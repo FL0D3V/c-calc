@@ -12,7 +12,7 @@
 #define l_unreachable_defer(message)  do { fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message); goto defer; } while(0)
 
 
-#define L_ERROR_NAME "lexing_error"
+#define L_ERROR_NAME "LEXING-ERROR"
 #define L_ERROR_INVALID_NUMBER(cursor, cstr)  fprintf(stderr, L_ERROR_NAME ":%zu: A number can only contain 1 comma ('%s')!\n", (cursor), (cstr))
 #define L_ERROR_INVALID_TOKEN(cursor, cstr)   fprintf(stderr, L_ERROR_NAME ":%zu: '%s' is an invalid token!\n", (cursor), (cstr))
 #define L_ERROR_GIVEN_LEXER_INVALID()         fprintf(stderr, L_ERROR_NAME ": Can't print the lexer because an error happend!\n")

@@ -8,7 +8,7 @@
 
 #define t_unreachable(message)  fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message)
 
-#define T_ERROR_NAME "tokenizer_error"
+#define T_ERROR_NAME "TOKENIZATION-ERROR"
 #define T_ERROR_NO_INPUT_GIVEN() fprintf(stderr, T_ERROR_NAME ": No input given!\n")
 #define T_ERROR_GIVEN_TOKENIZER_INVALID() fprintf(stderr, T_ERROR_NAME ": Can't print the tokenizer because an error happend!\n")
 
