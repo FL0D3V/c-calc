@@ -528,25 +528,8 @@ static bool check_semantics(lexer_t* lexer)
       continue;
     }
 
-    if (!lex_next_in_range(lexer, i) && !tok_is(tok, TT_EOI))
-    {
-      S_ERROR(tok->cursor, "No EOI token found at the end!");
-      isError = true;
-      continue;
-    }
-
     switch (tok->type)
     {
-      case TT_EOI:
-      {
-        if (lex_next_in_range(lexer, i))
-        {
-          S_ERROR(tok->cursor, "Unexpected place for the EOI token! EOI must be at the end!");
-          isError = true;
-          continue;
-        }
-        break;
-      }
       case TT_MATH_CONSTANT:
       case TT_NUMBER:
       {
@@ -617,7 +600,19 @@ static bool check_semantics(lexer_t* lexer)
 
         e_paren_type ptype = tok->as.paren;
         
-        if (ptype == PT_OPAREN) parenCount++;
+        if (ptype == PT_OPAREN)
+        {
+          parenCount++;
+          
+          token_t* lastTok = lex_at(lexer, i - 1);
+
+          if (tok_is_paren(lastTok, PT_CPAREN))
+          {
+            S_ERROR(tok->cursor, "Before an open paren must NOT be a closing paren! Expected an operator!");
+            isError = true;
+            continue;
+          }
+        }
         else if (ptype == PT_CPAREN)
         {
           if (parenCount == 0)

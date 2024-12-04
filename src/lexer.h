@@ -29,19 +29,17 @@ typedef enum {
   TT_OPERATOR,
   TT_PAREN,
   TT_FUNCTION,
-  TT_EOI, // End-Of-Input
 
   TT_COUNT
 } e_token_type;
 
-static_assert(TT_COUNT == 6, "Amount of token-types have changed");
+static_assert(TT_COUNT == 5, "Amount of token-types have changed");
 const char* tokenTypeNames[TT_COUNT] = {
 	[TT_NUMBER] = "Number",
   [TT_MATH_CONSTANT] = "Constant",
   [TT_OPERATOR] = "Operator",
   [TT_PAREN] = "Parenthesis",
-  [TT_FUNCTION] = "Function",
-  [TT_EOI] = "End-Of-Input",
+  [TT_FUNCTION] = "Function"
 };
 
 
@@ -86,7 +84,6 @@ typedef struct {
 #define add_operator_token(lexer, op, curr)       da_append((lexer), ((token_t) { .type = TT_OPERATOR,      .as.operator = (op),  .cursor = (curr) }))
 #define add_paren_token(lexer, pt, curr)          da_append((lexer), ((token_t) { .type = TT_PAREN,         .as.paren    = (pt),  .cursor = (curr) }))
 #define add_function_token(lexer, ft, curr)       da_append((lexer), ((token_t) { .type = TT_FUNCTION,      .as.function = (ft),  .cursor = (curr) }))
-#define add_eoi_token(lexer, curr)                da_append((lexer), ((token_t) { .type = TT_EOI,                                 .cursor = (curr) }))
 
 
 lexer_t lexer_execute(tokenizer_t* tokens)
@@ -175,9 +172,6 @@ lexer_t lexer_execute(tokenizer_t* tokens)
     lexer.isError = true;
   }
 
-  // Marks the end of input.
-  add_eoi_token(&lexer, -1);
-
 defer:
   sb_free(sb);
 
@@ -217,8 +211,6 @@ void lexer_print(const lexer_t* lexer)
         break;
       case TT_FUNCTION:
         printf("(%s, %s)", functionTypeIdentifiers[token->as.function], functionTypeNames[token->as.function]);
-        break;
-      case TT_EOI:
         break;
       case TT_COUNT:
       default:
