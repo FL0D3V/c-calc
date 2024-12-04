@@ -5,21 +5,17 @@
 
 #include "global.h"
 #include "lexer.h"
-#include "darray.h"
 
 #include <math.h>
 
+// Errors
+#define _S_ERROR_NAME "SEMANTIC-ERROR"
+#define _E_ERROR_NAME "EVALUATION-ERROR"
 
-#define S_ERROR_NAME "SEMANTIC-ERROR"
-#define S_ERROR_EXPECTED_OPAREN(cursor)   fprintf(stderr, S_ERROR_NAME ":%zu: Expected open-parenthesis!\n", (cursor))
-#define S_ERROR_EXPECTED_CPAREN(cursor)   fprintf(stderr, S_ERROR_NAME ":%zu: Expected closing-parenthesis!\n", (cursor))
-#define S_ERROR_EXPECTED_OPERATOR(cursor) fprintf(stderr, S_ERROR_NAME ":%zu: Expected operator!\n", (cursor))
-#define S_ERROR_UNEXPECTED_TOKEN(cursor)  fprintf(stderr, S_ERROR_NAME ":%zu: Unexpected value detected!\n", (cursor))
-#define S_ERROR_EXPECTED_ARG(cursor)      fprintf(stderr, S_ERROR_NAME ":%zu: Expected arguments!\n", (cursor))
-#define S_ERROR_EXPECTED_NUMBER_OR_OPAREN(cursor) \
-    fprintf(stderr, S_ERROR_NAME ":%zu: Expected number or open-parenthesis!\n", (cursor))
-#define E_ERROR_NAME "EVALUATION-ERROR"
-#define E_ERROR_DIVIDE_BY_ZERO(cursor)    fprintf(stderr, E_ERROR_NAME ":%zu: Tried to divide by zero!\n", (cursor))
+#define _PARSER_ERROR(type, cursor, message) fprintf(stderr, type ":%zu: %s\n", (cursor), (message));
+
+#define S_ERROR(cursor, message) _PARSER_ERROR(_S_ERROR_NAME, cursor, message)
+#define E_ERROR(cursor, message) _PARSER_ERROR(_E_ERROR_NAME, cursor, message)
 
 
 
@@ -367,7 +363,7 @@ node_t* eval(node_arena_t* arena, node_t* expr)
           if (!rhs) return NULL;
           if (rhs->as.constant == 0)
           {
-            E_ERROR_DIVIDE_BY_ZERO(rhs->cursor);
+            E_ERROR(rhs->cursor, "Tried to divide by zero!");
             return NULL;
           }
           return node_constant(arena, expr->cursor, lhs->as.constant / rhs->as.constant);
@@ -484,18 +480,6 @@ node_t* eval(node_arena_t* arena, node_t* expr)
 }
 
 
-// TODO: Maybe move helpers to the lexer!
-#define tok_is(tok, t)        ((tok)->type == (t))
-#define tok_not(tok, t)       ((tok)->type != (t))
-
-#define tok_is_paren(tok, pt)           (tok_is(tok, TT_PAREN) && (tok)->as.paren == (pt))
-#define tok_not_specific_paren(tok, pt) (tok_not((tok), TT_PAREN) || (tok)->as.paren != (pt))
-#define tok_is_number_operator(tok)     (tok_is(tok, TT_OPERATOR) && ((tok)->as.operator == OP_ADD || (tok)->as.operator == OP_SUB))
-
-#define lex_at(lexer, idx) (&(lexer)->items[(idx)])
-#define lex_next_in_range(lexer, idx) ((idx) < (lexer)->count - 1)
-
-
 static bool check_semantics(lexer_t* lexer)
 {
   ASSERT_NULL(lexer);
@@ -504,8 +488,8 @@ static bool check_semantics(lexer_t* lexer)
     return false;
   
   bool isError = false;
-  size_t parenCount = 0;
-
+  size_t parenCount = 0; // TODO: Rethink!
+  
   for (size_t i = 0; i < lexer->count; ++i)
   {
     token_t* tok = lex_at(lexer, i);
@@ -513,18 +497,23 @@ static bool check_semantics(lexer_t* lexer)
     // Checks if the fist token is valid on its position.
     if (i == 0)
     {
-      if (tok_is(tok, TT_NUMBER))
+      if (tok_is(tok, TT_NUMBER) ||
+          tok_is(tok, TT_MATH_CONSTANT) ||
+          tok_is_paren(tok, PT_OPAREN) ||
+          tok_is(tok, TT_FUNCTION))
+      {
+        if (tok_is_paren(tok, PT_OPAREN))
+          parenCount++;
+        
         continue;
-
-      if (tok_is_paren(tok, PT_OPAREN))
-        continue;
+      }
 
       if (tok_is_number_operator(tok) &&
           lex_next_in_range(lexer, i) &&
           tok_is(lex_at(lexer, i + 1), TT_NUMBER))
         continue;
 
-      S_ERROR_EXPECTED_NUMBER_OR_OPAREN(tok->cursor);
+      S_ERROR(tok->cursor, "The start of an expression must NOT be a closing paren or a normal operator like multiply, divide or pow!");
       isError = true;
       continue;
     }
@@ -534,13 +523,30 @@ static bool check_semantics(lexer_t* lexer)
         tok_is(lex_at(lexer, i - 1), TT_FUNCTION) &&
         tok_not_specific_paren(tok, PT_OPAREN))
     {
-      S_ERROR_EXPECTED_OPAREN(tok->cursor);
+      S_ERROR(tok->cursor, "Expected an open paren after a function initializer!");
+      isError = true;
+      continue;
+    }
+
+    if (!lex_next_in_range(lexer, i) && !tok_is(tok, TT_EOI))
+    {
+      S_ERROR(tok->cursor, "No EOI token found at the end!");
       isError = true;
       continue;
     }
 
     switch (tok->type)
     {
+      case TT_EOI:
+      {
+        if (lex_next_in_range(lexer, i))
+        {
+          S_ERROR(tok->cursor, "Unexpected place for the EOI token! EOI must be at the end!");
+          isError = true;
+          continue;
+        }
+        break;
+      }
       case TT_MATH_CONSTANT:
       case TT_NUMBER:
       {
@@ -554,7 +560,7 @@ static bool check_semantics(lexer_t* lexer)
             tok_is_paren(lastTok, PT_OPAREN))
           continue;
 
-        S_ERROR_EXPECTED_OPERATOR(lastTok->cursor);
+        S_ERROR(lastTok->cursor, "Expected an operator or an open paren before a number or constant!");
         isError = true;
         continue;
       }
@@ -567,7 +573,7 @@ static bool check_semantics(lexer_t* lexer)
         // Checks if this is the last token (the last must not be an opeartor).
         if (!lex_next_in_range(lexer, i))
         {
-          S_ERROR_UNEXPECTED_TOKEN(tok->cursor);
+          S_ERROR(tok->cursor, "An operator can't be the last token!");
           isError = true;
           continue;
         }
@@ -577,6 +583,7 @@ static bool check_semantics(lexer_t* lexer)
 
         // Checks if the last token was a number or a closing paren.
         if (tok_is(lastTok, TT_NUMBER) ||
+            tok_is(lastTok, TT_MATH_CONSTANT) ||
             tok_is_paren(lastTok, PT_CPAREN))
           continue;
 
@@ -597,43 +604,41 @@ static bool check_semantics(lexer_t* lexer)
             tok_is(nextTok, TT_NUMBER))
           continue;
 
-        S_ERROR_EXPECTED_NUMBER_OR_OPAREN(lastTok->cursor);
+        // TODO: Rethink if lastTok or tok should be used for the cursor!
+        S_ERROR(tok->cursor, "Invalid usage of an operator!");
         isError = true;
         continue;
       }
       case TT_PAREN:
       {
+        // First token gets checked before.
+        if (i == 0)
+          continue;
+
         e_paren_type ptype = tok->as.paren;
         
-        if (ptype == PT_OPAREN)
-        {
-          parenCount++;
-        }
+        if (ptype == PT_OPAREN) parenCount++;
         else if (ptype == PT_CPAREN)
         {
           if (parenCount == 0)
           {
-            S_ERROR_UNEXPECTED_TOKEN(tok->cursor);
+            S_ERROR(tok->cursor, "Too many closing parens!");
             isError = true;
             continue;
           }
           
-          // First token gets checked before.
-          if (i == 0)
-            continue;
-
           token_t* lastTok = lex_at(lexer, i - 1);
 
           if (tok_is(lastTok, TT_OPERATOR))
           {
-            S_ERROR_UNEXPECTED_TOKEN(lastTok->cursor);
+            S_ERROR(tok->cursor, "Expected an expression after an operator but got a closing paren!");
             isError = true;
             continue;
           }
 
           if (tok_is_paren(lastTok, PT_OPAREN))
           {
-            S_ERROR_EXPECTED_ARG(lastTok->cursor);
+            S_ERROR(tok->cursor, "Expected an argument expression inside the parens!");
             isError = true;
             continue;
           }
@@ -643,14 +648,11 @@ static bool check_semantics(lexer_t* lexer)
         else
           UNREACHABLE("Not implemented!");
 
-        if (!lex_next_in_range(lexer, i))
+        if (!lex_next_in_range(lexer, i) && parenCount > 0)
         {
-          if (parenCount > 0)
-          {
-            S_ERROR_EXPECTED_CPAREN(tok->cursor);
-            isError = true;
-            continue;
-          }
+          S_ERROR(tok->cursor, "Expected closing paren!");
+          isError = true;
+          continue;
         }
 
         break;
@@ -663,17 +665,18 @@ static bool check_semantics(lexer_t* lexer)
 
         token_t* lastTok = lex_at(lexer, i - 1);
 
+        // Checks if the last token was an operator or an open paren.
         if (tok_not(lastTok, TT_OPERATOR) &&
             tok_not_specific_paren(lastTok, PT_OPAREN))
         {
-          S_ERROR_EXPECTED_OPERATOR(lastTok->cursor);
+          S_ERROR(lastTok->cursor, "Before a function initializer must be an operator or an open paren!");
           isError = true;
           continue;
         }
 
         if (!lex_next_in_range(lexer, i))
         {
-          S_ERROR_UNEXPECTED_TOKEN(tok->cursor);
+          S_ERROR(tok->cursor, "A function initializer can't be the last token!");
           isError = true;
           continue;
         }
@@ -699,19 +702,25 @@ node_t* parser_execute(node_arena_t* arena, lexer_t* lexer)
     return NULL;
 
   // TODO:
-  // - Operation order checking (operators +,-,*,/,^ and brackets '(', ')')
-  // - - Order: Brackets -> Exponents -> Multiplication -> Division -> Addition -> Substraction
-  // - A stack for checking nested expressions in brackets. Also if the brackets are used correctly.
-  // - - 2 Open '(' should have 2 Closing ')' after.
-  // - After a constant MUST come an operator, function, or bracket
-
+  // The parser needs to reed to the next operator, open paren, or func.
+  // Order checking: Brackets -> Exponents -> Multiplication -> Division -> Addition -> Substraction
+  // A stack for checking nested expressions in brackets. Also if the brackets are used correctly.
+  // Paren checking: 2 Open '(' should have 2 Closing ')' after.
+  // After a constant / nubmer MUST come an operator, function, or closing paren
+  
   if (!check_semantics(lexer))
     return NULL;
 
+  // IN: "EN + 5 / (5 * 0)"
+  // AST: "add(EN, divide(5, paren(mult(5, 0))))"
+  // Getting constants: mathConstantTypeValues[token->as.constant]
+
   for (size_t i = 0; i < lexer->count; ++i)
   {
-    //token_t* tok = &lexer->items[i];
-    // TODO: Implement!
+    token_t* tok = &lexer->items[i];
+    
+    // TODO: implement!
+    (void) tok;
     break;
   }
 
