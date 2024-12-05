@@ -494,65 +494,28 @@ static bool check_semantics(lexer_t* lexer)
   {
     token_t* tok = lex_at(lexer, i);
     
-    // Checks if the fist token is valid on its position.
-    if (i == 0)
-    {
-      if (tok_is(tok, TT_NUMBER) ||
-          tok_is(tok, TT_MATH_CONSTANT) ||
-          tok_is_paren(tok, PT_OPAREN) ||
-          tok_is(tok, TT_FUNCTION))
-      {
-        if (tok_is_paren(tok, PT_OPAREN))
-          parenCount++;
-        
-        continue;
-      }
-
-      if (tok_is_number_operator(tok) &&
-          lex_next_in_range(lexer, i) &&
-          tok_is(lex_at(lexer, i + 1), TT_NUMBER))
-        continue;
-
-      S_ERROR(tok->cursor, "The start of an expression must NOT be a closing paren or a normal operator like multiply, divide or pow!");
-      isError = true;
-      continue;
-    }
-
-    // Checks if last token was a function initializer and also if the current is an open paren ("FUNC(<-...)").
-    if (i > 0 &&
-        tok_is(lex_at(lexer, i - 1), TT_FUNCTION) &&
-        tok_not_specific_paren(tok, PT_OPAREN))
-    {
-      S_ERROR(tok->cursor, "Expected an open paren after a function initializer!");
-      isError = true;
-      continue;
-    }
-
     switch (tok->type)
     {
       case TT_MATH_CONSTANT:
       case TT_NUMBER:
       {
-        // First char gets checked before.
-        if (i == 0)
-          continue;
+        if (i > 0)
+        {
+          token_t* lastTok = lex_at(lexer, i - 1);
+          
+          if (tok_is(lastTok, TT_OPERATOR) ||
+              tok_is_paren(lastTok, PT_OPAREN))
+            continue;
 
-        token_t* lastTok = lex_at(lexer, i - 1);
-        
-        if (tok_is(lastTok, TT_OPERATOR) ||
-            tok_is_paren(lastTok, PT_OPAREN))
+          S_ERROR(tok->cursor, "Expected an operator or an open paren before a number or constant!");
+          isError = true;
           continue;
+        }
 
-        S_ERROR(lastTok->cursor, "Expected an operator or an open paren before a number or constant!");
-        isError = true;
         continue;
       }
       case TT_OPERATOR:
       {
-        // First char gets checked before.
-        if (i == 0)
-          continue;
-
         // Checks if this is the last token (the last must not be an opeartor).
         if (!lex_next_in_range(lexer, i))
         {
@@ -561,87 +524,100 @@ static bool check_semantics(lexer_t* lexer)
           continue;
         }
         
-        token_t* lastTok = lex_at(lexer, i - 1);
         token_t* nextTok = lex_at(lexer, i + 1);
 
-        // Checks if the last token was a number or a closing paren.
-        if (tok_is(lastTok, TT_NUMBER) ||
-            tok_is(lastTok, TT_MATH_CONSTANT) ||
-            tok_is_paren(lastTok, PT_CPAREN))
+        if (i > 0)
+        {
+          token_t* lastTok = lex_at(lexer, i - 1);
+          
+          // Checks if the last token was a number or a closing paren.
+          if (tok_is(lastTok, TT_NUMBER) ||
+              tok_is(lastTok, TT_MATH_CONSTANT) ||
+              tok_is_paren(lastTok, PT_CPAREN))
+            continue;
+
+          // Checks for ".. ')' OPERATOR NUMBER ..".
+          if (tok_is_paren(lastTok, PT_CPAREN) &&
+              tok_is(nextTok, TT_NUMBER))
+            continue;
+
+          // Checks for ".. '(' '+'/'-' NUMBER ..".
+          if (tok_is_paren(lastTok, PT_OPAREN) &&
+              tok_is_number_operator(tok) &&
+              tok_is(nextTok, TT_NUMBER))
+            continue;
+
+          // Checks if last token was an operator, the current is a number operator and the next is a number ".. OPERATOR '+'/'-' NUMBER ..".
+          if (tok_is(lastTok, TT_OPERATOR) &&
+              tok_is_number_operator(tok) &&
+              tok_is(nextTok, TT_NUMBER))
+            continue;
+        }
+
+        if (tok_is_number_operator(tok) && tok_is(nextTok, TT_NUMBER))
           continue;
 
-        // Checks for ".. ')' OPERATOR NUMBER ..".
-        if (tok_is_paren(lastTok, PT_CPAREN) &&
-            tok_is(nextTok, TT_NUMBER))
-          continue;
-
-        // Checks for ".. '(' '+'/'-' NUMBER ..".
-        if (tok_is_paren(lastTok, PT_OPAREN) &&
-            tok_is_number_operator(tok) &&
-            tok_is(nextTok, TT_NUMBER))
-          continue;
-
-        // Checks if last token was an operator, the current is a number operator and the next is a number ".. OPERATOR '+'/'-' NUMBER ..".
-        if (tok_is(lastTok, TT_OPERATOR) &&
-            tok_is_number_operator(tok) &&
-            tok_is(nextTok, TT_NUMBER))
-          continue;
-
-        // TODO: Rethink if lastTok or tok should be used for the cursor!
         S_ERROR(tok->cursor, "Invalid usage of an operator!");
         isError = true;
         continue;
       }
       case TT_PAREN:
       {
-        // First token gets checked before.
-        if (i == 0)
-          continue;
-
         e_paren_type ptype = tok->as.paren;
-        
+
         if (ptype == PT_OPAREN)
         {
           parenCount++;
           
-          token_t* lastTok = lex_at(lexer, i - 1);
-
-          if (tok_is_paren(lastTok, PT_CPAREN))
+          if (i > 0)
           {
-            S_ERROR(tok->cursor, "Before an open paren must NOT be a closing paren! Expected an operator!");
-            isError = true;
-            continue;
+            token_t* lastTok = lex_at(lexer, i - 1);
+
+            if (tok_is_paren(lastTok, PT_CPAREN))
+            {
+              S_ERROR(tok->cursor, "Before an open paren must NOT be a closing paren!");
+              isError = true;
+              continue;
+            }
+
+            if (tok_not(lastTok, TT_OPERATOR) && !tok_is_paren(lastTok, PT_OPAREN))
+            {
+              S_ERROR(tok->cursor, "Expected operator!");
+              isError = true;
+              continue;
+            }
           }
         }
         else if (ptype == PT_CPAREN)
         {
-          if (parenCount == 0)
+          if (parenCount <= 0)
           {
             S_ERROR(tok->cursor, "Too many closing parens!");
             isError = true;
             continue;
           }
           
-          token_t* lastTok = lex_at(lexer, i - 1);
-
-          if (tok_is(lastTok, TT_OPERATOR))
+          if (i > 0)
           {
-            S_ERROR(tok->cursor, "Expected an expression after an operator but got a closing paren!");
-            isError = true;
-            continue;
-          }
+            token_t* lastTok = lex_at(lexer, i - 1);
 
-          if (tok_is_paren(lastTok, PT_OPAREN))
-          {
-            S_ERROR(tok->cursor, "Expected an argument expression inside the parens!");
-            isError = true;
-            continue;
+            if (tok_is(lastTok, TT_OPERATOR))
+            {
+              S_ERROR(tok->cursor, "Expected an expression after an operator but got a closing paren!");
+              isError = true;
+              continue;
+            }
+
+            if (tok_is_paren(lastTok, PT_OPAREN))
+            {
+              S_ERROR(tok->cursor, "Expected an argument expression inside the parens!");
+              isError = true;
+              continue;
+            }
           }
 
           parenCount--;
         }
-        else
-          UNREACHABLE("Not implemented!");
 
         if (!lex_next_in_range(lexer, i) && parenCount > 0)
         {
@@ -650,38 +626,53 @@ static bool check_semantics(lexer_t* lexer)
           continue;
         }
 
-        break;
+        continue;
       }
       case TT_FUNCTION:
       {
-        // First character gets checked before.
-        if (i == 0)
-          continue;
-
-        token_t* lastTok = lex_at(lexer, i - 1);
-
-        // Checks if the last token was an operator or an open paren.
-        if (tok_not(lastTok, TT_OPERATOR) &&
-            tok_not_specific_paren(lastTok, PT_OPAREN))
-        {
-          S_ERROR(lastTok->cursor, "Before a function initializer must be an operator or an open paren!");
-          isError = true;
-          continue;
-        }
-
         if (!lex_next_in_range(lexer, i))
         {
-          S_ERROR(tok->cursor, "A function initializer can't be the last token!");
+          S_ERROR(tok->cursor, "A function initializer can't be the last token because it needs an open and a closing paren and an argument expression inside them!");
           isError = true;
           continue;
         }
 
-        break;
+        token_t* nextTok = lex_at(lexer, i + 1);
+
+        // Checks if last token was a function initializer and also if the current is an open paren ("FUNC(<-...)").
+        if (tok_not_specific_paren(nextTok, PT_OPAREN))
+        {
+          S_ERROR(tok->cursor, "Expected an open paren after a function initializer!");
+          isError = true;
+          continue;
+        }
+
+        if (i > 0)
+        {
+          token_t* lastTok = lex_at(lexer, i - 1);
+
+          // Checks if the last token was an operator or an open paren.
+          if (tok_not(lastTok, TT_OPERATOR) &&
+              tok_not_specific_paren(lastTok, PT_OPAREN))
+          {
+            S_ERROR(lastTok->cursor, "Before a function initializer must be an operator or an open paren!");
+            isError = true;
+            continue;
+          }
+        }
+
+        continue;
       }
       case TT_COUNT:
       default:
         UNREACHABLE("Invalid token-type!");
     }
+  }
+
+  if (parenCount != 0 && !isError)
+  {
+    S_ERROR(lex_at(lexer, lexer->count - 1)->cursor, "Invalid paren usage!");
+    isError = true;
   }
 
   return isError;
