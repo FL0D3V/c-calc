@@ -13,6 +13,91 @@
 #define DOUBLE_PRINT_FORMAT "%.05lf"
 
 
+// TODO: Rethink!
+/*
+ Will be used for the parsing of expressions in different modes.
+ The mode depends on the usage of the program, because f.e. variables or function definitions can't be used when
+ executing a single expression directly in the program arguments. Thats because the program exits directly after evaluating
+ the given expression and does not store state in this mode. But when the full cli mode is used where the program was started
+ without any extra arguments except f.e. 'verbose' for executing and handling the expressions, it will stay open and multiple
+ lines can be entered where some lines could be assignments or func definitions and some are expressions which use them. So in
+ full cli mode it stores the previously entered data. Also the full cli mode is used when starting the program with a file
+ where all this is pre written in multiple lines and the program just prints the final value of the evaluated expression.
+ 
+ Also rethink if a linker should be implemented when implementing files, so often used functions can be pre written
+ in one or multiple files, which only contain variable- and function-definitions for easy reusability.
+ This would make it possible to use more complex and custom variables and functions in f.e single-mode where only the fewest features
+ are active. The variables can also be used because they would work exactly the same way as the pre defined math-constants. Same with
+ functions, because they also work the same way like the pre defined functions.
+ The linking could be used with a specific cli command like '-l <FILE>' or '--link <FILE>' and could allow multiple calls for linking
+ one or many different files.
+ The linker than loads everything in memory and pre parses all definitions, so that the user input can be combined like it would be just
+ a single file.
+
+ Evaluation-File Example:
+ """
+ var1 = 10 + sqrt(10 ^ EN)
+
+ func1(x1, x2) = var1 * x1 ^ ln(x2 ^ 2)
+ 
+ = func1(10, -4 * PI) - ln(20)
+ """
+
+ Linker-File Example:
+ """
+ var1 = 100 / sqrt(20 ^ 2 - 5)
+
+ funcTest(arg1, arg2) = arg1 + 20 / ln(arg2)
+ """
+
+ Retink if '\' should be implemented for easily splitting a single lines into multiple for larger expressions.
+ New lines can also only be used in the full cli mode.
+ New-Line Example:
+ """
+ func1(x1, x2) = \
+  100.53 + sqrt(3.5 - EN) + \
+  cos(x1 * 6.4^2) / 8.3 + ln(10) - \
+  PI + ln(5 ^ x2)
+ """
+*/
+
+typedef enum {
+  GPM_SINGLE_EXPRESSION,
+  GPM_FULL_CLI,
+  GPM_FILE,
+
+  GPM_COUNT
+} e_global_program_mode;
+
+static_assert(GPM_COUNT == 3, "Amount of global-program-modes have changed");
+
+const char* globalProgramModeNames[GPM_COUNT] = {
+  [GPM_SINGLE_EXPRESSION] = "Single expression mode",
+  [GPM_FULL_CLI]          = "Full multi line cli mode",
+  [GPM_FILE]              = "File mode",
+};
+
+const char* globalProgramModeDescriptions[GPM_COUNT] = {
+  [GPM_SINGLE_EXPRESSION] = "For simple direct execution of an expression given to the program as an argument. In this mode only the simple base features are active. So no assignments or multi line inputs, just simple expressions",
+  [GPM_FULL_CLI]          = "When the program was started without specifying an expression directly as an argument. With this mode the program stays open and expects an input expression per line entered. Here are the most features active like variable and function assignments.",
+  [GPM_FILE]              = "When the program was started with a file given as an argument. With this mode the program parses the given file line by line and evaluates it. In this mode is every feature usable like function and variable assignments and new lines to break a single line into multiple for easier readability.",
+};
+
+
+// It defaults to the single mode.
+static e_global_program_mode globalProgramMode = GPM_SINGLE_EXPRESSION;
+
+// Used for changing the program mode.
+void change_global_program_mode(e_global_program_mode mode)
+{
+  if (globalProgramMode == mode)
+    return;
+
+  globalProgramMode = mode;
+}
+
+
+
 // String functions
 void cstr_chop_till_last_delim(char** cstr, char delimiter)
 {

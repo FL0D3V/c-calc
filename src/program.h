@@ -249,7 +249,12 @@ int handle_program(program_t* program)
 
   // Checking if an expression should get executed and if it should be verbose.
   if (is_bit_set(program->funcFlags, PFF_EXPRESSION))
+  {
+    // TODO: Rethink! Changes to the simple expression eval mode with limited features.
+    change_global_program_mode(GPM_SINGLE_EXPRESSION);
+
     return handle_math_input(program->inputExpression, is_bit_set(program->funcFlags, PFF_VERBOSE));
+  }
 
   UNREACHABLE("handle_program: Flag not implemented!");
 }

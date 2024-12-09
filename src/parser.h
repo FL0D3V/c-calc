@@ -488,7 +488,7 @@ static bool check_semantics(lexer_t* lexer)
     return false;
   
   bool isError = false;
-  size_t parenCount = 0; // TODO: Rethink!
+  size_t parenCount = 0;
   
   for (size_t i = 0; i < lexer->count; ++i)
   {
@@ -575,14 +575,14 @@ static bool check_semantics(lexer_t* lexer)
 
             if (tok_is_paren(lastTok, PT_CPAREN))
             {
-              S_ERROR(tok->cursor, "Before an open paren must NOT be a closing paren!");
+              S_ERROR(tok->cursor, "Expected operator! Before an open paren must NOT be a closing paren.");
               isError = true;
               continue;
             }
 
             if (tok_not(lastTok, TT_OPERATOR) && !tok_is_paren(lastTok, PT_OPAREN))
             {
-              S_ERROR(tok->cursor, "Expected operator!");
+              S_ERROR(tok->cursor, "Expected operator or open paren!");
               isError = true;
               continue;
             }
@@ -597,6 +597,8 @@ static bool check_semantics(lexer_t* lexer)
             continue;
           }
           
+          parenCount--;
+
           if (i > 0)
           {
             token_t* lastTok = lex_at(lexer, i - 1);
@@ -615,8 +617,6 @@ static bool check_semantics(lexer_t* lexer)
               continue;
             }
           }
-
-          parenCount--;
         }
 
         if (!lex_next_in_range(lexer, i) && parenCount > 0)
@@ -671,8 +671,13 @@ static bool check_semantics(lexer_t* lexer)
       }
       case TT_LITERAL:
       {
-        S_ERROR(tok->cursor, "Literal not implemented yet!");
+        // TODO: Implement!
+        // Current literals:
+        // > ',': for multi argument functions like '... funcTest(arg1, arg2, arg3) ...'.
+        // > '=': for equations like '10 + 5 = 20 - 5'. This could return f.e. 'true' or 'false'.
+        //        Also it could maybe be used for assigning an expression to a variable.
 
+        S_ERROR(tok->cursor, "Literal not implemented yet!");
         continue;
       }
       case TT_COUNT:
@@ -696,11 +701,11 @@ node_t* parser_execute(node_arena_t* arena, lexer_t* lexer)
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
 
-  if (lexer->isError)
+  if (lexer->isError || lexer->count <= 0)
     return NULL;
 
   // TODO:
-  // The parser needs to reed to the next operator, open paren, or func.
+  // The parser needs to reed to the next operator, paren, or func for every node.
   // Order checking: Brackets -> Exponents -> Multiplication -> Division -> Addition -> Substraction
   // A stack for checking nested expressions in brackets. Also if the brackets are used correctly.
   // Paren checking: 2 Open '(' should have 2 Closing ')' after.
@@ -713,17 +718,28 @@ node_t* parser_execute(node_arena_t* arena, lexer_t* lexer)
   // AST: "add(EN, divide(5, paren(mult(5, 0))))"
   // Getting constants: mathConstantTypeValues[token->as.constant]
 
+  node_t* root = NULL;
+
   for (size_t i = 0; i < lexer->count; ++i)
   {
-    token_t* tok = &lexer->items[i];
-    
-    // TODO: implement!
+    token_t* tok = lex_at(lexer, i);
+
+    // TODO: Implement!
     (void) tok;
+
     break;
+
+    /*switch (tok->type)
+    {
+
+      case TT_COUNT:
+      default:
+        UNREACHABLE("Invalid token-type!");
+    }*/
   }
 
   // TODO: Return root node!
-  return NULL;  
+  return root;  
 }
 
 #endif // _PARSER_H_
