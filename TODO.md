@@ -9,19 +9,22 @@
 - [ ] Parser: Converts the lexed tokens to an AST (abstract syntax tree) for checking e.g. the "order of operations" of the math equation.
 - [X] Simple user-friendly CLI.
 - [ ] Complex CLI interface with the possibility to enter multiple math expressions without having to restart the program.
-- [ ] Implement the usage of negative numbers like e.g. '5 * -3'.
+- [X] Implement the usage of negative numbers like e.g. '5 * -3'.
+- [ ] Implement equations with '='. With this you could write f.e '5 + 10 = 20 - 5' and get f.e. 'true' or 'false'. Can later also be used for solving math equations for a specific variable.
 
 ## Missing extras
 
-- [ ] Implement ',' for functions with multiple parameters.
-- [X] 'Peek' and 'Seek' functions for the tokenization (not really needed with current implementation of it but propably needed for better tokenization)
+- [ ] Implement multiple function arguments with the ',' seperator.
 - [X] Handling of float values (not like currently with an extra 'Comma' token but with a different number type literal in the unit f.e.)
 - [X] Arena Allocator implementation in the parser for easy memory management
 - [ ] Variables and variable assignments and storing variables while running for e.g. multi line math expressions.
 - [ ] Solving math expressions with variables and assignments.
 - [ ] Maybe implement custom functions like variables that take one or multiple parameters/variables.
+- [ ] Implement file handling for writing simple to complex multi line math expressions in a seperate file. This could be used like a programming language for math expressions or equations with variable assignments and evaluations. Maybe the file could get parsed and all the equations and variables get evaluated and stored in memory. The program keeps running in a special mode where you can write a variable name and get its evaluated value. Another possibility could be to use variable and function assignments for handling more complex expressions and only allow 1 evaluation per file. So just 1 complete expression per file and to evaluate the final expression you write '= EXPRESSION WITH FUNCTIONS AND VARIABLES' at the end of the file.
 
 ## Math-Functions
+
+All the available math-functions in "math.c".
 
 - [X] acos(x)
   Returns the arc cosine of x in radians.

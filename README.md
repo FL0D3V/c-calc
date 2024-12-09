@@ -1,6 +1,6 @@
 # c-calc
 
-A simple terminal calculator written in C that can parse a given mathematical expression and evaluate it according to the rules of mathematics.
+A simple linux terminal calculator written in C which can parse a given mathematical expression and evaluate it.
 
 
 ## Math rules
@@ -151,9 +151,7 @@ add(
         8.30000
       ),
       substract(
-        ln(
-          10.00000
-        ),
+        ln(10.00000),
         add(
           3.14159,
           ln(
