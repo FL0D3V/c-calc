@@ -47,7 +47,7 @@ typedef struct {
 
 
 
-// Tokenizes a collection of characters into a symbol.
+// Tokenizes a collection of characters into a symbol which are not spaces and literal characters.
 static bool next_symbol(string_slice_t* ss, tokenizer_t* tokens)
 {
   ASSERT_NULL(ss);
@@ -89,7 +89,7 @@ static bool next_literal(string_slice_t* ss, tokenizer_t* tokens)
 
   const char* currentPtr = ss_get_current_ptr(ss);
   bool isLiteral = c_is_literal(*currentPtr);
-  
+
   if (isLiteral)
     tokenizer_append(tokens, currentPtr, 1, ss_current_pos(ss));
   

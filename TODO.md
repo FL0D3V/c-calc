@@ -2,71 +2,42 @@
 
 ## Main functionality
 
-- [X] Tokenizer: Converts the input string to valid tokens and checks for invalid characters. Input string must be e.g.: "100.53 + 23 * (53.21 - 34) / 2.5".
-- [X] Lexer: Is an extension to the tokenizer which adds additional meta data to the tokens like what type of token and extra values like converted value literal or operator type.
-- [X] AST: Implement the AST with nodes.
-- [X] Evaluator: Evaluates the AST to get the final result value.
-- [ ] Parser: Converts the lexed tokens to an AST (abstract syntax tree) for checking e.g. the "order of operations" of the math equation.
-- [X] Simple user-friendly CLI.
-- [ ] Complex CLI interface with the possibility to enter multiple math expressions without having to restart the program.
+- [X] Tokenizer: Converts the input string to valid tokens and checks for invalid characters. Input string must be e.g.: "100.53 + PI * (53.21 - 34) / 2.5 + sqrt(5 ^ EN)".
 - [X] Implement the usage of negative numbers like e.g. '5 * -3'.
-- [ ] Implement equations with '='. With this you could write f.e '5 + 10 = 20 - 5' and get f.e. 'true' or 'false'. Can later also be used for solving math equations for a specific variable.
+- [X] Lexer: Is an extension to the tokenizer which adds additional meta data to the tokens like what type of token and extra values like converted value literal or operator type. Also it checks for invalid tokens.- [X] AST: Implement the AST with nodes.
+- [X] Evaluator: Evaluates the AST to get the final result value.
+- [X] Semantics checking: Checks if the input (lexed tokens) has correct syntax.
+- [ ] Parser: Converts the lexed tokens to an AST (abstract syntax tree) for checking e.g. the "order of operations" of the math equation.
+- [X] Simple user-friendly CLI with a few basic commands.
 
 ## Missing extras
 
+- [ ] Implement equations with '='. With this you could write f.e '5 + 10 = 20 - 5' and get f.e. 'true' or 'false'. Can later also be used for solving math equations for a specific variable.
 - [ ] Implement multiple function arguments with the ',' seperator.
 - [X] Handling of float values (not like currently with an extra 'Comma' token but with a different number type literal in the unit f.e.)
 - [X] Arena Allocator implementation in the parser for easy memory management
-- [ ] Variables and variable assignments and storing variables while running for e.g. multi line math expressions.
+- [ ] Variables and variable assignments and storing variables while running for e.g. multi line math expressions. Rethink if variable assignments should use the '=' literal or a custom assignment symbol like ':='.
 - [ ] Solving math expressions with variables and assignments.
-- [ ] Maybe implement custom functions like variables that take one or multiple parameters/variables.
+- [ ] Custom functions like variables that take one or multiple parameters/variables. These need to be checked for duplicates and also if it is a standard function like f.e 'sqrt'.
 - [ ] Implement file handling for writing simple to complex multi line math expressions in a seperate file. This could be used like a programming language for math expressions or equations with variable assignments and evaluations. Maybe the file could get parsed and all the equations and variables get evaluated and stored in memory. The program keeps running in a special mode where you can write a variable name and get its evaluated value. Another possibility could be to use variable and function assignments for handling more complex expressions and only allow 1 evaluation per file. So just 1 complete expression per file and to evaluate the final expression you write '= EXPRESSION WITH FUNCTIONS AND VARIABLES' at the end of the file.
+- [ ] Complex CLI interface with the possibility to enter multiple math expressions without having to restart the program. Here you could run just f.e. 'ccalc' and the program starts in full mode and expects a math expression per entered line. This goes hand in hand with the file parsing because it should work exactly the same. You just enter each line while it is running and get instant parsing errors if there are any.
 
-## Math-Functions
+## Standard Math-Functions
 
-All the available math-functions in "math.c".
+All the available math-functions in "math.c". Some might need reconsiderations before implementation.
 
-- [X] acos(x)
-  Returns the arc cosine of x in radians.
-
-- [X] asin(x)
-  Returns the arc sine of x in radians.
-
-- [X] atan(x)
-  Returns the arc tangent of x in radians.
-
-- [ ] atan2(y, x)
-  Returns the arc tangent in radians of y/x based on the signs of both values to determine the correct quadrant.
-
-- [X] cos(x)
-  Returns the cosine of a radian angle x.
-
-- [X] cosh(x)
-  Returns the hyperbolic cosine of x.
-
-- [X] sin(x)
-  Returns the sine of a radian angle x.
-
-- [X] sinh(x)
-  Returns the hyperbolic sine of x.
-
-- [X] tan(x)
-  Returns the tangent of a given angle x.
-
-- [X] tanh(x)
-  Returns the hyperbolic tangent of x.
-
-- [X] exp(x)
-  Returns the value of e raised to the x'th power.
-
-- [ ] ldexp(x, exponent: int)
-  Returns x multiplied by 2 raised to the power of exponent.
-
-- [X] log(x)
-  Returns the natural logarithm (base-e logarithm) of x.
-
-- [X] log10(x)
-  Returns the common logarithm (base-10 logarithm) of x.
-
-- [X] sqrt(x)
-  Returns the square root of x.
+- [X] acos(x): Returns the arc cosine of x in radians.
+- [X] asin(x): Returns the arc sine of x in radians.
+- [X] atan(x): Returns the arc tangent of x in radians.
+- [ ] atan2(y, x): Returns the arc tangent in radians of y/x based on the signs of both values to determine the correct quadrant.
+- [X] cos(x): Returns the cosine of a radian angle x.
+- [X] cosh(x): Returns the hyperbolic cosine of x.
+- [X] sin(x): Returns the sine of a radian angle x.
+- [X] sinh(x): Returns the hyperbolic sine of x.
+- [X] tan(x): Returns the tangent of a given angle x.
+- [X] tanh(x): Returns the hyperbolic tangent of x.
+- [X] exp(x): Returns the value of e raised to the x'th power.
+- [ ] ldexp(x, exponent: int): Returns x multiplied by 2 raised to the power of exponent.
+- [X] log(x): Returns the natural logarithm (base-e logarithm) of x.
+- [X] log10(x): Returns the common logarithm (base-10 logarithm) of x.
+- [X] sqrt(x): Returns the square root of x.

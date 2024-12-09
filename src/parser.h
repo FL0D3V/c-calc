@@ -630,7 +630,9 @@ static bool check_semantics(lexer_t* lexer)
       }
       case TT_FUNCTION:
       {
-        if (!lex_next_in_range(lexer, i))
+        // Checks that after the current initializer there are still at least 3 more tokens because a function needs 
+        // an open paren, at least a single argument and a closing paren.
+        if (!lex_next_in_range(lexer, i + 2))
         {
           S_ERROR(tok->cursor, "A function initializer can't be the last token because it needs an open and a closing paren and an argument expression inside them!");
           isError = true;
@@ -642,7 +644,7 @@ static bool check_semantics(lexer_t* lexer)
         // Checks if last token was a function initializer and also if the current is an open paren ("FUNC(<-...)").
         if (tok_not_specific_paren(nextTok, PT_OPAREN))
         {
-          S_ERROR(tok->cursor, "Expected an open paren after a function initializer!");
+          S_ERROR(nextTok->cursor, "Expected an open paren after a function initializer!");
           isError = true;
           continue;
         }
@@ -660,6 +662,16 @@ static bool check_semantics(lexer_t* lexer)
             continue;
           }
         }
+
+        // This ignores the cheking for the next token because the checks here make sure that the next is an open paren.
+        parenCount++;
+        i++;
+
+        continue;
+      }
+      case TT_LITERAL:
+      {
+        S_ERROR(tok->cursor, "Literal not implemented yet!");
 
         continue;
       }

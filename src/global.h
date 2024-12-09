@@ -72,6 +72,7 @@ bool is_not_only_bit_set(int flags, int bit)
 
 
 #define COMMA_CHARACTER '.'
+#define MINUS_CHARACTER '-'
 
 #define c_is_comma(c)   ((c) == COMMA_CHARACTER)
 #define c_is_number(c)  (isdigit(c) || c_is_comma(c))
@@ -81,10 +82,10 @@ typedef struct {
   int cursor;
 } num_check_t;
 
-#define num_check_null()          ((num_check_t) { .ret =  1, .cursor = 0     })
-#define num_check_success(cur)    ((num_check_t) { .ret =  0, .cursor = (cur) })
-#define num_check_comma_err(cur)  ((num_check_t) { .ret = -1, .cursor = (cur) })
-#define num_check_invalid(cur)    ((num_check_t) { .ret = -2, .cursor = (cur) })
+#define _NUM_CHECK_NULL()         ((num_check_t) { .ret =  1, .cursor = 0     })
+#define _NUM_CHECK_SUCCESS(cur)   ((num_check_t) { .ret =  0, .cursor = (cur) })
+#define _NUM_CHECK_COMMA_ERR(cur) ((num_check_t) { .ret = -1, .cursor = (cur) })
+#define _NUM_CHECK_INVALID(cur)   ((num_check_t) { .ret = -2, .cursor = (cur) })
 
 // Returns an 'num_check_t'.
 // The 'ret' value variations:
@@ -95,11 +96,11 @@ typedef struct {
 num_check_t cstr_is_number(const char* cstr)
 {
   if (!cstr)
-    return num_check_null();
+    return _NUM_CHECK_NULL();
 
   size_t len = strlen(cstr);
   if (len <= 0)
-    return num_check_null();
+    return _NUM_CHECK_NULL();
 
   bool commaFound = false;
 
@@ -107,22 +108,22 @@ num_check_t cstr_is_number(const char* cstr)
   {
     const char current = cstr[i];
 
-    if (i == 0 && current == '-')
+    if (i == 0 && current == MINUS_CHARACTER)
       continue;
     
     if (!c_is_number(current))
-      return num_check_invalid(i);
+      return _NUM_CHECK_INVALID(i);
 
     if (c_is_comma(current))
     {
       if (commaFound)
-        return num_check_comma_err(i);
+        return _NUM_CHECK_COMMA_ERR(i);
       else
         commaFound = true;
     }
   }
 
-  return num_check_success(len);
+  return _NUM_CHECK_SUCCESS(len);
 }
 
 
@@ -202,13 +203,6 @@ typedef enum {
 } e_operator_type;
 
 static_assert(OP_COUNT == 5, "Amount of operator-types have changed");
-const char* operatorTypeNames[OP_COUNT] = {
-	[OP_ADD] = "Add",
-	[OP_SUB] = "Subtract",
-	[OP_MUL] = "Multiply",
-	[OP_DIV] = "Divide",
-	[OP_POW] = "Pow",
-};
 
 const char operatorTypeIdentifiers[OP_COUNT] = {
   [OP_ADD] = '+',
@@ -217,6 +211,15 @@ const char operatorTypeIdentifiers[OP_COUNT] = {
   [OP_DIV] = '/',
   [OP_POW] = '^'
 };
+
+const char* operatorTypeNames[OP_COUNT] = {
+	[OP_ADD] = "Add",
+	[OP_SUB] = "Subtract",
+	[OP_MUL] = "Multiply",
+	[OP_DIV] = "Divide",
+	[OP_POW] = "Pow",
+};
+
 
 e_operator_type char_to_operator_type(const char c)
 {
@@ -356,6 +359,12 @@ typedef enum {
 } e_paren_type;
 
 static_assert(PT_COUNT == 2, "Amount of paren-types have changed");
+
+const char parenTypeIdentifiers[PT_COUNT] = {
+  [PT_OPAREN] = '(',
+  [PT_CPAREN] = ')'
+};
+
 const char* parenTypeNames[PT_COUNT] = {
   [PT_OPAREN] = "Open",
   [PT_CPAREN] = "Close"
@@ -363,12 +372,13 @@ const char* parenTypeNames[PT_COUNT] = {
 
 e_paren_type char_to_paren_type(const char c)
 {
-  switch (c)
+  for (size_t i = 0; i < PT_COUNT; ++i)
   {
-    case '(': return PT_OPAREN;
-    case ')': return PT_CPAREN;
-    default:  return PT_INVALID;
+    if (parenTypeIdentifiers[i] == c)
+      return (e_paren_type) i;
   }
+
+  return PT_INVALID;
 }
 
 e_paren_type cstr_to_paren_type(const char* cstr)
@@ -383,7 +393,53 @@ e_paren_type cstr_to_paren_type(const char* cstr)
 #define cstr_is_paren(cstr) (cstr_to_paren_type(cstr) != PT_INVALID)
 
 
-#define c_is_literal(c) c_is_operator(c) || c_is_paren(c)
+
+typedef enum {
+  CLT_COMMA,
+  CLT_EQUALS,
+
+  CLT_COUNT,
+  CLT_INVALID
+} e_common_literal_type;
+
+static_assert(CLT_COUNT == 2, "Amount of common-literal-types have changed");
+
+const char commonLiteralTypeIdentifiers[CLT_COUNT] = {
+  [CLT_COMMA] = ',',
+  [CLT_EQUALS] = '='
+};
+
+const char* commonLiteralTypeNames[CLT_COUNT] = {
+  [CLT_COMMA] = "Comma",
+  [CLT_EQUALS] = "Equals"
+};
+
+
+e_common_literal_type char_to_common_literal_type(const char c)
+{
+  for (size_t i = 0; i < CLT_COUNT; ++i)
+  {
+    if (commonLiteralTypeIdentifiers[i] == c)
+      return (e_common_literal_type) i;
+  }
+
+  return CLT_INVALID;
+}
+
+e_common_literal_type cstr_to_common_literal_type(const char* cstr)
+{
+  if (!cstr || strlen(cstr) != 1)
+    return CLT_INVALID;
+
+  return char_to_common_literal_type(cstr[0]);
+}
+
+#define c_is_common_literal(c) (char_to_common_literal_type(c) != CLT_INVALID)
+#define cstr_is_common_literal(cstr) (cstr_to_common_literal_type(cstr) != CLT_INVALID)
+
+
+// Literals are all single character tokens.
+#define c_is_literal(c) (c_is_operator(c) || c_is_paren(c) || c_is_common_literal(c))
 
 
 #endif // _GLOBAL_H_

@@ -20,8 +20,8 @@
 
 // TODO: Implement variables and variable assigning
 // Variables could look like e.g.: 'a', 'b', 'out1'
-// Variable assigning could look like: ':='
-// Also 'solve' could be a function which allows for using the '=' operator inside and variables for more complex expressions
+// Variable assigning could look like: ':=' or '='
+// Also 'solve' could be a function which allows for using the '=' literal inside and variables for more complex expressions
 
 typedef enum {
   TT_NUMBER,
@@ -29,17 +29,19 @@ typedef enum {
   TT_OPERATOR,
   TT_PAREN,
   TT_FUNCTION,
+  TT_LITERAL, // Here are all not connected literals like ',' or '='.
 
   TT_COUNT
 } e_token_type;
 
-static_assert(TT_COUNT == 5, "Amount of token-types have changed");
+static_assert(TT_COUNT == 6, "Amount of token-types have changed");
 const char* tokenTypeNames[TT_COUNT] = {
 	[TT_NUMBER] = "Number",
   [TT_MATH_CONSTANT] = "Constant",
   [TT_OPERATOR] = "Operator",
   [TT_PAREN] = "Parenthesis",
-  [TT_FUNCTION] = "Function"
+  [TT_FUNCTION] = "Function",
+  [TT_LITERAL] = "Literal",
 };
 
 
@@ -49,6 +51,7 @@ typedef union {
   e_operator_type operator;
   e_paren_type paren;
   e_function_type function;
+  e_common_literal_type literal;
 } u_token_as;
 
 typedef struct {
@@ -84,6 +87,7 @@ typedef struct {
 #define add_operator_token(lexer, op, curr)       da_append((lexer), ((token_t) { .type = TT_OPERATOR,      .as.operator = (op),  .cursor = (curr) }))
 #define add_paren_token(lexer, pt, curr)          da_append((lexer), ((token_t) { .type = TT_PAREN,         .as.paren    = (pt),  .cursor = (curr) }))
 #define add_function_token(lexer, ft, curr)       da_append((lexer), ((token_t) { .type = TT_FUNCTION,      .as.function = (ft),  .cursor = (curr) }))
+#define add_literal_token(lexer, clt, curr)       da_append((lexer), ((token_t) { .type = TT_LITERAL,       .as.literal =  (clt), .cursor = (curr) }))
 
 
 lexer_t lexer_execute(tokenizer_t* tokens)
@@ -141,6 +145,17 @@ lexer_t lexer_execute(tokenizer_t* tokens)
         l_unreachable_defer("Invalid function-type!");
 
       add_function_token(&lexer, ft, currentToken->cursor);
+      continue;
+    }
+
+    if (cstr_is_common_literal(currentTokenString))
+    {
+      e_common_literal_type clt = cstr_to_common_literal_type(currentTokenString);
+
+      if (clt == CLT_INVALID)
+        l_unreachable_defer("Invalid common-literal-type!");
+
+      add_literal_token(&lexer, clt, currentToken->cursor);
       continue;
     }
     
@@ -211,6 +226,9 @@ void lexer_print(const lexer_t* lexer)
         break;
       case TT_FUNCTION:
         printf("(%s, %s)", functionTypeIdentifiers[token->as.function], functionTypeNames[token->as.function]);
+        break;
+      case TT_LITERAL:
+        printf("(%s)", commonLiteralTypeNames[token->as.literal]);
         break;
       case TT_COUNT:
       default:

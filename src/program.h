@@ -24,6 +24,7 @@ typedef enum {
   PFF_VERBOSE    = (1u << 1),
   PFF_HELP       = (1u << 2),
   PFF_VERSION    = (1u << 3),
+  PFF_TEST_AST   = (1u << 4),   // TODO: Remove later! This is just for testing.
   // OTHER       = (1u << 4...'int' size in bit),
 } e_program_function_flags;
 
@@ -31,28 +32,31 @@ typedef enum {
   PFT_VERBOSE,
   PFT_HELP,
   PFT_VERSION,
-
+  PFT_TEST_AST, // TODO: Remove later! This is just for testing.
+  
   PFT_COUNT,
   PFT_EXPRESSION,
   PFT_INVALID,
 } e_program_function_type;
 
-static_assert(PFT_COUNT == 3, "Amount of program-function-types have changed");
+static_assert(PFT_COUNT == 4, "Amount of program-function-types have changed");
 
 #define SHORT_PREFIX "-"
 #define SHORT_PREFIX_LEN strlen(SHORT_PREFIX)
 static const char* shortProgFuncTypeIdentifier[PFT_COUNT] = {
-  [PFT_VERBOSE] = "vv",
-  [PFT_HELP]    = "h",
-  [PFT_VERSION] = "v",
+  [PFT_VERBOSE]  = "vv",
+  [PFT_HELP]     = "h",
+  [PFT_VERSION]  = "v",
+  [PFT_TEST_AST] = "ta", // TODO: Remove later! This is just for testing.
 };
 
 #define LONG_PREFIX "--"
 #define LONG_PREFIX_LEN strlen(LONG_PREFIX)
 static const char* longProgFuncTypeIdentifier[PFT_COUNT] = {
-  [PFT_VERBOSE] = "verbose",
-  [PFT_HELP]    = "help",
-  [PFT_VERSION] = "version",
+  [PFT_VERBOSE]  = "verbose",
+  [PFT_HELP]     = "help",
+  [PFT_VERSION]  = "version",
+  [PFT_TEST_AST] = "test-ast", // TODO: Remove later! This is just for testing.
 };
 
 // TODO: Rethink:
@@ -69,9 +73,10 @@ static const char* longProgFuncTypeIdentifier[PFT_COUNT] = {
 #define long_full_identifier(index)  LONG_PREFIX, longProgFuncTypeIdentifier[(index)]
 
 static const char* progFuncTypeDescriptions[PFT_COUNT] = {
-  [PFT_VERBOSE] = "Execute the given expression with verbose logging and exit.",
-  [PFT_HELP]    = "Display this help and exit.",
-  [PFT_VERSION] = "Output version information and exit."
+  [PFT_VERBOSE]  = "Execute the given expression with verbose logging and exit.",
+  [PFT_HELP]     = "Display this help and exit.",
+  [PFT_VERSION]  = "Output version information and exit.",
+  [PFT_TEST_AST] = "Tests the ast generation and evaluation of pre defined expressions.", // TODO: Remove later! This is just for testing.
 };
 
 static e_program_function_type cstr_to_program_function_type(const char* cstr)
@@ -106,6 +111,7 @@ static e_program_function_flags function_type_to_flag(e_program_function_type ty
     case PFT_VERBOSE:    return PFF_VERBOSE;
     case PFT_HELP:       return PFF_HELP;
     case PFT_VERSION:    return PFF_VERSION;
+    case PFT_TEST_AST:   return PFF_TEST_AST; // TODO: Remove later! This is just for testing.
     case PFT_INVALID:    return PFF_ERROR;
     case PFT_COUNT:
     default:
@@ -122,6 +128,7 @@ typedef struct {
   char** argv;
   char* inputExpression;
 } program_t;
+
 
 static void program_init(program_t* prog, int argc, char** argv)
 {
@@ -153,6 +160,7 @@ static void print_usage(e_program_function_flags flags, const char* programName,
 static void print_help(const char* programName);
 static void print_current_version(const char* programName);
 static int handle_math_input(const char* input, bool verbose);
+static void test_ast_eval();
 
 
 
@@ -211,7 +219,8 @@ int handle_program(program_t* program)
   if (program->funcFlags == PFF_ERROR ||
       is_only_bit_set(program->funcFlags, PFF_VERBOSE) ||
       is_not_only_bit_set(program->funcFlags, PFF_HELP) ||
-      is_not_only_bit_set(program->funcFlags, PFF_VERSION))
+      is_not_only_bit_set(program->funcFlags, PFF_VERSION) ||
+      is_not_only_bit_set(program->funcFlags, PFF_TEST_AST)) // TODO: Remove later! Just for testing.
   {
     print_usage(program->funcFlags, program->programName, program->argc, program->argv);
     return EXIT_FAILURE;
@@ -228,6 +237,13 @@ int handle_program(program_t* program)
   if (is_only_bit_set(program->funcFlags, PFF_VERSION))
   {
     print_current_version(program->programName);
+    return EXIT_SUCCESS;
+  }
+
+  // TODO: Remove later! Just for testing.
+  if (is_only_bit_set(program->funcFlags, PFF_TEST_AST))
+  {
+    test_ast_eval();
     return EXIT_SUCCESS;
   }
 
@@ -324,15 +340,8 @@ static void print_current_version(const char* programName)
 }
 
 
-// TODO: Remove later!
-static void test_ast_eval();
-
-
 static int handle_math_input(const char* input, bool verbose)
 {
-  // INFO: Just for testing:
-  test_ast_eval();
-
   if (verbose) printf("Executing VERBOSE:\n");
 
   tokenizer_t tokens = tokenizer_execute(input);
@@ -381,9 +390,6 @@ static int handle_math_input(const char* input, bool verbose)
 // INFO: Just for testing! Remove later!
 static void test_ast_eval()
 {
-  // TODO: Remove!
-  return;
-
   node_arena_t arena = {0};
   bool freeAfterEachTest = false;
 
