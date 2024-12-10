@@ -1,166 +1,20 @@
 #ifndef _GLOBAL_H_
 #define _GLOBAL_H_
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <stdbool.h>
 #include <ctype.h>
 #include <string.h>
-#include <assert.h>
 
 
 // TODO: Does currently not print correctly after around 5 decimal digits!
 #define DOUBLE_PRINT_FORMAT "%.05lf"
 
 
-// TODO: Rethink!
-/*
- Will be used for the parsing of expressions in different modes.
- The mode depends on the usage of the program, because f.e. variables or function definitions can't be used when
- executing a single expression directly in the program arguments. Thats because the program exits directly after evaluating
- the given expression and does not store state in this mode. But when the full cli mode is used where the program was started
- without any extra arguments except f.e. 'verbose' for executing and handling the expressions, it will stay open and multiple
- lines can be entered where some lines could be assignments or func definitions and some are expressions which use them. So in
- full cli mode it stores the previously entered data. Also the full cli mode is used when starting the program with a file
- where all this is pre written in multiple lines and the program just prints the final value of the evaluated expression.
- 
- Also rethink if a linker should be implemented when implementing files, so often used functions can be pre written
- in one or multiple files, which only contain variable- and function-definitions for easy reusability.
- This would make it possible to use more complex and custom variables and functions in f.e single-mode where only the fewest features
- are active. The variables can also be used because they would work exactly the same way as the pre defined math-constants. Same with
- functions, because they also work the same way like the pre defined functions.
- The linking could be used with a specific cli command like '-l <FILE>' or '--link <FILE>' and could allow multiple calls for linking
- one or many different files.
- The linker than loads everything in memory and pre parses all definitions, so that the user input can be combined like it would be just
- a single file.
+#define _DECIMAL_SEPERATOR_CHARACTER '.'
+#define _MINUS_CHARACTER '-'
 
- Evaluation-File Example:
- """
- var1 = 10 + sqrt(10 ^ EN)
-
- func1(x1, x2) = var1 * x1 ^ ln(x2 ^ 2)
- 
- = func1(10, -4 * PI) - ln(20)
- """
-
- Linker-File Example:
- """
- var1 = 100 / sqrt(20 ^ 2 - 5)
-
- funcTest(arg1, arg2) = arg1 + 20 / ln(arg2)
- """
-
- Retink if '\' should be implemented for easily splitting a single lines into multiple for larger expressions.
- New lines can also only be used in the full cli mode.
- New-Line Example:
- """
- func1(x1, x2) = \
-  100.53 + sqrt(3.5 - EN) + \
-  cos(x1 * 6.4^2) / 8.3 + ln(10) - \
-  PI + ln(5 ^ x2)
- """
-*/
-
-typedef enum {
-  GPM_SINGLE_EXPRESSION,
-  GPM_FULL_CLI,
-  GPM_FILE,
-
-  GPM_COUNT
-} e_global_program_mode;
-
-static_assert(GPM_COUNT == 3, "Amount of global-program-modes have changed");
-
-const char* globalProgramModeNames[GPM_COUNT] = {
-  [GPM_SINGLE_EXPRESSION] = "Single expression mode",
-  [GPM_FULL_CLI]          = "Full multi line cli mode",
-  [GPM_FILE]              = "File mode",
-};
-
-const char* globalProgramModeDescriptions[GPM_COUNT] = {
-  [GPM_SINGLE_EXPRESSION] = "For simple direct execution of an expression given to the program as an argument. In this mode only the simple base features are active. So no assignments or multi line inputs, just simple expressions",
-  [GPM_FULL_CLI]          = "When the program was started without specifying an expression directly as an argument. With this mode the program stays open and expects an input expression per line entered. Here are the most features active like variable and function assignments.",
-  [GPM_FILE]              = "When the program was started with a file given as an argument. With this mode the program parses the given file line by line and evaluates it. In this mode is every feature usable like function and variable assignments and new lines to break a single line into multiple for easier readability.",
-};
-
-
-// It defaults to the single mode.
-static e_global_program_mode globalProgramMode = GPM_SINGLE_EXPRESSION;
-
-// Used for changing the program mode.
-void change_global_program_mode(e_global_program_mode mode)
-{
-  if (globalProgramMode == mode)
-    return;
-
-  globalProgramMode = mode;
-}
-
-
-
-// String functions
-void cstr_chop_till_last_delim(char** cstr, char delimiter)
-{
-  if (!cstr)
-    return;
-
-  size_t len = strlen(*cstr);
-  size_t index = 0;
-  
-  for (size_t i = 0; i < len; ++i)
-    if ((*cstr)[i] == delimiter)
-      index = i;
-  
-  *cstr += index + 1;
-}
-
-// Versioning
-typedef struct {
-  size_t major;
-  size_t minor;
-  size_t revision;
-} version_t;
-
-#define version(maj, min, rev) ((version_t) { .major = (maj), .minor = (min), .revision = (rev) })
-#define VERSION_FORMAT "v%zu.%zu.%zu"
-#define VERSION_ARGS(v) (v).major, (v).minor, (v).revision
-
-
-// Bit-Operations
-#define set_bit(flags, bit) flags |= bit
-#define unset_bit(flags, bit) flags &= ~bit
-#define is_bit_set(flags, bit) (flags & bit)
-#define is_only_bit_set(flags, bit) (flags == bit)
-bool is_not_only_bit_set(int flags, int bit)
-{
-  int index = 0;
-
-  if (!is_bit_set(flags, bit))
-    return false;
-
-  while (index < (int)sizeof(int))
-  {
-    int mask = (1u << (index++));
-
-    if (is_bit_set(flags, mask) && bit != mask)
-      return true;
-  }
-
-  return false;
-}
-
-
-// Errors
-#define UNREACHABLE(message) do { fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
-#define return_defer() goto defer
-#define ASSERT_NULL(value) assert((value) && #value)
-
-
-#define COMMA_CHARACTER '.'
-#define MINUS_CHARACTER '-'
-
-#define c_is_comma(c)   ((c) == COMMA_CHARACTER)
-#define c_is_number(c)  (isdigit(c) || c_is_comma(c))
+#define c_is_decimal_seperator(c) ((c) == _DECIMAL_SEPERATOR_CHARACTER)
+#define c_is_number(c)            (isdigit(c) || c_is_decimal_seperator(c))
 
 typedef struct {
   int ret;
@@ -187,24 +41,24 @@ num_check_t cstr_is_number(const char* cstr)
   if (len <= 0)
     return _NUM_CHECK_NULL();
 
-  bool commaFound = false;
+  bool decimalSeperatorFound = false;
 
   for (size_t i = 0; i < len; ++i)
   {
-    const char current = cstr[i];
+    const char current = cstr[i]; // TODO: Rethink! Maybe make this a pointer reference to the current char.
 
-    if (i == 0 && current == MINUS_CHARACTER)
+    if (i == 0 && current == _MINUS_CHARACTER)
       continue;
     
     if (!c_is_number(current))
       return _NUM_CHECK_INVALID(i);
 
-    if (c_is_comma(current))
+    if (c_is_decimal_seperator(current))
     {
-      if (commaFound)
+      if (decimalSeperatorFound)
         return _NUM_CHECK_COMMA_ERR(i);
       else
-        commaFound = true;
+        decimalSeperatorFound = true;
     }
   }
 

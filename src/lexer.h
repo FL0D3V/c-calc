@@ -6,6 +6,7 @@
 #include "global.h"
 #include "darray.h"
 #include "stringslice.h"
+#include "helpers.h"
 #include "tokenizer.h"
 
 

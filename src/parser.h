@@ -4,6 +4,7 @@
 #define _PARSER_H_
 
 #include "global.h"
+#include "helpers.h"
 #include "lexer.h"
 
 #include <math.h>

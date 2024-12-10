@@ -4,6 +4,7 @@
 #include "global.h"
 #include "darray.h"
 #include "stringslice.h"
+#include "helpers.h"
 
 
 #define t_unreachable(message)  fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message)

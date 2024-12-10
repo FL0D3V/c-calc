@@ -1,10 +1,14 @@
 #ifndef _PROGRAM_H_
 #define _PROGRAM_H_
 
+#include "config.h"
+#include "helpers.h"
+#include "versioning.h"
 #include "global.h"
 #include "tokenizer.h"
 #include "lexer.h"
 #include "parser.h"
+
 
 #define COPYRIGHT_CREATOR "Florian Maier"
 #define COPYRIGHT_YEAR "2024"
@@ -251,7 +255,7 @@ int handle_program(program_t* program)
   if (is_bit_set(program->funcFlags, PFF_EXPRESSION))
   {
     // TODO: Rethink! Changes to the simple expression eval mode with limited features.
-    change_global_program_mode(GPM_SINGLE_EXPRESSION);
+    change_global_program_mode(GPM_SINGLE_CLI_EXPRESSION_ARG);
 
     return handle_math_input(program->inputExpression, is_bit_set(program->funcFlags, PFF_VERBOSE));
   }
