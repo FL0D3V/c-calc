@@ -15,6 +15,11 @@
 
 
 
+// Bool functions
+#define bool_cstr(flag) (flag) ? "true" : "false"
+
+
+
 // String functions
 void cstr_chop_till_last_delim(char** cstr, char delimiter)
 {

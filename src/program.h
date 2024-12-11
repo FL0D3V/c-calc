@@ -297,38 +297,44 @@ static void print_help(const char* programName)
 {
   ASSERT_NULL(programName);
 
+  // Prints the usage and an example.
   printf("Usage: %s [OPTION]... [EXPRESSION]\n", programName);
   printf("Execute simple to more complex math expressions in the terminal.\n");
+  printf("\n");
   printf("Example usage:\n");
   printf("  %s \"10.5 + 30 - sqrt(PI * 5.2) / 8\"\n", programName);
   printf("\n");
 
-  printf("Supported operators:\n");
-  printf("  ");
+
+  // Prints the cli options.
+  printf("The options below may be used for printing the expression execution verbose\n");
+  printf("or for example getting the current version.\n");
+  for (size_t i = 0; i < PFT_COUNT; ++i)
+    printf("  " IDENTIFIER_STRING_ARGS_COL_S " " IDENTIFIER_STRING_ARGS_COL_L "  %s\n", short_full_identifier(i), long_full_identifier(i), progFuncTypeDescriptions[i]);
+  
+  printf("\n");
+
+
+  // Prints program inforamtions.
+  printf("Supported operators [USAGE, NAME]:\n");
   for (size_t i = 0; i < OP_COUNT; ++i)
-  {
-    printf("%c", operatorTypeIdentifiers[i]);
-    if (i < OP_COUNT - 1)
-      printf(", ");
-  }
-  printf("\n\n");
+    printf("  %-10c%s\n", operatorTypeIdentifiers[i], operatorTypeNames[i]);
+  printf("\n");
 
   printf("Supported functions [USAGE(x), DESCRIPTION]:\n");
   for (size_t i = 0; i < FT_COUNT; ++i)
     printf("  %-10s%s\n", functionTypeIdentifiers[i], functionTypeDescriptions[i]);
+  
   printf("\n");
 
   printf("Supported math-constants [USAGE, NAME]:\n");
   for (size_t i = 0; i < MC_COUNT; ++i)
-    printf("  %-6s%s\n", mathConstantTypeIdentifiers[i], mathConstantTypeNames[i]);
+    printf("  %-10s%s\n", mathConstantTypeIdentifiers[i], mathConstantTypeNames[i]);
+  
   printf("\n");
 
-  printf("The options below may be used for printing the expression execution verbose\n");
-  printf("or for example getting the current version.\n");
+  print_global_program_config_help();
 
-  for (size_t i = 0; i < PFT_COUNT; ++i)
-    printf("  " IDENTIFIER_STRING_ARGS_COL_S " " IDENTIFIER_STRING_ARGS_COL_L "  %s\n", short_full_identifier(i), long_full_identifier(i), progFuncTypeDescriptions[i]);
-  
   printf("\n");
   
   printf("Full documentation <" FULL_DOCUMENTATION_LINK ">\n");

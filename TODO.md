@@ -4,7 +4,8 @@
 
 - [X] Tokenizer: Converts the input string to valid tokens and checks for invalid characters. Input string must be e.g.: "100.53 + PI * (53.21 - 34) / 2.5 + sqrt(5 ^ EN)".
 - [X] Implement the usage of negative numbers like e.g. '5 * -3'.
-- [X] Lexer: Is an extension to the tokenizer which adds additional meta data to the tokens like what type of token and extra values like converted value literal or operator type. Also it checks for invalid tokens.- [X] AST: Implement the AST with nodes.
+- [X] Lexer: Is an extension to the tokenizer which adds additional meta data to the tokens like what type of token and extra values like converted value literal or operator type. Also it checks for invalid tokens.
+- [X] AST: Implement the AST with nodes.
 - [X] Evaluator: Evaluates the AST to get the final result value.
 - [X] Semantics checking: Checks if the input (lexed tokens) has correct syntax.
 - [ ] Parser: Converts the lexed tokens to an AST (abstract syntax tree) for checking e.g. the "order of operations" of the math equation.
@@ -13,7 +14,9 @@
 ## Missing extras
 
 - [ ] Implement equations with '='. With this you could write f.e '5 + 10 = 20 - 5' and get f.e. 'true' or 'false'. Can later also be used for solving math equations for a specific variable. Also it can later be used to assign variables or custom function definitions.
-- [ ] Implement the usage of multiple function arguments with the ',' seperator.
+- [ ] Implement the usage of multiple function arguments with the ',' seperator so more complex functions can be Implemented.
+- [ ] Summation function ∑: 'sum(i, n, expr)'. Sum of 'expr' from 'i' to 'n'. 'i' should be usable from inside the 'expr'.
+- [ ] Product function ∏(): 'prod(i, n, expr)'. Product of 'expr' from 'i' to 'n'. 'i' should be usable from inside the 'expr'.
 - [X] Handling of float values (not like currently with an extra 'Comma' token but with a different number type literal in the unit f.e.)
 - [X] Arena Allocator implementation in the parser for easy memory management
 - [ ] Variables and variable assignments and storing variables while running for e.g. multi line math expressions. Rethink if variable assignments should use the '=' literal or a custom assignment symbol like ':='.

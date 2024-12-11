@@ -1,0 +1,7 @@
+// Reusable variable when linked.
+testLinkVar = 20 ^ 5 + sqrt(12)
+
+// Just a test function that can be reused when linked with e.f. '-l FILENAME'
+testLinkFunc(arg1, arg2) = \
+  32 + EN ^ ln(arg1) - \
+  3 * arg2
