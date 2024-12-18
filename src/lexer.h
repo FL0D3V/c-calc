@@ -1,29 +1,25 @@
-// Used for handling the tokenization and lexing of an input math equation.
-
 #ifndef _LEXER_H_
 #define _LEXER_H_
 
-#include "global.h"
-#include "darray.h"
-#include "stringslice.h"
-#include "helpers.h"
+// Everything else needed is included in the tokenizer.
 #include "tokenizer.h"
 
 
-#define l_unreachable_defer(message)  do { fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message); goto defer; } while(0)
-
-
+// Error handling
 #define L_ERROR_NAME "LEXING-ERROR"
-#define L_ERROR_INVALID_NUMBER(cursor, cstr)  fprintf(stderr, L_ERROR_NAME ":%zu: A number can only contain 1 comma ('%s')!\n", (cursor), (cstr))
-#define L_ERROR_INVALID_TOKEN(cursor, cstr)   fprintf(stderr, L_ERROR_NAME ":%zu: '%s' is an invalid token!\n", (cursor), (cstr))
-#define L_ERROR_GIVEN_LEXER_INVALID()         fprintf(stderr, L_ERROR_NAME ": Can't print the lexer because an error happend!\n")
+#define L_ERROR_INVALID_NUMBER(cursor, tok) fprintf(stderr, L_ERROR_NAME ":%zu: A number can only contain 1 comma ('" IN_TOK_FMT "')!\n", (cursor), IN_TOK_ARG(tok))
+#define L_ERROR_INVALID_TOKEN(cursor, tok)  fprintf(stderr, L_ERROR_NAME ":%zu: '" IN_TOK_FMT "' is an invalid token!\n", (cursor), IN_TOK_ARG(tok))
+#define L_ERROR_GIVEN_LEXER_INVALID()       fprintf(stderr, L_ERROR_NAME ": Can't print the lexer because an error happend!\n")
+
 
 
 // TODO: Implement variables and variable assigning
 // Variables could look like e.g.: 'a', 'b', 'out1'
 // Variable assigning could look like: ':=' or '='
-// Also 'solve' could be a function which allows for using the '=' literal inside and variables for more complex expressions
+// Also 'solve' could be a function which allows for using the '=' literal inside and variables for more complex expressions and equations.
 
+
+// All enums
 typedef enum {
   TT_NUMBER,
   TT_MATH_CONSTANT,
@@ -36,7 +32,8 @@ typedef enum {
 } e_token_type;
 
 static_assert(TT_COUNT == 6, "Amount of token-types have changed");
-const char* tokenTypeNames[TT_COUNT] = {
+
+static const char* tokenTypeNames[TT_COUNT] = {
 	[TT_NUMBER] = "Number",
   [TT_MATH_CONSTANT] = "Constant",
   [TT_OPERATOR] = "Operator",
@@ -46,6 +43,7 @@ const char* tokenTypeNames[TT_COUNT] = {
 };
 
 
+// Type-Definitions
 typedef union {
   double number;
   e_math_constant_type constant;
@@ -69,20 +67,10 @@ typedef struct {
   bool isError;
 } lexer_t;
 
-#define lexer_free(lexer) da_free(lexer);
 
+#define lexer_free(lexer) da_free(lexer)
 
-#define tok_is(tok, t)        ((tok)->type == (t))
-#define tok_not(tok, t)       ((tok)->type != (t))
-
-#define tok_is_paren(tok, pt)           (tok_is(tok, TT_PAREN) && (tok)->as.paren == (pt))
-#define tok_not_specific_paren(tok, pt) (tok_not((tok), TT_PAREN) || (tok)->as.paren != (pt))
-#define tok_is_number_operator(tok)     (tok_is(tok, TT_OPERATOR) && ((tok)->as.operator == OP_ADD || (tok)->as.operator == OP_SUB))
-
-#define lex_at(lexer, idx) (&(lexer)->items[(idx)])
-#define lex_next_in_range(lexer, idx) ((idx) < (lexer)->count - 1)
-
-
+// TODO: Change to 'arena_da_append' and use a single arena allocator for all allocations.
 #define add_number_token(lexer, num, curr)        da_append((lexer), ((token_t) { .type = TT_NUMBER,        .as.number   = (num), .cursor = (curr) }))
 #define add_math_constant_token(lexer, mc, curr)  da_append((lexer), ((token_t) { .type = TT_MATH_CONSTANT, .as.constant = (mc),  .cursor = (curr) }))
 #define add_operator_token(lexer, op, curr)       da_append((lexer), ((token_t) { .type = TT_OPERATOR,      .as.operator = (op),  .cursor = (curr) }))
@@ -91,105 +79,113 @@ typedef struct {
 #define add_literal_token(lexer, clt, curr)       da_append((lexer), ((token_t) { .type = TT_LITERAL,       .as.literal =  (clt), .cursor = (curr) }))
 
 
-lexer_t lexer_execute(tokenizer_t* tokens)
+// Helpers
+#define lex_at(lexer, idx)            (&(lexer)->items[(idx)])
+#define lex_next_in_range(lexer, idx) ((idx) < (lexer)->count - 1)
+#define tok_is(tok, t)                ((tok)->type == (t))
+#define tok_not(tok, t)               ((tok)->type != (t))
+
+
+lexer_t lexer_execute(tokenizer_t* tokenizer)
 {
-  ASSERT_NULL(tokens);
+  ASSERT_NULL(tokenizer);
 
   lexer_t lexer = {0};
-  string_builder_t sb = {0};
 
-  for (size_t i = 0; i < tokens->count; ++i)
+  for (size_t i = 0; i < tokenizer->count; ++i)
   {
-    const input_token_t* currentToken = &tokens->items[i];
-    sb_clear(&sb);
-    sb_append_buf_with_null_termination(&sb, currentToken->value, currentToken->length);
-    const char* currentTokenString = sb.items;
+    const input_token_t* currentToken = &tokenizer->items[i];
 
-    if (cstr_is_operator(currentTokenString))
+    // Operator needs to be checked at first because else the double conversion fails on number parsing.
+    if (cstr_is_operator_ex(currentToken->value, currentToken->length))
     {
-      e_operator_type op = cstr_to_operator_type(currentTokenString);
+      e_operator_type op = cstr_to_operator_type_ex(currentToken->value, currentToken->length);
 
       if (op == OP_INVALID)
-        l_unreachable_defer("Invalid operator-type!");
+        UNREACHABLE("Invalid operator-type!");
 
       add_operator_token(&lexer, op, currentToken->cursor);
       continue;
     }
-    
-    if (cstr_is_paren(currentTokenString))
+
+
+    // Number checking
+    num_check_t numCheck = cstr_is_number_ex(currentToken->value, currentToken->length);
+
+    if (numCheck.ret == 1) UNREACHABLE("Number-Token was NULL!");
+    else if (numCheck.ret == 0)
     {
-      e_paren_type pt = cstr_to_paren_type(currentTokenString);
+      char* endptr;
+      double number = strtof(currentToken->value, &endptr);
+      
+      if (!endptr || endptr == currentToken->value || (size_t)(endptr - currentToken->value) != currentToken->length)
+        UNREACHABLE("Error while converting a number!");
+
+      add_number_token(&lexer, number, currentToken->cursor);
+      continue;
+    }
+    else if (numCheck.ret == -1)
+    {
+      // Too many commas
+      L_ERROR_INVALID_NUMBER(currentToken->cursor + numCheck.cursor, currentToken);
+      lexer.isError = true;
+      continue;
+    }
+    // Else: Not a number.
+
+
+    if (cstr_is_paren_ex(currentToken->value, currentToken->length))
+    {
+      e_paren_type pt = cstr_to_paren_type_ex(currentToken->value, currentToken->length);
 
       if (pt == PT_INVALID)
-        l_unreachable_defer("Invalid paren-type!");
+        UNREACHABLE("Invalid paren-type!");
 
       add_paren_token(&lexer, pt, currentToken->cursor);
       continue;
     }
 
-    if (cstr_is_math_constant(currentTokenString))
+
+    if (cstr_is_math_constant_ex(currentToken->value, currentToken->length))
     {
-      e_math_constant_type mc = cstr_to_math_constant_type(currentTokenString);
+      e_math_constant_type mc = cstr_to_math_constant_type_ex(currentToken->value, currentToken->length);
 
       if (mc == MC_INVALID)
-        l_unreachable_defer("Invalid math-constant-type!");
+        UNREACHABLE("Invalid math-constant-type!");
 
       add_math_constant_token(&lexer, mc, currentToken->cursor);
       continue;
     }
 
-    if (cstr_is_function(currentTokenString))
+
+    if (cstr_is_function_ex(currentToken->value, currentToken->length))
     {
-      e_function_type ft = cstr_to_function_type(currentTokenString);
+      e_function_type ft = cstr_to_function_type_ex(currentToken->value, currentToken->length);
 
       if (ft == FT_INVALID)
-        l_unreachable_defer("Invalid function-type!");
+        UNREACHABLE("Invalid function-type!");
 
       add_function_token(&lexer, ft, currentToken->cursor);
       continue;
     }
 
-    if (cstr_is_common_literal(currentTokenString))
+
+    if (cstr_is_common_literal_ex(currentToken->value, currentToken->length))
     {
-      e_common_literal_type clt = cstr_to_common_literal_type(currentTokenString);
+      e_common_literal_type clt = cstr_to_common_literal_type_ex(currentToken->value, currentToken->length);
 
       if (clt == CLT_INVALID)
-        l_unreachable_defer("Invalid common-literal-type!");
+        UNREACHABLE("Invalid common-literal-type!");
 
       add_literal_token(&lexer, clt, currentToken->cursor);
       continue;
     }
+
     
-    // Number checking
-    num_check_t numCheck = cstr_is_number(currentTokenString);
-
-    switch (numCheck.ret) {
-      case 1: l_unreachable_defer("Number-Token was NULL!");
-      case 0:
-      {
-        double number = strtof(currentTokenString, NULL);
-        add_number_token(&lexer, number, currentToken->cursor);
-        continue;
-      }
-      case -1:
-      {
-        // Too many commas
-        L_ERROR_INVALID_NUMBER(currentToken->cursor + numCheck.cursor, currentTokenString);
-        lexer.isError = true;
-        continue;
-      }
-      case -2: // Not a number
-      default:
-        break;
-    }
-
     // ERROR: Invalid token.
-    L_ERROR_INVALID_TOKEN(currentToken->cursor, currentTokenString);
+    L_ERROR_INVALID_TOKEN(currentToken->cursor, currentToken);
     lexer.isError = true;
   }
-
-defer:
-  sb_free(sb);
 
   return lexer;
 }

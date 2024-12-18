@@ -1,6 +1,5 @@
 #include "program.h"
 
-
 int main(int argc, char** argv)
 {
   // TODO: Implement full CLI interface mode if the user does not run the program with a math expression directly.

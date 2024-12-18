@@ -52,6 +52,7 @@
  """
 */
 
+
 typedef enum {
   GPM_SINGLE_CLI_EXPRESSION_ARG,
   GPM_FULL_CLI,
@@ -63,7 +64,7 @@ typedef enum {
 
 static_assert(GPM_COUNT == 4, "Amount of global-program-modes have changed");
 
-#define ASSERT_PROGRAM_MODE(mode) assert((mode) < GPM_COUNT && "Invalid program-mode!");
+#define ASSERT_PROGRAM_MODE(mode) assert((mode) < GPM_COUNT && "Invalid program-mode!")
 
 static const char* globalProgramModeNames[GPM_COUNT] = {
   [GPM_SINGLE_CLI_EXPRESSION_ARG] = "Simple CLI expr-argument mode",
@@ -123,48 +124,25 @@ static const char* globalProgramModeDescriptions[GPM_COUNT] = {
 static e_global_program_mode _globalProgramMode = GPM_SINGLE_CLI_EXPRESSION_ARG;
 
 
-// TODO: Rethink!
 // Used for changing the program mode.
 void change_global_program_mode(e_global_program_mode mode)
 {
-  assert(mode < GPM_COUNT && "Invalid program-mode!");
+  ASSERT_PROGRAM_MODE(mode);
   if (_globalProgramMode == mode) return;
   _globalProgramMode = mode;
 }
 
 
 
-// TODO: Maybe remove and change to single enum which stores all flags with bit-shifting.
-// This stores the feature configuration of the program. Needs to be bools!
-typedef struct {
-  bool expression_eval_allowed;
-  bool comments_allowed;
-  bool new_lines_allowed;
-  bool variable_definitions_allowed;
-  bool function_definitions_allowed;
-} program_mode_config_t;
+typedef enum {
+  CF_EXPRESSION_EVALUATION_ALLOWED  = (1u << 0),
+  CF_COMMENTS_ALLOWED               = (1u << 1),
+  CF_NEW_LINES_ALLOWED              = (1u << 2),
+  CF_VARIABLE_DEFINITIONS_ALLOWED   = (1u << 3),
+  CF_FUNCTION_DEFINITIONS_ALLOWED   = (1u << 4),
+} e_config_flags;
 
-// EXPRESSION-EVAL, COMMENTS, NEW-LINES, VARIABLE-DEFINITIONS, FUNCTION-DEFINITIONS
-#define _NEW_PMC(eea, ca, nla, vda, fda)    \
-  {                                         \
-    .expression_eval_allowed = (eea),       \
-    .comments_allowed = (ca),               \
-    .new_lines_allowed = (nla),             \
-    .variable_definitions_allowed = (vda),  \
-    .function_definitions_allowed = (fda)   \
-  }
-
-
-// All configurations for every program mode.
-static const program_mode_config_t globalProgramModeConfigurations[GPM_COUNT] = {
-  [GPM_SINGLE_CLI_EXPRESSION_ARG] = _NEW_PMC(true, false, false, false, false),
-  [GPM_FULL_CLI]                  = _NEW_PMC(true, false, false, true, true),
-  [GPM_EXPRESSION_FILE]           = _NEW_PMC(true, true, true, true, true),
-  [GPM_LINKER_FILE]               = _NEW_PMC(false, true, true, true, true),
-};
-
-
-// Needs to be in the same layout as the 'program_mode_config_t'.
+// Needs to be in the same layout as the 'e_config_flags'.
 typedef enum {
   SPMC_EXPR_EVAL_ALLOWED,
   SPMC_COMMENTS_ALLOWED,
@@ -177,7 +155,16 @@ typedef enum {
 
 static_assert(SPMC_COUNT == 5, "Amount of specific-program-mode-config has changed");
 
-#define ASSERT_SPECIFIC_CONFIG(specificConfig) assert((specificConfig) < SPMC_COUNT && "Invalid config!");
+#define ASSERT_SPECIFIC_CONFIG(specificConfig) assert((specificConfig) < SPMC_COUNT && "Invalid config!")
+
+
+static inline e_config_flags specific_prog_mode_conf_to_config_flag(e_specific_program_mode_config config)
+{
+  ASSERT_SPECIFIC_CONFIG(config);
+
+  return (e_config_flags) (1u << (int)config);
+}
+
 
 static const char* specificProgramModeConfigNames[SPMC_COUNT] = {
   [SPMC_EXPR_EVAL_ALLOWED]  = "Expression-Evaluation",
@@ -232,6 +219,27 @@ static const char* specificProgramModeConfigDescriptions[SPMC_COUNT] = {
 };
 
 
+// The specific configurations for each program mode.
+static const e_config_flags globalProgramModeConfigurations[GPM_COUNT] =
+{
+  [GPM_SINGLE_CLI_EXPRESSION_ARG] = CF_EXPRESSION_EVALUATION_ALLOWED,
+
+  [GPM_FULL_CLI]                  = CF_EXPRESSION_EVALUATION_ALLOWED  |
+                                    CF_VARIABLE_DEFINITIONS_ALLOWED   |
+                                    CF_FUNCTION_DEFINITIONS_ALLOWED,
+  
+  [GPM_EXPRESSION_FILE]           = CF_EXPRESSION_EVALUATION_ALLOWED  |
+                                    CF_COMMENTS_ALLOWED               |
+                                    CF_NEW_LINES_ALLOWED              |
+                                    CF_VARIABLE_DEFINITIONS_ALLOWED   |
+                                    CF_FUNCTION_DEFINITIONS_ALLOWED,
+  
+  [GPM_LINKER_FILE]               = CF_COMMENTS_ALLOWED               |
+                                    CF_NEW_LINES_ALLOWED              |
+                                    CF_VARIABLE_DEFINITIONS_ALLOWED   |
+                                    CF_FUNCTION_DEFINITIONS_ALLOWED,
+};
+
 
 // Loads a specifc configuration from the currently set program mode.
 bool get_specific_program_config_ex(e_global_program_mode mode, e_specific_program_mode_config specificConfig)
@@ -239,46 +247,45 @@ bool get_specific_program_config_ex(e_global_program_mode mode, e_specific_progr
   ASSERT_PROGRAM_MODE(mode);
   ASSERT_SPECIFIC_CONFIG(specificConfig);
 
-  return (bool) *((bool*) ((size_t)(&globalProgramModeConfigurations[mode]) + sizeof(bool) * (size_t)specificConfig));
+  return is_bit_set(globalProgramModeConfigurations[mode], specific_prog_mode_conf_to_config_flag(specificConfig));
 }
 
-#define get_current_specific_program_config(specificConfig) get_current_specific_program_config_ex(_globalProgramMode, (specificConfig))
-
-
-static void print_specific_program_config(e_global_program_mode mode)
+bool get_current_specific_program_config(e_specific_program_mode_config specificConfig)
 {
-  ASSERT_PROGRAM_MODE(mode);
-
-  for (size_t i = 0; i < SPMC_COUNT; ++i)
-  {
-    bool configFlag = get_specific_program_config_ex(mode, i);
-    printf("  - %-35s%s\n", specificProgramModeConfigNames[i], bool_cstr(configFlag));
-  }
+  return get_specific_program_config_ex(_globalProgramMode, specificConfig);
 }
 
 
-// TODO: Rethink and test!
+
 void print_global_program_config_help()
 {
   printf("Configurations and mode descriptions:\n\n");
 
   printf("Configuration descriptions:\n\n");
-  for (size_t i = 0; i < SPMC_COUNT; ++i)
+
+  for (size_t configIdx = 0; configIdx < SPMC_COUNT; ++configIdx)
   {
-    printf("%s\n", specificProgramModeConfigNames[i]);
-    printf("%s\n", specificProgramModeConfigDescriptions[i]);
-    if (i < SPMC_COUNT - 1) printf("\n");
+    printf("%s\n", specificProgramModeConfigNames[configIdx]);
+    printf("%s\n", specificProgramModeConfigDescriptions[configIdx]);
+    if (configIdx < SPMC_COUNT - 1) printf("\n");
   }
 
   printf("\n");
   
   printf("Configurations by mode:\n\n");
-  for (size_t i = 0; i < GPM_COUNT; ++i)
-  {
-    printf("%s\n", globalProgramModeNames[i]);
-    printf("%s\n", globalProgramModeDescriptions[i]);
 
-    print_specific_program_config((e_global_program_mode) i);
+  for (size_t pModeIdx = 0; pModeIdx < GPM_COUNT; ++pModeIdx)
+  {
+    printf("%s\n", globalProgramModeNames[pModeIdx]);
+    printf("%s\n", globalProgramModeDescriptions[pModeIdx]);
+
+    // Prints all configurations for a specific program-mode.
+    for (size_t configIdx = 0; configIdx < SPMC_COUNT; ++configIdx)
+    {
+      bool configFlag = get_specific_program_config_ex((e_global_program_mode) pModeIdx, (e_specific_program_mode_config) configIdx);
+      printf("  - %-35s%s\n", specificProgramModeConfigNames[configIdx], bool_cstr(configFlag));
+    }
+
     printf("\n");
   }
 }

@@ -2,6 +2,7 @@
 #define _HELPERS_H_
 
 #include <stdio.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
@@ -9,10 +10,11 @@
 
 
 // Errors
-#define UNREACHABLE(message) do { fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
-#define return_defer() goto defer
-#define ASSERT_NULL(value) assert((value) && #value)
-
+#define UNREACHABLE_MSG(message)    fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message)
+#define UNREACHABLE(message)        do { UNREACHABLE_MSG(message); abort(); } while(0)
+#define UNREACHABLE_DEFER(message)  do { UNREACHABLE_MSG(message); goto defer; } while(0)
+#define ASSERT_NULL(value)          assert((value) && #value)
+#define return_defer()              goto defer
 
 
 // Bool functions

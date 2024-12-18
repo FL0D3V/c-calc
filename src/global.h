@@ -1,9 +1,11 @@
 #ifndef _GLOBAL_H_
 #define _GLOBAL_H_
 
+#include <stddef.h>
 #include <stdbool.h>
 #include <ctype.h>
 #include <string.h>
+#include <assert.h>
 
 
 // TODO: Does currently not print correctly after around 5 decimal digits!
@@ -32,43 +34,50 @@ typedef struct {
 //  0: Input IS a valid number and the cursor will be set to the length of the input.
 // -1: Input has too many commas. Cursor will be set to the error position in the string.
 // -2: Input was NOT a number. Cursor will be set to the error position in the string.
-num_check_t cstr_is_number(const char* cstr)
+num_check_t cstr_is_number_ex(const char* cstr, size_t len)
 {
-  if (!cstr)
-    return _NUM_CHECK_NULL();
-
-  size_t len = strlen(cstr);
-  if (len <= 0)
+  if (!cstr || len == 0)
     return _NUM_CHECK_NULL();
 
   bool decimalSeperatorFound = false;
 
+  // TODO: Rethink!
+  char* current = (char*) cstr;
+  
   for (size_t i = 0; i < len; ++i)
   {
-    const char current = cstr[i]; // TODO: Rethink! Maybe make this a pointer reference to the current char.
-
-    if (i == 0 && current == _MINUS_CHARACTER)
+    if (i == 0 && *current == _MINUS_CHARACTER)
       continue;
     
-    if (!c_is_number(current))
+    if (!c_is_number(*current))
       return _NUM_CHECK_INVALID(i);
 
-    if (c_is_decimal_seperator(current))
+    if (c_is_decimal_seperator(*current))
     {
       if (decimalSeperatorFound)
         return _NUM_CHECK_COMMA_ERR(i);
       else
         decimalSeperatorFound = true;
     }
+
+    current++;
   }
 
   return _NUM_CHECK_SUCCESS(len);
 }
 
+num_check_t cstr_is_number(const char* cstr)
+{
+  // Needs to check for null before trying to get the length.
+  if (!cstr)
+    return _NUM_CHECK_NULL();
+  
+  return cstr_is_number_ex(cstr, strlen(cstr));
+}
+
 
 
 // Reference: https://en.wikipedia.org/wiki/List_of_mathematical_constants
-// TODO: Implement more constants.
 typedef enum {
   MC_PI,
   MC_TAU,
@@ -83,6 +92,7 @@ typedef enum {
 } e_math_constant_type;
 
 static_assert(MC_COUNT == 7, "Amount of math-constant-types have changed");
+
 const char* mathConstantTypeIdentifiers[MC_COUNT] = {
   [MC_PI]              = "PI",  // Pi
   [MC_TAU]             = "TAU", // Tau
@@ -126,8 +136,20 @@ e_math_constant_type cstr_to_math_constant_type(const char* cstr)
   return MC_INVALID;
 }
 
-#define cstr_is_math_constant(cstr) (cstr_to_math_constant_type(cstr) != MC_INVALID)
+e_math_constant_type cstr_to_math_constant_type_ex(const char* cstr, size_t len)
+{
+  if (!cstr || len == 0)
+    return MC_INVALID;
 
+  for (size_t i = 0; i < MC_COUNT; ++i)
+    if (strncmp(cstr, mathConstantTypeIdentifiers[i], len) == 0)
+      return (e_math_constant_type) i;
+
+  return MC_INVALID;
+}
+
+#define cstr_is_math_constant(cstr)         (cstr_to_math_constant_type(cstr) != MC_INVALID)
+#define cstr_is_math_constant_ex(cstr, len) (cstr_to_math_constant_type_ex(cstr, len) != MC_INVALID)
 
 
 typedef enum {
@@ -179,9 +201,18 @@ e_operator_type cstr_to_operator_type(const char* cstr)
   return char_to_operator_type(cstr[0]);
 }
 
-#define c_is_operator(c) (char_to_operator_type(c) != OP_INVALID)
-#define cstr_is_operator(cstr) (cstr_to_operator_type(cstr) != OP_INVALID)
+e_operator_type cstr_to_operator_type_ex(const char* cstr, size_t len)
+{
+  if (!cstr || len != 1)
+    return OP_INVALID;
 
+  return char_to_operator_type(cstr[0]);
+}
+
+
+#define c_is_operator(c)               (char_to_operator_type(c) != OP_INVALID)
+#define cstr_is_operator(cstr)         (cstr_to_operator_type(cstr) != OP_INVALID)
+#define cstr_is_operator_ex(cstr, len) (cstr_to_operator_type_ex(cstr, len) != OP_INVALID)
 
 
 // TODO: Implement parameter count for each function to support multiple arguments.
@@ -273,6 +304,18 @@ const char* functionTypeDescriptions[FT_COUNT] = {
   [FT_LOG10]  = "Returns the common logarithm (base-10 logarithm) of x."
 };
 
+e_function_type cstr_to_function_type_ex(const char* cstr, size_t len)
+{
+  if (!cstr || len == 0)
+    return FT_INVALID;
+
+  for (size_t i = 0; i < FT_COUNT; ++i)
+    if (strncmp(cstr, functionTypeIdentifiers[i], len) == 0)
+      return (e_function_type) i;
+
+  return FT_INVALID;
+}
+
 e_function_type cstr_to_function_type(const char* cstr)
 {
   if (!cstr)
@@ -285,7 +328,8 @@ e_function_type cstr_to_function_type(const char* cstr)
   return FT_INVALID;
 }
 
-#define cstr_is_function(cstr) (cstr_to_function_type(cstr) != FT_INVALID)
+#define cstr_is_function(cstr)         (cstr_to_function_type(cstr) != FT_INVALID)
+#define cstr_is_function_ex(cstr, len) (cstr_to_function_type_ex(cstr, len) != FT_INVALID)
 
 
 
@@ -328,11 +372,21 @@ e_paren_type cstr_to_paren_type(const char* cstr)
   return char_to_paren_type(cstr[0]);
 }
 
-#define c_is_paren(c) (char_to_paren_type(c) != PT_INVALID)
-#define cstr_is_paren(cstr) (cstr_to_paren_type(cstr) != PT_INVALID)
+e_paren_type cstr_to_paren_type_ex(const char* cstr, size_t len)
+{
+  if (!cstr || len != 1)
+    return PT_INVALID;
+
+  return char_to_paren_type(cstr[0]);
+}
 
 
+#define c_is_paren(c)               (char_to_paren_type(c) != PT_INVALID)
+#define cstr_is_paren(cstr)         (cstr_to_paren_type(cstr) != PT_INVALID)
+#define cstr_is_paren_ex(cstr, len) (cstr_to_paren_type_ex(cstr, len) != PT_INVALID)
 
+
+// TODO: Rethink! Maybe add later here also !=, <=, >=, <, > or add it to symbols.
 typedef enum {
   CLT_COMMA,
   CLT_EQUALS,
@@ -373,12 +427,19 @@ e_common_literal_type cstr_to_common_literal_type(const char* cstr)
   return char_to_common_literal_type(cstr[0]);
 }
 
-#define c_is_common_literal(c) (char_to_common_literal_type(c) != CLT_INVALID)
-#define cstr_is_common_literal(cstr) (cstr_to_common_literal_type(cstr) != CLT_INVALID)
+e_common_literal_type cstr_to_common_literal_type_ex(const char* cstr, size_t len)
+{
+  if (!cstr || len != 1)
+    return CLT_INVALID;
 
+  return char_to_common_literal_type(cstr[0]);
+}
+
+#define c_is_common_literal(c)                (char_to_common_literal_type(c) != CLT_INVALID)
+#define cstr_is_common_literal(cstr)          (cstr_to_common_literal_type(cstr) != CLT_INVALID)
+#define cstr_is_common_literal_ex(cstr, len)  (cstr_to_common_literal_type_ex(cstr, len) != CLT_INVALID)
 
 // Literals are all single character tokens.
 #define c_is_literal(c) (c_is_operator(c) || c_is_paren(c) || c_is_common_literal(c))
-
 
 #endif // _GLOBAL_H_

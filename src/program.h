@@ -2,14 +2,11 @@
 #define _PROGRAM_H_
 
 #include "config.h"
-#include "helpers.h"
 #include "versioning.h"
-#include "global.h"
-#include "tokenizer.h"
-#include "lexer.h"
 #include "parser.h"
 
 
+// Program informations
 #define COPYRIGHT_CREATOR "Florian Maier"
 #define COPYRIGHT_YEAR "2024"
 #define PROGRAM_LICENCE_LINK "https://github.com/FL0D3V/c-calc/blob/main/LICENSE"
@@ -21,6 +18,7 @@
 
 
 
+// All enums
 // This is usefull for: "PF_VERBOSE | PF_HELP"
 typedef enum {
   PFF_ERROR      = 0,
@@ -29,8 +27,8 @@ typedef enum {
   PFF_HELP       = (1u << 2),
   PFF_VERSION    = (1u << 3),
   PFF_TEST_AST   = (1u << 4),   // TODO: Remove later! This is just for testing.
-  // OTHER       = (1u << 4...'int' size in bit),
 } e_program_function_flags;
+
 
 typedef enum {
   PFT_VERBOSE,
@@ -47,7 +45,7 @@ static_assert(PFT_COUNT == 4, "Amount of program-function-types have changed");
 
 #define SHORT_PREFIX "-"
 #define SHORT_PREFIX_LEN strlen(SHORT_PREFIX)
-static const char* shortProgFuncTypeIdentifier[PFT_COUNT] = {
+const char* shortProgFuncTypeIdentifier[PFT_COUNT] = {
   [PFT_VERBOSE]  = "vv",
   [PFT_HELP]     = "h",
   [PFT_VERSION]  = "v",
@@ -56,7 +54,7 @@ static const char* shortProgFuncTypeIdentifier[PFT_COUNT] = {
 
 #define LONG_PREFIX "--"
 #define LONG_PREFIX_LEN strlen(LONG_PREFIX)
-static const char* longProgFuncTypeIdentifier[PFT_COUNT] = {
+const char* longProgFuncTypeIdentifier[PFT_COUNT] = {
   [PFT_VERBOSE]  = "verbose",
   [PFT_HELP]     = "help",
   [PFT_VERSION]  = "version",
@@ -76,12 +74,25 @@ static const char* longProgFuncTypeIdentifier[PFT_COUNT] = {
 #define short_full_identifier(index) SHORT_PREFIX, shortProgFuncTypeIdentifier[(index)]
 #define long_full_identifier(index)  LONG_PREFIX, longProgFuncTypeIdentifier[(index)]
 
-static const char* progFuncTypeDescriptions[PFT_COUNT] = {
+const char* progFuncTypeDescriptions[PFT_COUNT] = {
   [PFT_VERBOSE]  = "Execute the given expression with verbose logging and exit.",
   [PFT_HELP]     = "Display this help and exit.",
   [PFT_VERSION]  = "Output version information and exit.",
   [PFT_TEST_AST] = "Tests the ast generation and evaluation of pre defined expressions.", // TODO: Remove later! This is just for testing.
 };
+
+
+
+// Type definitions
+typedef struct {
+  e_program_function_flags funcFlags;
+  int argc;
+  char* programName;
+  char** argv;
+  char* inputExpression;
+} program_t;
+
+
 
 static e_program_function_type cstr_to_program_function_type(const char* cstr)
 {
@@ -89,14 +100,17 @@ static e_program_function_type cstr_to_program_function_type(const char* cstr)
     return PFT_INVALID;
 
   // No argument can have spaces so it must be an expression.
+  // TODO: Change to -e for an expression which needs to accept an argument, the expression itself.
   if (strstr(cstr, " "))
     return PFT_EXPRESSION;
 
+  // Checks for a present prefix and returns the pointer to the location in the input.
   const char* longPrefixStart = strstr(cstr, LONG_PREFIX);
   const char* shortPrefixStart = strstr(cstr, SHORT_PREFIX);
-
-  const bool validLongPrefix = longPrefixStart && PTR_DIFF(cstr, longPrefixStart) == 0;
-  const bool validShortPrefix = shortPrefixStart && PTR_DIFF(cstr, shortPrefixStart) == 0;
+  
+  // Checks if a specific prefix was found and if it is placed in the beginning of the string. E.g. "--COMMAND"
+  const bool validLongPrefix = longPrefixStart && ((size_t)longPrefixStart - (size_t)cstr) == 0;
+  const bool validShortPrefix = shortPrefixStart && ((size_t)shortPrefixStart - (size_t)cstr) == 0;
 
   for (size_t i = 0; i < PFT_COUNT; ++i)
   {
@@ -105,8 +119,10 @@ static e_program_function_type cstr_to_program_function_type(const char* cstr)
       return (e_program_function_type) i;
   }
 
+  // TODO: Remove! -> Maybe error here!
   return PFT_EXPRESSION;
 }
+
 
 static e_program_function_flags function_type_to_flag(e_program_function_type type)
 {
@@ -124,17 +140,7 @@ static e_program_function_flags function_type_to_flag(e_program_function_type ty
 }
 
 
-// Program definition.
-typedef struct {
-  e_program_function_flags funcFlags;
-  int argc;
-  char* programName;
-  char** argv;
-  char* inputExpression;
-} program_t;
-
-
-static void program_init(program_t* prog, int argc, char** argv)
+static inline void program_init(program_t* prog, int argc, char** argv)
 {
   prog->funcFlags = PFF_ERROR;
 
@@ -147,17 +153,14 @@ static void program_init(program_t* prog, int argc, char** argv)
   prog->inputExpression = NULL;
 }
 
-static void program_set_error(program_t* prog)
+
+static inline void program_set_error(program_t* prog)
 {
   prog->funcFlags = PFF_ERROR;
   prog->inputExpression = NULL;
 }
 
 
-
-// Interface definitions.
-program_t validate_cli_input(int argc, char** argv);
-int handle_program(program_t* program);
 
 // All program definitions.
 static void print_usage(e_program_function_flags flags, const char* programName, int argc, char** argv);
@@ -266,6 +269,53 @@ int handle_program(program_t* program)
 
 
 // All programs functions.
+static int handle_math_input(const char* input, bool verbose)
+{
+  if (verbose) printf("Executing VERBOSE:\n");
+
+  tokenizer_t tokenizer = tokenizer_execute(input);
+  
+  if (tokenizer.isError) {
+    tokenizer_free(tokenizer);
+    return EXIT_FAILURE;
+  }
+
+  if (verbose) tokenizer_print(&tokenizer);
+  
+  lexer_t lexer = lexer_execute(&tokenizer);
+  tokenizer_free(tokenizer);
+
+  if (lexer.isError) {
+    lexer_free(lexer);
+    return EXIT_FAILURE;
+  }
+
+  if (verbose) lexer_print(&lexer);
+  
+  // TODO: Change to global arena for all allocations.
+  node_arena_t nodeArena = {0};
+  node_t* rootNode = parser_execute(&nodeArena, &lexer);
+  lexer_free(lexer);
+
+  if (!rootNode)
+    return EXIT_FAILURE;
+
+  if (verbose) print_node(rootNode, true);
+
+  node_t* evaluatedNode = eval(&nodeArena, rootNode);
+  
+  if (!evaluatedNode)
+  {
+    node_arena_free(&nodeArena);
+    return EXIT_FAILURE;
+  }
+
+  printf("Result = " DOUBLE_PRINT_FORMAT "\n", evaluatedNode->as.constant);
+
+  node_arena_free(&nodeArena);
+  return EXIT_SUCCESS;
+}
+
 
 static void print_usage(e_program_function_flags flags, const char* programName, int argc, char** argv)
 {
@@ -355,53 +405,6 @@ static void print_current_version(const char* programName)
 }
 
 
-static int handle_math_input(const char* input, bool verbose)
-{
-  if (verbose) printf("Executing VERBOSE:\n");
-
-  tokenizer_t tokens = tokenizer_execute(input);
-  
-  if (tokens.isError) {
-    tokenizer_free(tokens);
-    return EXIT_FAILURE;
-  }
-
-  if (verbose) tokenizer_print(&tokens);
-  
-  lexer_t lexer = lexer_execute(&tokens);
-  tokenizer_free(tokens);
-
-  if (lexer.isError) {
-    lexer_free(lexer);
-    return EXIT_FAILURE;
-  }
-
-  if (verbose) lexer_print(&lexer);
-
-  node_arena_t nodeArena = {0};
-  node_t* rootNode = parser_execute(&nodeArena, &lexer);
-  lexer_free(lexer);
-
-  if (!rootNode)
-    return EXIT_FAILURE;
-
-  if (verbose) print_node(rootNode, true);
-
-  node_t* evaluatedNode = eval(&nodeArena, rootNode);
-  
-  if (!evaluatedNode)
-  {
-    node_arena_free(&nodeArena);
-    return EXIT_FAILURE;
-  }
-
-  printf("Result = " DOUBLE_PRINT_FORMAT "\n", evaluatedNode->as.constant);
-
-  node_arena_free(&nodeArena);
-  return EXIT_SUCCESS;
-}
-
-
 // INFO: Just for testing! Remove later!
 static void test_ast_eval()
 {
@@ -411,6 +414,7 @@ static void test_ast_eval()
   printf("AST testing:\n\n");
 
   // TEST 1
+  printf("Test 1:\n");
   {
     // IN: "1 + 2 + (PI ^ 2) / 3"
     // AST: add(1.00000, add(2.00000, divide(paren(pow(3.14159, 2.00000)), 3.00000)))
@@ -446,6 +450,7 @@ static void test_ast_eval()
 
 
   // TEST 2
+  printf("Test 2:\n");
   {
     // IN: "ln(10)"
     // AST: ln(10)
@@ -468,6 +473,7 @@ static void test_ast_eval()
 
 
   // TEST 3
+  printf("Test 3:\n");
   {
     // IN: "100.53 + sqrt(3.5 - EN) + cos(44.23 * 6.4^2) / 8.3 + ln(10) - PI + ln(5^EC)"
     // AST: add(100.53000, add(sqrt(substract(3.50000, 2.71828)), add(divide(acos(multiply(44.23000, pow(6.40000, 2.00000))), 8.30000), substract(ln(10.00000), add(3.14159, ln(pow(5.00000, 0.57722)))))))
@@ -527,6 +533,7 @@ static void test_ast_eval()
 
 
   // TEST 4
+  printf("Test 4:\n");
   {
     // IN: "10.5 * exp(4)"
     // AST: mult(10.5, exp(4))
@@ -553,6 +560,7 @@ static void test_ast_eval()
 
 
   // TEST 5
+  printf("Test 5:\n");
   {
     // IN: "10 + 5 / (5 * 0)"
     // AST: "add(10, divide(5, paren(mult(5, 0))))"
@@ -585,6 +593,7 @@ static void test_ast_eval()
 
   
   // TEST 6
+  printf("Test 6:\n");
   {
     // IN: "(5 * 0)"
     // AST: "paren(mult(5, 0))"
@@ -611,6 +620,7 @@ static void test_ast_eval()
 
 
   // TEST 7
+  printf("Test 7:\n");
   {
     // IN: "10 / 0"
     // AST: "div(10, 0)"
@@ -635,6 +645,7 @@ static void test_ast_eval()
 
 
   // TEST 8
+  printf("Test 8:\n");
   {
     // IN: "10 / (4)"
     // AST: "div(10, paren(4))"

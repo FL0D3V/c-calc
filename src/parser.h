@@ -1,13 +1,10 @@
-// Tries to parse a given lexed tokens-list and generates an AST for checking the order of operations in the math equation.
-
 #ifndef _PARSER_H_
 #define _PARSER_H_
 
-#include "global.h"
-#include "helpers.h"
+#include <math.h>
+
 #include "lexer.h"
 
-#include <math.h>
 
 // Errors
 #define _S_ERROR_NAME "SEMANTIC-ERROR"
@@ -20,6 +17,7 @@
 
 
 
+// All enums
 typedef enum {
     NT_CONSTANT,
     NT_BINOP,
@@ -30,6 +28,7 @@ typedef enum {
 } e_node_type;
 
 static_assert(NT_COUNT == 4, "Amount of node-types have changed");
+
 const char* nodeTypeNames[NT_COUNT] = {
   [NT_CONSTANT] = "constant",
   [NT_BINOP] = "operator",
@@ -49,6 +48,7 @@ typedef enum {
 } e_node_binop_type;
 
 static_assert(NO_COUNT == 5, "Amount of binop-node-types have changed");
+
 const char* nodeBinopTypeNames[NO_COUNT] = {
   [NO_ADD] = "add",
   [NO_SUB] = "substract",
@@ -81,6 +81,7 @@ typedef enum {
 } e_node_func_type;
 
 static_assert(NF_COUNT == 13, "Amount of function-node-types have changed");
+
 const char* nodeFunctionTypeNames[NF_COUNT] = {
   [NF_SQRT]  = "sqrt",
   [NF_EXP]   = "exp",
@@ -103,6 +104,7 @@ const char* nodeFunctionTypeNames[NF_COUNT] = {
 
 
 
+// Node definitions
 typedef struct node node_t;
 
 typedef struct {
@@ -136,6 +138,9 @@ struct node {
 
 
 
+// TODO: Move to arena.h and make it generically usable!
+// TODO: Also implement arena_da_append and use a global arena for every memory allocation on runtime.
+
 #define NODE_REGION_DEFAULT_CAPACITY 1024
 
 typedef struct node_region node_region_t;
@@ -153,7 +158,7 @@ typedef struct {
 } node_arena_t;
 
 
-static node_region_t* node_region_alloc(size_t capacity)
+node_region_t* node_region_alloc(size_t capacity)
 {
   // size = size-of(REGION) + size-of(DATA in REGION) * capacity
   size_t regionSize = sizeof(node_region_t) + sizeof(node_t) * capacity;
@@ -165,14 +170,14 @@ static node_region_t* node_region_alloc(size_t capacity)
   return region;
 }
 
-static void free_node_region(node_region_t* region)
+void free_node_region(node_region_t* region)
 {
   free(region);
 }
 
-static node_t* node_arena_alloc(node_arena_t* arena)
+node_t* node_arena_alloc(node_arena_t* arena)
 {
-  ASSERT_NULL(arena);
+  assert(arena);
   
   if (!arena->end)
   {
@@ -196,7 +201,7 @@ static node_t* node_arena_alloc(node_arena_t* arena)
 
 void node_arena_free(node_arena_t* arena)
 {
-  ASSERT_NULL(arena);
+  assert(arena);
   node_region_t* region = arena->begin;
   while (region) {
     node_region_t* tmp = region;
@@ -209,7 +214,8 @@ void node_arena_free(node_arena_t* arena)
 
 
 
-node_t* base_node(node_arena_t* arena, size_t cursor, e_node_type type)
+// Creating new nodes
+static node_t* base_node(node_arena_t* arena, size_t cursor, e_node_type type)
 {
   node_t* newNode = node_arena_alloc(arena);
   newNode->type = type;
@@ -249,77 +255,7 @@ node_t* node_paren(node_arena_t* arena, size_t cursor, node_t* arg)
 }
 
 
-
-#define _PRINT_DEPTH_SPACES(indented, deph) \
-    do {                                    \
-      if (indented)                         \
-        for (size_t i = 0; i < (deph); ++i) \
-          printf(" ");                      \
-    } while(0)
-
-void print_node_ex(node_t* node, bool indented, size_t deph)
-{
-  ASSERT_NULL(node);
-
-  switch (node->type) {
-    case NT_CONSTANT:
-    {
-      _PRINT_DEPTH_SPACES(indented, deph);
-      printf(DOUBLE_PRINT_FORMAT, node->as.constant);
-      break;
-    }
-    case NT_BINOP:
-    {
-      if (node->as.binop.type >= NO_COUNT)
-        UNREACHABLE("Invalid binop-node-type!");
-      
-      _PRINT_DEPTH_SPACES(indented, deph);
-      printf("%s(", nodeBinopTypeNames[node->as.binop.type]);
-      if (indented) printf("\n");
-      print_node_ex(node->as.binop.lhs, indented, deph + 1);
-      printf(",%s", indented ? "\n" : " ");
-      print_node_ex(node->as.binop.rhs, indented, deph + 1);
-      if (indented) printf("\n");
-      _PRINT_DEPTH_SPACES(indented, deph);
-      printf(")");
-      break;
-    }
-    case NT_FUNCTION:
-    {
-      if (node->as.func.type >= NF_COUNT)
-        UNREACHABLE("Invalid func-node-type!");
-      
-      _PRINT_DEPTH_SPACES(indented, deph);
-      printf("%s(", nodeFunctionTypeNames[node->as.func.type]);
-      bool isArgTypeConst = node->as.func.arg->type == NT_CONSTANT;
-      if (indented && !isArgTypeConst) printf("\n");
-      print_node_ex(node->as.func.arg, indented, !isArgTypeConst ? deph + 1 : 0);
-      if (indented && !isArgTypeConst) printf("\n");
-      _PRINT_DEPTH_SPACES(indented, !isArgTypeConst ? deph : 0);
-      printf(")");
-      break;
-    }
-    case NT_PAREN:
-    {
-      _PRINT_DEPTH_SPACES(indented, deph);
-      printf("paren(");
-      bool isArgTypeConst = node->as.paren.arg->type == NT_CONSTANT;
-      if (indented && !isArgTypeConst) printf("\n");
-      print_node_ex(node->as.paren.arg, indented, !isArgTypeConst ? deph + 1 : 0);
-      if (indented && !isArgTypeConst) printf("\n");
-      _PRINT_DEPTH_SPACES(indented, !isArgTypeConst ? deph : 0);
-      printf(")");
-      break;
-    }
-    case NT_COUNT:
-    default:
-      UNREACHABLE("Invalid node-type!");
-  }
-}
-
-#define print_node(node, indented) (printf("Printing parsed AST:\n"), print_node_ex(node, indented, 0), printf("\n"))
-
-
+// TODO: Maybe rename to "eval_node" or "node_eval"!
 node_t* eval(node_arena_t* arena, node_t* expr)
 {
   ASSERT_NULL(arena);
@@ -479,6 +415,11 @@ node_t* eval(node_arena_t* arena, node_t* expr)
       UNREACHABLE("Invalid node-type!");
   }
 }
+
+
+#define tok_is_paren(tok, pt)           (tok_is(tok, TT_PAREN) && (tok)->as.paren == (pt))
+#define tok_not_specific_paren(tok, pt) (tok_not((tok), TT_PAREN) || (tok)->as.paren != (pt))
+#define tok_is_number_operator(tok)     (tok_is(tok, TT_OPERATOR) && ((tok)->as.operator == OP_ADD || (tok)->as.operator == OP_SUB))
 
 
 static bool check_semantics(lexer_t* lexer)
@@ -717,7 +658,7 @@ node_t* parser_execute(node_arena_t* arena, lexer_t* lexer)
 
   // IN: "EN + 5 / (5 * 0)"
   // AST: "add(EN, divide(5, paren(mult(5, 0))))"
-  // Getting constants: mathConstantTypeValues[token->as.constant]
+  // Getting constants - global.h: mathConstantTypeValues[token->as.constant]
 
   node_t* root = NULL;
 
@@ -740,7 +681,85 @@ node_t* parser_execute(node_arena_t* arena, lexer_t* lexer)
   }
 
   // TODO: Return root node!
-  return root;  
+  return root;
+}
+
+
+
+#define _PRINT_DEPTH_SPACES(indented, deph) \
+    do {                                    \
+      if (indented)                         \
+        for (size_t i = 0; i < (deph); ++i) \
+          printf(" ");                      \
+    } while(0)
+
+
+void print_node_ex(node_t* node, bool indented, size_t deph)
+{
+  ASSERT_NULL(node);
+
+  switch (node->type) {
+    case NT_CONSTANT:
+    {
+      _PRINT_DEPTH_SPACES(indented, deph);
+      printf(DOUBLE_PRINT_FORMAT, node->as.constant);
+      break;
+    }
+    case NT_BINOP:
+    {
+      if (node->as.binop.type >= NO_COUNT)
+        UNREACHABLE("Invalid binop-node-type!");
+      
+      _PRINT_DEPTH_SPACES(indented, deph);
+      printf("%s(", nodeBinopTypeNames[node->as.binop.type]);
+      if (indented) printf("\n");
+      print_node_ex(node->as.binop.lhs, indented, deph + 1);
+      printf(",%s", indented ? "\n" : " ");
+      print_node_ex(node->as.binop.rhs, indented, deph + 1);
+      if (indented) printf("\n");
+      _PRINT_DEPTH_SPACES(indented, deph);
+      printf(")");
+      break;
+    }
+    case NT_FUNCTION:
+    {
+      if (node->as.func.type >= NF_COUNT)
+        UNREACHABLE("Invalid func-node-type!");
+      
+      _PRINT_DEPTH_SPACES(indented, deph);
+      printf("%s(", nodeFunctionTypeNames[node->as.func.type]);
+      bool isArgTypeConst = node->as.func.arg->type == NT_CONSTANT;
+      if (indented && !isArgTypeConst) printf("\n");
+      print_node_ex(node->as.func.arg, indented, !isArgTypeConst ? deph + 1 : 0);
+      if (indented && !isArgTypeConst) printf("\n");
+      _PRINT_DEPTH_SPACES(indented, !isArgTypeConst ? deph : 0);
+      printf(")");
+      break;
+    }
+    case NT_PAREN:
+    {
+      _PRINT_DEPTH_SPACES(indented, deph);
+      printf("paren(");
+      bool isArgTypeConst = node->as.paren.arg->type == NT_CONSTANT;
+      if (indented && !isArgTypeConst) printf("\n");
+      print_node_ex(node->as.paren.arg, indented, !isArgTypeConst ? deph + 1 : 0);
+      if (indented && !isArgTypeConst) printf("\n");
+      _PRINT_DEPTH_SPACES(indented, !isArgTypeConst ? deph : 0);
+      printf(")");
+      break;
+    }
+    case NT_COUNT:
+    default:
+      UNREACHABLE("Invalid node-type!");
+  }
+}
+
+
+void print_node(node_t* node, bool indented)
+{
+  printf("Printing parsed AST:\n");
+  print_node_ex(node, indented, 0);
+  printf("\n");
 }
 
 #endif // _PARSER_H_
