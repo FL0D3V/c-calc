@@ -29,7 +29,7 @@ typedef enum {
   PFF_TEST_AST   = (1u << 4),   // TODO: Remove later! This is just for testing.
 } e_program_function_flags;
 
-
+// Must be the same layout as 'e_program_function_flags'!
 typedef enum {
   PFT_VERBOSE,
   PFT_HELP,
@@ -42,6 +42,22 @@ typedef enum {
 } e_program_function_type;
 
 static_assert(PFT_COUNT == 4, "Amount of program-function-types have changed");
+
+static e_program_function_flags function_type_to_flag(e_program_function_type type)
+{
+  switch (type) {
+    case PFT_EXPRESSION: return PFF_EXPRESSION;
+    case PFT_VERBOSE:    return PFF_VERBOSE;
+    case PFT_HELP:       return PFF_HELP;
+    case PFT_VERSION:    return PFF_VERSION;
+    case PFT_TEST_AST:   return PFF_TEST_AST; // TODO: Remove later! This is just for testing.
+    case PFT_INVALID:    return PFF_ERROR;
+    case PFT_COUNT:
+    default:
+      UNREACHABLE("function_type_to_flag: Type not implemented!");
+  }
+}
+
 
 #define SHORT_PREFIX "-"
 #define SHORT_PREFIX_LEN strlen(SHORT_PREFIX)
@@ -124,22 +140,6 @@ static e_program_function_type cstr_to_program_function_type(const char* cstr)
 }
 
 
-static e_program_function_flags function_type_to_flag(e_program_function_type type)
-{
-  switch (type) {
-    case PFT_EXPRESSION: return PFF_EXPRESSION;
-    case PFT_VERBOSE:    return PFF_VERBOSE;
-    case PFT_HELP:       return PFF_HELP;
-    case PFT_VERSION:    return PFF_VERSION;
-    case PFT_TEST_AST:   return PFF_TEST_AST; // TODO: Remove later! This is just for testing.
-    case PFT_INVALID:    return PFF_ERROR;
-    case PFT_COUNT:
-    default:
-      UNREACHABLE("function_type_to_flag: Type not implemented!");
-  }
-}
-
-
 static inline void program_init(program_t* prog, int argc, char** argv)
 {
   prog->funcFlags = PFF_ERROR;
@@ -166,7 +166,7 @@ static inline void program_set_error(program_t* prog)
 static void print_usage(e_program_function_flags flags, const char* programName, int argc, char** argv);
 static void print_help(const char* programName);
 static void print_current_version(const char* programName);
-static int handle_math_input(const char* input, bool verbose);
+static bool handle_math_input(const char* input, bool verbose);
 static void test_ast_eval();
 
 
@@ -260,7 +260,8 @@ int handle_program(program_t* program)
     // TODO: Rethink! Changes to the simple expression eval mode with limited features.
     change_global_program_mode(GPM_SINGLE_CLI_EXPRESSION_ARG);
 
-    return handle_math_input(program->inputExpression, is_bit_set(program->funcFlags, PFF_VERBOSE));
+    bool success = handle_math_input(program->inputExpression, is_bit_set(program->funcFlags, PFF_VERBOSE));
+    return success ? EXIT_SUCCESS : EXIT_FAILURE;
   }
 
   UNREACHABLE("handle_program: Flag not implemented!");
@@ -269,51 +270,54 @@ int handle_program(program_t* program)
 
 
 // All programs functions.
-static int handle_math_input(const char* input, bool verbose)
+static bool handle_math_input(const char* input, bool verbose)
 {
-  if (verbose) printf("Executing VERBOSE:\n");
+  arena_t arena = {0};
 
-  tokenizer_t tokenizer = tokenizer_execute(input);
+  if (verbose)
+    printf("Executing VERBOSE:\n");
+
+  tokenizer_t tokenizer = tokenizer_execute(&arena, input);
   
   if (tokenizer.isError) {
-    tokenizer_free(tokenizer);
-    return EXIT_FAILURE;
+    arena_free(&arena);
+    return false;
   }
 
-  if (verbose) tokenizer_print(&tokenizer);
+  if (verbose)
+    tokenizer_print(&tokenizer);
   
-  lexer_t lexer = lexer_execute(&tokenizer);
-  tokenizer_free(tokenizer);
+  lexer_t lexer = lexer_execute(&arena, &tokenizer);
 
   if (lexer.isError) {
-    lexer_free(lexer);
-    return EXIT_FAILURE;
+    arena_free(&arena);
+    return false;
   }
 
-  if (verbose) lexer_print(&lexer);
+  if (verbose)
+    lexer_print(&lexer);
+
+  node_t* rootNode = parser_execute(&arena, &lexer);
+
+  if (!rootNode) {
+    arena_free(&arena);
+    return false;
+  }
+
+  if (verbose)
+    print_node(rootNode, true);
+
+  node_t* evaluatedNode = ast_eval(&arena, rootNode);
   
-  // TODO: Change to global arena for all allocations.
-  node_arena_t nodeArena = {0};
-  node_t* rootNode = parser_execute(&nodeArena, &lexer);
-  lexer_free(lexer);
-
-  if (!rootNode)
-    return EXIT_FAILURE;
-
-  if (verbose) print_node(rootNode, true);
-
-  node_t* evaluatedNode = eval(&nodeArena, rootNode);
-  
-  if (!evaluatedNode)
-  {
-    node_arena_free(&nodeArena);
-    return EXIT_FAILURE;
+  if (!evaluatedNode) {
+    arena_free(&arena);
+    return false;
   }
 
   printf("Result = " DOUBLE_PRINT_FORMAT "\n", evaluatedNode->as.constant);
 
-  node_arena_free(&nodeArena);
-  return EXIT_SUCCESS;
+  arena_free(&arena);
+  return true;
 }
 
 
@@ -395,6 +399,7 @@ static void print_current_version(const char* programName)
 {
   ASSERT_NULL(programName);
 
+  printf("Test\n");
   printf("%s " VERSION_FORMAT "\n", programName, VERSION_ARGS(CURRENT_PROGRAM_VERSION));
   printf("Copyright (c) " COPYRIGHT_YEAR " " COPYRIGHT_CREATOR ".\n");
   printf("License " PROGRAM_LICENCE ": <" PROGRAM_LICENCE_LINK ">.\n");
@@ -408,7 +413,7 @@ static void print_current_version(const char* programName)
 // INFO: Just for testing! Remove later!
 static void test_ast_eval()
 {
-  node_arena_t arena = {0};
+  arena_t arena = {0};
   bool freeAfterEachTest = false;
 
   printf("AST testing:\n\n");
@@ -439,13 +444,14 @@ static void test_ast_eval()
     printf("Input = 1 + 2 + (PI ^ 2) / 3\n");
     print_node(test, true);
     
-    node_t* evaluated = eval(&arena, test);
+    node_t* evaluated = ast_eval(&arena, test);
     if (evaluated)
       printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
 
     printf("\n");
 
-    if (freeAfterEachTest) node_arena_free(&arena);
+    if (freeAfterEachTest)
+      arena_free(&arena);
   }
 
 
@@ -462,13 +468,14 @@ static void test_ast_eval()
     printf("Input = ln(10)\n");
     print_node(test, true);
     
-    node_t* evaluated = eval(&arena, test);
+    node_t* evaluated = ast_eval(&arena, test);
     if (evaluated)
       printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
 
     printf("\n");
 
-    if (freeAfterEachTest) node_arena_free(&arena);
+    if (freeAfterEachTest)
+      arena_free(&arena);
   }
 
 
@@ -522,13 +529,14 @@ static void test_ast_eval()
     printf("Input = 100.53 + sqrt(3.5 - EN) + cos(44.23 * 6.4^2) / 8.3 + ln(10) - PI + ln(5^EC)\n");
     print_node(test, true);
     
-    node_t* evaluated = eval(&arena, test);
+    node_t* evaluated = ast_eval(&arena, test);
     if (evaluated)
       printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
 
     printf("\n");
 
-    if (freeAfterEachTest) node_arena_free(&arena);
+    if (freeAfterEachTest)
+      arena_free(&arena);
   }
 
 
@@ -549,13 +557,14 @@ static void test_ast_eval()
     printf("Input = 10.5 * exp(4)\n");
     print_node(test, true);
     
-    node_t* evaluated = eval(&arena, test);
+    node_t* evaluated = ast_eval(&arena, test);
     if (evaluated)
       printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
 
     printf("\n");
 
-    if (freeAfterEachTest) node_arena_free(&arena);
+    if (freeAfterEachTest)
+      arena_free(&arena);
   }
 
 
@@ -582,13 +591,14 @@ static void test_ast_eval()
     printf("Input = 10 + 5 / (5 * 0)\n");
     print_node(test, true);
 
-    node_t* evaluated = eval(&arena, test);
+    node_t* evaluated = ast_eval(&arena, test);
     if (evaluated)
       printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
 
     printf("\n");
 
-    if (freeAfterEachTest) node_arena_free(&arena);
+    if (freeAfterEachTest)
+      arena_free(&arena);
   }
 
   
@@ -609,13 +619,14 @@ static void test_ast_eval()
     printf("Input = (5 * 0)\n");
     print_node(test, true);
 
-    node_t* evaluated = eval(&arena, test);
+    node_t* evaluated = ast_eval(&arena, test);
     if (evaluated)
       printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
 
     printf("\n");
 
-    if (freeAfterEachTest) node_arena_free(&arena);
+    if (freeAfterEachTest)
+      arena_free(&arena);
   }
 
 
@@ -634,13 +645,14 @@ static void test_ast_eval()
     printf("Input = 10 / 0\n");
     print_node(test, true);
 
-    node_t* evaluated = eval(&arena, test);
+    node_t* evaluated = ast_eval(&arena, test);
     if (evaluated)
       printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
 
     printf("\n");
 
-    if (freeAfterEachTest) node_arena_free(&arena);
+    if (freeAfterEachTest)
+      arena_free(&arena);
   }
 
 
@@ -661,17 +673,19 @@ static void test_ast_eval()
     printf("Input = 10 / (4)\n");
     print_node(test, true);
 
-    node_t* evaluated = eval(&arena, test);
+    node_t* evaluated = ast_eval(&arena, test);
     if (evaluated)
       printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
 
     printf("\n");
 
-    if (freeAfterEachTest) node_arena_free(&arena);
+    if (freeAfterEachTest)
+      arena_free(&arena);
   }
 
 
-  if (!freeAfterEachTest) node_arena_free(&arena);
+  if (!freeAfterEachTest)
+    arena_free(&arena);
 }
 
 #endif // _PROGRAM_H_

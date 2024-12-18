@@ -265,7 +265,7 @@ void print_global_program_config_help()
 
   for (size_t configIdx = 0; configIdx < SPMC_COUNT; ++configIdx)
   {
-    printf("%s\n", specificProgramModeConfigNames[configIdx]);
+    printf("%s:\n", specificProgramModeConfigNames[configIdx]);
     printf("%s\n", specificProgramModeConfigDescriptions[configIdx]);
     if (configIdx < SPMC_COUNT - 1) printf("\n");
   }
@@ -276,7 +276,7 @@ void print_global_program_config_help()
 
   for (size_t pModeIdx = 0; pModeIdx < GPM_COUNT; ++pModeIdx)
   {
-    printf("%s\n", globalProgramModeNames[pModeIdx]);
+    printf("%s:\n", globalProgramModeNames[pModeIdx]);
     printf("%s\n", globalProgramModeDescriptions[pModeIdx]);
 
     // Prints all configurations for a specific program-mode.
@@ -286,7 +286,8 @@ void print_global_program_config_help()
       printf("  - %-35s%s\n", specificProgramModeConfigNames[configIdx], bool_cstr(configFlag));
     }
 
-    printf("\n");
+    if (pModeIdx < GPM_COUNT - 1)
+      printf("\n");
   }
 }
 

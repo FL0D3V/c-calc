@@ -1,16 +1,13 @@
 #ifndef _LEXER_H_
 #define _LEXER_H_
 
-// Everything else needed is included in the tokenizer.
 #include "tokenizer.h"
-
 
 // Error handling
 #define L_ERROR_NAME "LEXING-ERROR"
 #define L_ERROR_INVALID_NUMBER(cursor, tok) fprintf(stderr, L_ERROR_NAME ":%zu: A number can only contain 1 comma ('" IN_TOK_FMT "')!\n", (cursor), IN_TOK_ARG(tok))
 #define L_ERROR_INVALID_TOKEN(cursor, tok)  fprintf(stderr, L_ERROR_NAME ":%zu: '" IN_TOK_FMT "' is an invalid token!\n", (cursor), IN_TOK_ARG(tok))
 #define L_ERROR_GIVEN_LEXER_INVALID()       fprintf(stderr, L_ERROR_NAME ": Can't print the lexer because an error happend!\n")
-
 
 
 // TODO: Implement variables and variable assigning
@@ -26,7 +23,8 @@ typedef enum {
   TT_OPERATOR,
   TT_PAREN,
   TT_FUNCTION,
-  TT_LITERAL, // Here are all not connected literals like ',' or '='.
+  // Here are all not connected literals like ',' or '='.
+  TT_LITERAL,
 
   TT_COUNT
 } e_token_type;
@@ -63,31 +61,34 @@ typedef struct {
   token_t* items;
   size_t capacity;
   size_t count;
-  
   bool isError;
 } lexer_t;
 
 
-#define lexer_free(lexer) da_free(lexer)
-
-// TODO: Change to 'arena_da_append' and use a single arena allocator for all allocations.
-#define add_number_token(lexer, num, curr)        da_append((lexer), ((token_t) { .type = TT_NUMBER,        .as.number   = (num), .cursor = (curr) }))
-#define add_math_constant_token(lexer, mc, curr)  da_append((lexer), ((token_t) { .type = TT_MATH_CONSTANT, .as.constant = (mc),  .cursor = (curr) }))
-#define add_operator_token(lexer, op, curr)       da_append((lexer), ((token_t) { .type = TT_OPERATOR,      .as.operator = (op),  .cursor = (curr) }))
-#define add_paren_token(lexer, pt, curr)          da_append((lexer), ((token_t) { .type = TT_PAREN,         .as.paren    = (pt),  .cursor = (curr) }))
-#define add_function_token(lexer, ft, curr)       da_append((lexer), ((token_t) { .type = TT_FUNCTION,      .as.function = (ft),  .cursor = (curr) }))
-#define add_literal_token(lexer, clt, curr)       da_append((lexer), ((token_t) { .type = TT_LITERAL,       .as.literal =  (clt), .cursor = (curr) }))
+#define add_number_token(a, lexer, num, curr)        arena_da_append((a), (lexer), ((token_t) { .type = TT_NUMBER,        .as.number   = (num), .cursor = (curr) }))
+#define add_math_constant_token(a, lexer, mc, curr)  arena_da_append((a), (lexer), ((token_t) { .type = TT_MATH_CONSTANT, .as.constant = (mc),  .cursor = (curr) }))
+#define add_operator_token(a, lexer, op, curr)       arena_da_append((a), (lexer), ((token_t) { .type = TT_OPERATOR,      .as.operator = (op),  .cursor = (curr) }))
+#define add_paren_token(a, lexer, pt, curr)          arena_da_append((a), (lexer), ((token_t) { .type = TT_PAREN,         .as.paren    = (pt),  .cursor = (curr) }))
+#define add_function_token(a, lexer, ft, curr)       arena_da_append((a), (lexer), ((token_t) { .type = TT_FUNCTION,      .as.function = (ft),  .cursor = (curr) }))
+#define add_literal_token(a, lexer, clt, curr)       arena_da_append((a), (lexer), ((token_t) { .type = TT_LITERAL,       .as.literal =  (clt), .cursor = (curr) }))
 
 
 // Helpers
 #define lex_at(lexer, idx)            (&(lexer)->items[(idx)])
 #define lex_next_in_range(lexer, idx) ((idx) < (lexer)->count - 1)
+
 #define tok_is(tok, t)                ((tok)->type == (t))
 #define tok_not(tok, t)               ((tok)->type != (t))
 
+#define tok_is_paren(tok, pt)           (tok_is(tok, TT_PAREN) && (tok)->as.paren == (pt))
+#define tok_not_specific_paren(tok, pt) (tok_not((tok), TT_PAREN) || (tok)->as.paren != (pt))
+#define tok_is_number_operator(tok)     (tok_is(tok, TT_OPERATOR) && ((tok)->as.operator == OP_ADD || (tok)->as.operator == OP_SUB))
 
-lexer_t lexer_execute(tokenizer_t* tokenizer)
+
+
+lexer_t lexer_execute(arena_t* arena, tokenizer_t* tokenizer)
 {
+  ASSERT_NULL(arena);
   ASSERT_NULL(tokenizer);
 
   lexer_t lexer = {0};
@@ -104,7 +105,7 @@ lexer_t lexer_execute(tokenizer_t* tokenizer)
       if (op == OP_INVALID)
         UNREACHABLE("Invalid operator-type!");
 
-      add_operator_token(&lexer, op, currentToken->cursor);
+      add_operator_token(arena, &lexer, op, currentToken->cursor);
       continue;
     }
 
@@ -121,7 +122,7 @@ lexer_t lexer_execute(tokenizer_t* tokenizer)
       if (!endptr || endptr == currentToken->value || (size_t)(endptr - currentToken->value) != currentToken->length)
         UNREACHABLE("Error while converting a number!");
 
-      add_number_token(&lexer, number, currentToken->cursor);
+      add_number_token(arena, &lexer, number, currentToken->cursor);
       continue;
     }
     else if (numCheck.ret == -1)
@@ -141,7 +142,7 @@ lexer_t lexer_execute(tokenizer_t* tokenizer)
       if (pt == PT_INVALID)
         UNREACHABLE("Invalid paren-type!");
 
-      add_paren_token(&lexer, pt, currentToken->cursor);
+      add_paren_token(arena, &lexer, pt, currentToken->cursor);
       continue;
     }
 
@@ -153,7 +154,7 @@ lexer_t lexer_execute(tokenizer_t* tokenizer)
       if (mc == MC_INVALID)
         UNREACHABLE("Invalid math-constant-type!");
 
-      add_math_constant_token(&lexer, mc, currentToken->cursor);
+      add_math_constant_token(arena, &lexer, mc, currentToken->cursor);
       continue;
     }
 
@@ -165,7 +166,7 @@ lexer_t lexer_execute(tokenizer_t* tokenizer)
       if (ft == FT_INVALID)
         UNREACHABLE("Invalid function-type!");
 
-      add_function_token(&lexer, ft, currentToken->cursor);
+      add_function_token(arena, &lexer, ft, currentToken->cursor);
       continue;
     }
 
@@ -177,7 +178,7 @@ lexer_t lexer_execute(tokenizer_t* tokenizer)
       if (clt == CLT_INVALID)
         UNREACHABLE("Invalid common-literal-type!");
 
-      add_literal_token(&lexer, clt, currentToken->cursor);
+      add_literal_token(arena, &lexer, clt, currentToken->cursor);
       continue;
     }
 

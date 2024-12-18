@@ -7,6 +7,6 @@ int main(int argc, char** argv)
   // solving. Could be used to store a few base expressions into variables and then using them to calulate more complex expressions.
 
   program_t prog = validate_cli_input(argc, argv);
-
+  
   return handle_program(&prog);
 }

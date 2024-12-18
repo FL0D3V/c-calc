@@ -1,5 +1,3 @@
-// A dynamic array implementation with a few extras.
-
 #ifndef _DARRAY_H_
 #define _DARRAY_H_
 
@@ -35,7 +33,7 @@ size_t ptr_diff(const void* start, const void* curr)
 
 
 // Initial capacity of a dynamic array
-#define DA_INIT_CAP 128
+#define DA_INIT_CAP 128 // byte
 
 // Append an item to a dynamic array
 #define da_append(da, item)                                                                   \
