@@ -18,6 +18,14 @@
 
 
 
+// TODO:
+// Make it possible to configure how the commands can be used.
+// Like multiple flags:
+// 1. Must it be the only command
+// 2. Does it need an extra argument (e.g.: '-e "1 + 2 - sqrt(5 ^ 10)"'; '-h', '-v'; '-vv -e "1 + 5"')
+// ...
+
+
 // All enums
 // This is usefull for: "PF_VERBOSE | PF_HELP"
 typedef enum {
