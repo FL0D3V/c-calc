@@ -386,6 +386,7 @@ e_paren_type cstr_to_paren_type_ex(const char* cstr, size_t len)
 #define cstr_is_paren_ex(cstr, len) (cstr_to_paren_type_ex(cstr, len) != PT_INVALID)
 
 
+
 // TODO: Rethink! Maybe add later here also !=, <=, >=, <, > or add it to symbols.
 typedef enum {
   CLT_COMMA,

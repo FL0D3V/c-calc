@@ -34,6 +34,8 @@ const char* nodeTypeNames[NT_COUNT] = {
 };
 
 
+
+
 typedef enum {
   NO_ADD,
   NO_SUB,
@@ -53,6 +55,21 @@ const char* nodeBinopTypeNames[NO_COUNT] = {
   [NO_DIV] = "divide",
   [NO_POW] = "pow"
 };
+
+static inline e_node_binop_type to_local_binop_type(e_operator_type type)
+{
+  switch (type)
+  {
+    case OP_ADD: return NO_ADD;
+    case OP_SUB: return NO_SUB;
+    case OP_MUL: return NO_MUL;
+    case OP_DIV: return NO_DIV;
+    case OP_POW: return NO_POW;
+    case OP_COUNT:
+    case OP_INVALID:
+    default: UNREACHABLE("Operator-Type not implemented!");
+  }
+}
 
 
 typedef enum {
@@ -98,6 +115,29 @@ const char* nodeFunctionTypeNames[NF_COUNT] = {
   [NF_LN]    = "ln",
   [NF_LOG10] = "log10"
 };
+
+static inline e_node_func_type to_local_func_type(e_function_type type)
+{
+  switch (type)
+  {
+    case FT_SQRT: return NF_SQRT;
+    case FT_EXP: return NF_EXP;
+    case FT_SIN: return NF_SIN;
+    case FT_ASIN: return NF_ASIN;
+    case FT_SINH: return NF_SINH;
+    case FT_COS: return NF_COS;
+    case FT_ACOS: return NF_ACOS;
+    case FT_COSH: return NF_COSH;
+    case FT_TAN: return NF_TAN;
+    case FT_ATAN: return NF_ATAN;
+    case FT_TANH: return NF_TANH;
+    case FT_LN: return NF_LN;
+    case FT_LOG10: return NF_LOG10;
+    case FT_COUNT:
+    case FT_INVALID:
+    default: UNREACHABLE("Function-Type not implemented!");
+  }
+}
 
 
 // Node definitions
@@ -511,6 +551,7 @@ static bool check_semantics(lexer_t* lexer)
         //        Also it could maybe be used for assigning an expression to a variable.
 
         S_ERROR(tok->cursor, "Literal not implemented yet!");
+        isError = true; // TODO: Rethink!
         continue;
       }
       case TT_COUNT:
@@ -529,6 +570,76 @@ static bool check_semantics(lexer_t* lexer)
 }
 
 
+
+static node_t* try_parse_constant(arena_t* arena, lexer_t* lexer, size_t index);
+static node_t* try_parse_binop(arena_t* arena, lexer_t* lexer, size_t index);
+static node_t* try_parse_func(arena_t* arena, lexer_t* lexer, size_t index);
+static node_t* try_parse_paren(arena_t* arena, lexer_t* lexer, size_t index);
+
+
+static node_t* try_parse_constant(arena_t* arena, lexer_t* lexer, size_t index)
+{
+  ASSERT_NULL(arena);
+  ASSERT_NULL(lexer);
+
+  token_t* token = lex_at(lexer, index);
+  
+  if (tok_is(token, TT_NUMBER))
+    return node_constant(arena, token->cursor, token->as.number);
+  else if (tok_is(token, TT_MATH_CONSTANT))
+    return node_constant(arena, token->cursor, mathConstantTypeValues[token->as.constant]);
+  else return NULL;
+}
+
+static node_t* try_parse_binop(arena_t* arena, lexer_t* lexer, size_t index)
+{
+  ASSERT_NULL(arena);
+  ASSERT_NULL(lexer);
+
+  token_t* token = lex_at(lexer, index);
+
+  if (tok_is(token, TT_OPERATOR))
+  {
+    // TODO: Implement! Parse left and right argument tree.
+    return NULL;
+  }
+  else return NULL;
+}
+
+static node_t* try_parse_func(arena_t* arena, lexer_t* lexer, size_t index)
+{
+  ASSERT_NULL(arena);
+  ASSERT_NULL(lexer);
+
+  token_t* token = lex_at(lexer, index);
+
+  if (tok_is(token, TT_FUNCTION))
+  {
+    node_t* arg = try_parse_paren(arena, lexer, index + 1);
+    if (!arg) return NULL;
+    return node_func(arena, token->cursor, to_local_func_type(token->as.function), arg);
+  }
+  else return NULL;
+}
+
+static node_t* try_parse_paren(arena_t* arena, lexer_t* lexer, size_t index)
+{
+  ASSERT_NULL(arena);
+  ASSERT_NULL(lexer);
+
+  token_t* token = lex_at(lexer, index);
+
+  if (tok_is(token, TT_PAREN))
+  {
+    // TODO: Implement! Parse everything till the till the corresponding closing paren.
+    // Paren-Arguments can contain sub parens, functions, etc.
+    return NULL;
+  }
+  else return NULL;
+}
+
+
+
 node_t* parser_execute(arena_t* arena, lexer_t* lexer)
 {
   ASSERT_NULL(arena);
@@ -536,6 +647,8 @@ node_t* parser_execute(arena_t* arena, lexer_t* lexer)
 
   if (lexer->isError || lexer->count <= 0)
     return NULL;
+
+  printf("INFO: AST generator and parser is currently under developement.\n");
 
   // TODO:
   // The parser needs to reed to the next operator, paren, or func for every node.
@@ -553,7 +666,7 @@ node_t* parser_execute(arena_t* arena, lexer_t* lexer)
 
   node_t* root = NULL;
 
-  for (size_t i = 0; i < lexer->count; ++i)
+  /*for (size_t i = 0; i < lexer->count; ++i)
   {
     token_t* tok = lex_at(lexer, i);
 
@@ -562,14 +675,14 @@ node_t* parser_execute(arena_t* arena, lexer_t* lexer)
 
     break;
 
-    /*switch (tok->type)
+    switch (tok->type)
     {
 
       case TT_COUNT:
       default:
         UNREACHABLE("Invalid token-type!");
-    }*/
-  }
+    }
+  }*/
 
   // TODO: Return root node!
   return root;

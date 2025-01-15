@@ -2,7 +2,7 @@ CC := gcc
 # debug
 #CFLAGS := -Wall -Wextra -Werror -Wpedantic -Wswitch-enum -std=c11 -ggdb
 # release
-CFLAGS := -Wall -Wextra -Werror -Wpedantic -Wswitch-enum -std=c11
+CFLAGS := -Wall -Wextra -Wpedantic -Wswitch-enum -std=c11    # -Werror -> Treat all warnings as errors
 LDLIBS := -lm
 LDFLAGS := 
 TARGET := ccalc
