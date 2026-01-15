@@ -3,4 +3,4 @@
 input="-f testFile.eval"
 linker="-l testLinkerFile.link"
 
-../bin/ccalc $input $linker
+./bin/ccalc $input $linker

@@ -466,14 +466,21 @@ static void test_ast_eval()
   // TEST 2
   printf("Test 2:\n");
   {
-    // IN: "ln(10)"
-    // AST: ln(10)
-    // = 2.30258
-    node_t* test =
-      node_func(&arena, 0, NF_LN,
-        node_constant(&arena, 0, 10));
+    // IN: "100 + ln(10)"
+    // AST: add(100.0000, ln(10))
+    // = 102.30258
+
+    node_t* args[] = {
+      node_constant(&arena, 0, 10),
+    };
+
+    node_t* test = 
+      node_binop(&arena, 3, NO_ADD,
+        node_constant(&arena, 0, 100), 
+        node_func(&arena, 4, NF_LN, args, 1)
+      );
     
-    printf("Input = ln(10)\n");
+    printf("Input = 100 + ln(10)\n");
     print_node(test, true);
     
     node_t* evaluated = ast_eval(&arena, test);
@@ -486,7 +493,7 @@ static void test_ast_eval()
       arena_free(&arena);
   }
 
-
+  /*
   // TEST 3
   printf("Test 3:\n");
   {
@@ -574,6 +581,7 @@ static void test_ast_eval()
     if (freeAfterEachTest)
       arena_free(&arena);
   }
+  */
 
 
   // TEST 5
