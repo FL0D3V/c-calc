@@ -11,9 +11,7 @@ SRC_DIR := src
 OBJ_DIR	:= obj
 BIN_DIR	:= bin
 
-TEST := -vv "  100.53 + sqrt(3.5 - EN) + cos(44.23 *   6.4^2) /   8.3 + ln(10) - PI + ln(5^EC)"
-#TEST := -vv "-5"
-#TEST := -ta
+TEST_INPUT := "  100.53 + sqrt(3.5 - EN) + cos(44.23 *   6.4^2) /   8.3 + ln(10) - PI + ln(5^EC)"
 
 EXE := $(BIN_DIR)/$(TARGET)
 SRC := $(wildcard $(SRC_DIR)/*.c)
@@ -33,7 +31,10 @@ $(BIN_DIR) $(OBJ_DIR):
 	mkdir -p $@
 
 check: $(EXE)
-	valgrind -s --leak-check=full --track-origins=yes --show-leak-kinds=all $^ $(TEST)
+	valgrind -s --leak-check=full --track-origins=yes --show-leak-kinds=all $^ -vv $(TEST_INPUT)
+
+test: $(EXE)
+	$^ -ta
 
 clean:
 	@$(RM) -rv $(BIN_DIR) $(OBJ_DIR)
@@ -41,7 +42,7 @@ clean:
 remake: clean all
 
 run: $(EXE)
-	./$(EXE) $(TEST)
+	./$(EXE) -vv $(TEST_INPUT)
 
 .PHONY: all check clean
 

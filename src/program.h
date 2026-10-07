@@ -14,7 +14,8 @@
 #define FULL_DOCUMENTATION_LINK "https://github.com/FL0D3V/c-calc"
 #define WRITTEN_BY "Florian Maier"
 #define CREATOR_LINK "https://github.com/FL0D3V"
-#define CURRENT_PROGRAM_VERSION version(0, 0, 1)  // MAJOR, MINOR, REVISION/PATCH
+
+const version_t CURRENT_PROGRAM_VERSION = VERSION_NEW(0, 0, 1);  // MAJOR, MINOR, REVISION/PATCH
 
 
 
