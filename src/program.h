@@ -646,7 +646,7 @@ static void test_ast_eval()
       arena_free(&arena);
   }
 
-
+  
   // TEST 7
   printf("Test 7:\n");
   {
@@ -699,7 +699,70 @@ static void test_ast_eval()
     if (freeAfterEachTest)
       arena_free(&arena);
   }
+  
+  printf("Test 9:\n");
+  {
+    // IN: "(2+2)*8/2"
+    // AST "divide(mult(par(add(2,2)),8),2)"
+    // = 16
+    node_t* test = 
+      node_binop(&arena, 8, NO_DIV,
+          node_binop(&arena, 6, NO_MUL,
+            node_paren(&arena, 1,
+              node_binop(&arena, 3, NO_ADD,
+                node_constant(&arena, 2, 2),
+                node_constant(&arena, 4, 2)
+              )
+            ),
+            node_constant(&arena, 2, 8)
+          ),
+          node_constant(&arena, 2, 2)
+        );
 
+    printf("Input = (2+2)*8/2\n");
+    print_node(test, true);
+
+    node_t* evaluated = ast_eval(&arena, test);
+    if (evaluated)
+      printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
+ 
+    printf("\n");
+ 
+    if (freeAfterEachTest)
+      arena_free(&arena);
+  }
+
+  printf("Test 10:\n");
+  {
+    // IN: "8/2*(2+2)"
+    // AST "divide(8,mult(2,par(add(2,2))))"
+    // = 16
+    node_t* test =
+      node_binop(&arena, 4, NO_MUL,
+          node_binop(&arena, 2, NO_DIV,
+            node_constant(&arena, 1, 8),
+            node_constant(&arena, 2, 2)
+          ),
+          node_paren(&arena, 5,
+            node_binop(&arena, 7, NO_ADD,
+              node_constant(&arena, 6, 2),
+              node_constant(&arena, 8, 2)
+            )
+          )
+        );
+ 
+      printf("Input = 8/2*(2+2)\n");
+      print_node(test, true);
+ 
+      node_t* evaluated = ast_eval(&arena, test);
+      if (evaluated)
+        printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
+ 
+      printf("\n");
+ 
+      if (freeAfterEachTest)
+        arena_free(&arena);
+  }
 
   if (!freeAfterEachTest)
     arena_free(&arena);
