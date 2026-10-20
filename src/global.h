@@ -173,6 +173,22 @@ const char operatorTypeIdentifiers[OP_COUNT] = {
   [OP_POW] = '^'
 };
 
+const int operatorPrecedence[OP_COUNT] = {
+  [OP_ADD] = 0,
+  [OP_SUB] = 0,
+  [OP_MUL] = 1,
+  [OP_DIV] = 1,
+  [OP_POW] = 2
+};
+
+const bool operatorRightAssociative[OP_COUNT] = {
+  [OP_ADD] = false,
+  [OP_SUB] = false,
+  [OP_MUL] = false,
+  [OP_DIV] = false,
+  [OP_POW] = true
+};
+
 const char* operatorTypeNames[OP_COUNT] = {
 	[OP_ADD] = "Add",
 	[OP_SUB] = "Subtract",

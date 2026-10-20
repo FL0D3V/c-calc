@@ -1,8 +1,5 @@
 CC := gcc
-# debug
-#CFLAGS := -Wall -Wextra -Werror -Wpedantic -Wswitch-enum -std=c11 -ggdb
-# release
-CFLAGS := -Wall -Wextra -Wpedantic -Wswitch-enum -std=c11    # -Werror -> Treat all warnings as errors
+CFLAGS := -Wall -Wextra -Wpedantic -Wswitch-enum -std=c11 # -Werror -> Treat all warnings as errors
 LDLIBS := -lm
 LDFLAGS := 
 TARGET := ccalc
@@ -17,9 +14,10 @@ EXE := $(BIN_DIR)/$(TARGET)
 SRC := $(wildcard $(SRC_DIR)/*.c)
 OBJ := $(SRC:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 
-# TODO: Implement debug and release builds.
-
 all: $(EXE)
+
+debug: CFLAGS += -ggdb
+debug: $(EXE)
 
 $(EXE): $(OBJ) | $(BIN_DIR)
 	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
@@ -40,10 +38,11 @@ clean:
 	@$(RM) -rv $(BIN_DIR) $(OBJ_DIR)
 
 remake: clean all
+remakeDebug: clean debug
 
 run: $(EXE)
 	./$(EXE) -vv $(TEST_INPUT)
 
-.PHONY: all check clean
+.PHONY: all check test clean remake run
 
 -include $(OBJ:.o=.d)

@@ -162,6 +162,7 @@ typedef struct {
 } node_paren_t;
 
 typedef union {
+  // TODO: Change to big number type!
   double constant;
   node_binop_t binop;
   node_function_t func;
@@ -706,15 +707,14 @@ node_t* parser_execute(arena_t* arena, lexer_t* lexer)
   if (lexer->isError || lexer->count <= 0)
     return NULL;
 
-  printf("INFO: AST generator and parser is currently under developement.\n");
-
   // TODO:
   // The parser needs to reed to the next operator, paren, or func for every node.
-  // Order checking: Brackets -> Exponents -> Multiplication -> Division -> Addition -> Substraction
+  // Order checking: Brackets -> Exponents -> Multiplication / Division -> Addition / Substraction
   // A stack for checking nested expressions in brackets. Also if the brackets are used correctly.
   // Paren checking: 2 Open '(' should have 2 Closing ')' after.
-  // After a constant / nubmer MUST come an operator, function, or closing paren
+  // After a constant / number MUST come an operator, function, or closing paren
   
+  // TODO: Rethink!
   if (!check_semantics(lexer))
     return NULL;
 
@@ -723,6 +723,8 @@ node_t* parser_execute(arena_t* arena, lexer_t* lexer)
   // Getting constants - global.h: mathConstantTypeValues[token->as.constant]
 
   node_t* root = NULL;
+
+  printf("INFO: AST generator and parser is currently under developement.\n");
 
   /*for (size_t i = 0; i < lexer->count; ++i)
   {

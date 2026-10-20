@@ -8,15 +8,15 @@
 
 // Program informations
 #define COPYRIGHT_CREATOR "Florian Maier"
-#define COPYRIGHT_YEAR "2024"
+#define COPYRIGHT_YEAR "2024-2026"
 #define PROGRAM_LICENCE_LINK "https://github.com/FL0D3V/c-calc/blob/main/LICENSE"
 #define PROGRAM_LICENCE "MIT"
 #define FULL_DOCUMENTATION_LINK "https://github.com/FL0D3V/c-calc"
 #define WRITTEN_BY "Florian Maier"
 #define CREATOR_LINK "https://github.com/FL0D3V"
 
-const version_t CURRENT_PROGRAM_VERSION = VERSION_NEW(0, 0, 1);  // MAJOR, MINOR, REVISION/PATCH
-
+// MAJOR, MINOR, REVISION/PATCH, BUILD
+static const version_t current_program_version = VERSION_NEW_EX(0, 0, 1, 1);
 
 
 // TODO:
@@ -407,15 +407,14 @@ static void print_help(const char* programName)
 static void print_current_version(const char* programName)
 {
   ASSERT_NULL(programName);
-
-  printf("Test\n");
-  printf("%s " VERSION_FORMAT "\n", programName, VERSION_ARGS(CURRENT_PROGRAM_VERSION));
-  printf("Copyright (c) " COPYRIGHT_YEAR " " COPYRIGHT_CREATOR ".\n");
-  printf("License " PROGRAM_LICENCE ": <" PROGRAM_LICENCE_LINK ">.\n");
-  printf("This is free software: you are free to change and redistribute it.\n");
+  
+  printf("%s " VERSION_FORMAT "\n", programName, VERSION_ARGS(current_program_version));
+  printf("Copyright (c): " COPYRIGHT_YEAR " " COPYRIGHT_CREATOR "\n");
+  printf("License: " PROGRAM_LICENCE " <" PROGRAM_LICENCE_LINK ">\n\n");
+  printf("This is FREE software, you are free to change and redistribute it.\n");
   printf("There is NO WARRANTY, to the extent permitted by law.\n");
   printf("\n");
-  printf("Written by " WRITTEN_BY " <" CREATOR_LINK ">.\n");
+  printf("Written by " WRITTEN_BY " <" CREATOR_LINK ">\n");
 }
 
 

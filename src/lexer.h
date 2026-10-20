@@ -43,6 +43,7 @@ static const char* tokenTypeNames[TT_COUNT] = {
 
 // Type-Definitions
 typedef union {
+  // TODO: Change to big number type!
   double number;
   e_math_constant_type constant;
   e_operator_type operator;
@@ -217,7 +218,7 @@ void lexer_print(const lexer_t* lexer)
         printf("(" DOUBLE_PRINT_FORMAT ", %s)", mathConstantTypeValues[token->as.constant], mathConstantTypeNames[token->as.constant]);
         break;
       case TT_OPERATOR:
-        printf("(%s)", operatorTypeNames[token->as.operator]);
+        printf("(%s) precedence: %d, right-associative: %s", operatorTypeNames[token->as.operator], operatorPrecedence[token->as.operator], operatorRightAssociative[token->as.operator] ? "true" : "false");
         break;
       case TT_PAREN:
         printf("(%s)", parenTypeNames[token->as.paren]);
