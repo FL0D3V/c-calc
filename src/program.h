@@ -1,10 +1,11 @@
 #ifndef _PROGRAM_H_
 #define _PROGRAM_H_
 
+#include <versioning.h>
+#define FLAG_IMPLEMENTATION
+#include <flag.h>
 #include "config.h"
-#include "versioning.h"
 #include "parser.h"
-
 
 // Program informations
 #define COPYRIGHT_CREATOR "Florian Maier"
@@ -18,7 +19,6 @@
 // MAJOR, MINOR, REVISION/PATCH, BUILD
 static const version_t current_program_version = VERSION_NEW_EX(0, 0, 1, 1);
 
-
 // TODO:
 // Make it possible to configure how the commands can be used.
 // Like multiple flags:
@@ -26,25 +26,26 @@ static const version_t current_program_version = VERSION_NEW_EX(0, 0, 1, 1);
 // 2. Does it need an extra argument (e.g.: '-e "1 + 2 - sqrt(5 ^ 10)"'; '-h', '-v'; '-vv -e "1 + 5"')
 // ...
 
-
 // All enums
 // This is usefull for: "PF_VERBOSE | PF_HELP"
-typedef enum {
-  PFF_ERROR      = 0,
+typedef enum
+{
+  PFF_ERROR = 0,
   PFF_EXPRESSION = (1u << 0),
-  PFF_VERBOSE    = (1u << 1),
-  PFF_HELP       = (1u << 2),
-  PFF_VERSION    = (1u << 3),
-  PFF_TEST_AST   = (1u << 4),   // TODO: Remove later! This is just for testing.
+  PFF_VERBOSE = (1u << 1),
+  PFF_HELP = (1u << 2),
+  PFF_VERSION = (1u << 3),
+  PFF_TEST_AST = (1u << 4), // TODO: Remove later! This is just for testing.
 } e_program_function_flags;
 
 // Must be the same layout as 'e_program_function_flags'!
-typedef enum {
+typedef enum
+{
   PFT_VERBOSE,
   PFT_HELP,
   PFT_VERSION,
   PFT_TEST_AST, // TODO: Remove later! This is just for testing.
-  
+
   PFT_COUNT,
   PFT_EXPRESSION,
   PFT_INVALID,
@@ -54,36 +55,42 @@ static_assert(PFT_COUNT == 4, "Amount of program-function-types have changed");
 
 static e_program_function_flags function_type_to_flag(e_program_function_type type)
 {
-  switch (type) {
-    case PFT_EXPRESSION: return PFF_EXPRESSION;
-    case PFT_VERBOSE:    return PFF_VERBOSE;
-    case PFT_HELP:       return PFF_HELP;
-    case PFT_VERSION:    return PFF_VERSION;
-    case PFT_TEST_AST:   return PFF_TEST_AST; // TODO: Remove later! This is just for testing.
-    case PFT_INVALID:    return PFF_ERROR;
-    case PFT_COUNT:
-    default:
-      UNREACHABLE("function_type_to_flag: Type not implemented!");
+  switch (type)
+  {
+  case PFT_EXPRESSION:
+    return PFF_EXPRESSION;
+  case PFT_VERBOSE:
+    return PFF_VERBOSE;
+  case PFT_HELP:
+    return PFF_HELP;
+  case PFT_VERSION:
+    return PFF_VERSION;
+  case PFT_TEST_AST:
+    return PFF_TEST_AST; // TODO: Remove later! This is just for testing.
+  case PFT_INVALID:
+    return PFF_ERROR;
+  case PFT_COUNT:
+  default:
+    UNREACHABLE("function_type_to_flag: Type not implemented!");
   }
 }
 
-
 #define SHORT_PREFIX "-"
 #define SHORT_PREFIX_LEN strlen(SHORT_PREFIX)
-const char* shortProgFuncTypeIdentifier[PFT_COUNT] = {
-  [PFT_VERBOSE]  = "vv",
-  [PFT_HELP]     = "h",
-  [PFT_VERSION]  = "v",
-  [PFT_TEST_AST] = "ta", // TODO: Remove later! This is just for testing.
+const char *shortProgFuncTypeIdentifier[PFT_COUNT] = {
+    [PFT_VERBOSE] = "vv",
+    [PFT_HELP] = "h",
+    [PFT_VERSION] = "v",
+    [PFT_TEST_AST] = "ta", // TODO: Remove later! This is just for testing.
 };
 
 #define LONG_PREFIX "--"
 #define LONG_PREFIX_LEN strlen(LONG_PREFIX)
-const char* longProgFuncTypeIdentifier[PFT_COUNT] = {
-  [PFT_VERBOSE]  = "verbose",
-  [PFT_HELP]     = "help",
-  [PFT_VERSION]  = "version",
-  [PFT_TEST_AST] = "test-ast", // TODO: Remove later! This is just for testing.
+const char *longProgFuncTypeIdentifier[PFT_COUNT] = {
+    [PFT_VERBOSE] = "verbose",
+    [PFT_HELP] = "help",
+    [PFT_VERSION] = "version",
+    [PFT_TEST_AST] = "test-ast", // TODO: Remove later! This is just for testing.
 };
 
 // TODO: Rethink:
@@ -97,29 +104,195 @@ const char* longProgFuncTypeIdentifier[PFT_COUNT] = {
 #define IDENTIFIER_STRING_ARGS_COL_S _IDENTIFIER_STRING_ARGS_COL("-5")
 #define IDENTIFIER_STRING_ARGS_COL_L _IDENTIFIER_STRING_ARGS_COL("-15")
 #define short_full_identifier(index) SHORT_PREFIX, shortProgFuncTypeIdentifier[(index)]
-#define long_full_identifier(index)  LONG_PREFIX, longProgFuncTypeIdentifier[(index)]
+#define long_full_identifier(index) LONG_PREFIX, longProgFuncTypeIdentifier[(index)]
 
-const char* progFuncTypeDescriptions[PFT_COUNT] = {
-  [PFT_VERBOSE]  = "Execute the given expression with verbose logging and exit.",
-  [PFT_HELP]     = "Display this help and exit.",
-  [PFT_VERSION]  = "Output version information and exit.",
-  [PFT_TEST_AST] = "Tests the ast generation and evaluation of pre defined expressions.", // TODO: Remove later! This is just for testing.
+const char *progFuncTypeDescriptions[PFT_COUNT] = {
+    [PFT_HELP] = "Display this help and exit.",
+    [PFT_VERBOSE] = "Execute the given expression with verbose logging and exit.",
+    [PFT_VERSION] = "Output version information and exit.",
+    [PFT_TEST_AST] = "Tests the ast generation and evaluation of pre defined expressions.", // TODO: Remove later! This is just for testing.
 };
 
-
-
 // Type definitions
-typedef struct {
+typedef struct
+{
   e_program_function_flags funcFlags;
   int argc;
-  char* programName;
-  char** argv;
-  char* inputExpression;
+  char *programName;
+  char **argv;
+  char *inputExpression;
 } program_t;
 
+// TODO: Rethink or implement!
+typedef struct command command_t;
 
+// TODO: RETHINK!
+static bool execute_expression(command_t *self, const char *programName, int argc, char **argv);
+static bool show_help(command_t *self, const char *programName, int argc, char **argv);
+static bool show_version(command_t *self, const char *programName, int argc, char **argv);
+static bool execute_ast_test(command_t *self, const char *programName, int argc, char **argv);
 
-static e_program_function_type cstr_to_program_function_type(const char* cstr)
+struct command
+{
+  const char *name;
+  const char *nameShort;
+  const char *short_description;
+  const char *extra_description;
+  const char *signature;
+  bool deprecated;
+  bool (*run)(command_t *self, const char *programName, int argc, char **argv);
+};
+
+void print_command_usage(FILE *sink, command_t *command, const char *program_name, void *c)
+{
+  fprintf(sink, "Usage:\n");
+  fprintf(sink, "    %s %s", program_name, command->name);
+  if (command->signature)
+  {
+    fprintf(sink, " %s", command->signature);
+  }
+  fprintf(sink, "\n");
+  fprintf(sink, "\n");
+
+  if (command->short_description)
+  {
+    fprintf(sink, "Description:\n");
+    fprintf(sink, "    %s", command->short_description);
+    if (command->extra_description)
+    {
+      fprintf(sink, " %s", command->extra_description);
+    }
+    fprintf(sink, "\n");
+    fprintf(sink, "\n");
+  }
+
+  if (c)
+  {
+    fprintf(sink, "OPTIONS:\n");
+    flag_c_print_options(c, sink);
+    fprintf(sink, "\n");
+  }
+}
+
+const command_t commands[] = {
+    {
+        .name = "exp",
+        .signature = "[OPTIONS] [EXPRESSION...]",
+        .short_description = "Execute the given expression with verbose logging and exit.",
+        .run = execute_expression,
+    },
+    {
+        .name = "help",
+        .nameShort = "h",
+        .short_description = "Display this help and exit.",
+        .run = show_help,
+    },
+    {
+        .name = "version",
+        .short_description = "Output version information and exit.",
+        .run = show_version,
+    },
+    // TODO: Remove later! This is just for testing.
+    {
+        .name = "test-ast",
+        .short_description =
+            "Tests the ast generation and evaluation of pre defined expressions.",
+        .run = execute_ast_test,
+    },
+};
+
+static bool execute_expression(command_t *self, const char *programName, int argc, char **argv)
+{
+  bool verbose = false;
+  bool help = false;
+
+  void *c = flag_c_new(programName);
+  flag_c_bool_var(c, &verbose, "v", NULL, "Execute the given expression with verbose logging and exit");
+  flag_c_bool_var(c, &help, "help", false, "Print this help message");
+
+  if (!flag_c_parse(c, argc, argv))
+  {
+    print_command_usage(stderr, self, programName, c);
+    flag_c_print_error(c, stderr);
+    return false;
+  }
+
+  argc = flag_c_rest_argc(c);
+  argv = flag_c_rest_argv(c);
+
+  if (help)
+  {
+    print_command_usage(stdout, self, programName, c);
+    return true;
+  }
+
+  if (argc <= 0)
+  {
+    print_command_usage(stderr, self, programName, c);
+    fprintf(stderr, "ERROR: no math expression provided\n");
+    return false;
+  }
+
+  arena_t arena = {0};
+
+  if (verbose)
+    printf("Verbose logging:\n");
+
+  // TODO: Rethink!
+  tokenizer_t tokenizer = tokenizer_execute(&arena, *argv);
+
+  if (tokenizer.isError)
+  {
+    arena_free(&arena);
+    return false;
+  }
+
+  if (verbose)
+    tokenizer_print(&tokenizer);
+
+  lexer_t lexer = lexer_execute(&arena, &tokenizer);
+
+  if (lexer.isError)
+  {
+    arena_free(&arena);
+    return false;
+  }
+
+  if (verbose)
+    lexer_print(&lexer);
+
+  node_t *rootNode = parser_execute(&arena, &lexer);
+
+  if (!rootNode)
+  {
+    arena_free(&arena);
+    return false;
+  }
+
+  if (verbose)
+    print_node(rootNode, true);
+
+  node_t *evaluatedNode = ast_eval(&arena, rootNode);
+
+  if (!evaluatedNode)
+  {
+    arena_free(&arena);
+    return false;
+  }
+
+  // Print result
+  printf(">>> = " DOUBLE_PRINT_FORMAT "\n", evaluatedNode->as.constant);
+
+  // Cleanup
+  arena_free(&arena);
+  return true;
+}
+
+static bool show_help(command_t *self, const char *programName, int argc, char **argv) { return true; }
+static bool show_version(command_t *self, const char *programName, int argc, char **argv) { return true; }
+static bool execute_ast_test(command_t *self, const char *programName, int argc, char **argv) { return true; }
+
+static e_program_function_type cstr_to_program_function_type(const char *cstr)
 {
   if (!cstr)
     return PFT_INVALID;
@@ -130,9 +303,9 @@ static e_program_function_type cstr_to_program_function_type(const char* cstr)
     return PFT_EXPRESSION;
 
   // Checks for a present prefix and returns the pointer to the location in the input.
-  const char* longPrefixStart = strstr(cstr, LONG_PREFIX);
-  const char* shortPrefixStart = strstr(cstr, SHORT_PREFIX);
-  
+  const char *longPrefixStart = strstr(cstr, LONG_PREFIX);
+  const char *shortPrefixStart = strstr(cstr, SHORT_PREFIX);
+
   // Checks if a specific prefix was found and if it is placed in the beginning of the string. E.g. "--COMMAND"
   const bool validLongPrefix = longPrefixStart && ((size_t)longPrefixStart - (size_t)cstr) == 0;
   const bool validShortPrefix = shortPrefixStart && ((size_t)shortPrefixStart - (size_t)cstr) == 0;
@@ -141,53 +314,47 @@ static e_program_function_type cstr_to_program_function_type(const char* cstr)
   {
     if ((validLongPrefix && strcmp(cstr + LONG_PREFIX_LEN, longProgFuncTypeIdentifier[i]) == 0) ||
         (validShortPrefix && strcmp(cstr + SHORT_PREFIX_LEN, shortProgFuncTypeIdentifier[i]) == 0))
-      return (e_program_function_type) i;
+      return (e_program_function_type)i;
   }
 
   // TODO: Remove! -> Maybe error here!
   return PFT_EXPRESSION;
 }
 
-
-static inline void program_init(program_t* prog, int argc, char** argv)
+static inline void program_init(program_t *prog, int argc, char **argv)
 {
   prog->funcFlags = PFF_ERROR;
 
   // Store only the current program name without path: './bin/PROGRAM_NAME' -> 'PROGRAM_NAME'
   cstr_chop_till_last_delim(argv, '/');
   prog->programName = *argv;
-  
+
   prog->argc = --argc;
   prog->argv = ++argv;
   prog->inputExpression = NULL;
 }
 
-
-static inline void program_set_error(program_t* prog)
+static inline void program_set_error(program_t *prog)
 {
   prog->funcFlags = PFF_ERROR;
   prog->inputExpression = NULL;
 }
 
-
-
 // All program definitions.
-static void print_usage(e_program_function_flags flags, const char* programName, int argc, char** argv);
-static void print_help(const char* programName);
-static void print_current_version(const char* programName);
-static bool handle_math_input(const char* input, bool verbose);
+static void print_usage(e_program_function_flags flags, const char *programName, int argc, char **argv);
+static void print_help(const char *programName);
+static void print_current_version(const char *programName);
+static bool handle_math_input(const char *input, bool verbose);
 static void test_ast_eval();
 
-
-
-program_t validate_cli_input(int argc, char** argv)
+program_t validate_cli_input(int argc, char **argv)
 {
   program_t prog = {0};
 
   program_init(&prog, argc, argv);
 
   // Do the pointer aritmethic on an independent variable, so the program keeps the valid state.
-  char** currentArgv = prog.argv;
+  char **currentArgv = prog.argv;
 
   // Invalid usage.
   if (prog.argc == 0)
@@ -195,7 +362,7 @@ program_t validate_cli_input(int argc, char** argv)
     program_set_error(&prog);
     return prog;
   }
-  
+
   for (int i = 0; i < prog.argc; ++i)
   {
     const e_program_function_type func = cstr_to_program_function_type(*currentArgv);
@@ -228,8 +395,7 @@ program_t validate_cli_input(int argc, char** argv)
   return prog;
 }
 
-
-int handle_program(program_t* program)
+int handle_program(program_t *program)
 {
   // Checking for invalid usage.
   if (program->funcFlags == PFF_ERROR ||
@@ -276,10 +442,8 @@ int handle_program(program_t* program)
   UNREACHABLE("handle_program: Flag not implemented!");
 }
 
-
-
 // All programs functions.
-static bool handle_math_input(const char* input, bool verbose)
+static bool handle_math_input(const char *input, bool verbose)
 {
   arena_t arena = {0};
 
@@ -287,18 +451,20 @@ static bool handle_math_input(const char* input, bool verbose)
     printf("Executing VERBOSE:\n");
 
   tokenizer_t tokenizer = tokenizer_execute(&arena, input);
-  
-  if (tokenizer.isError) {
+
+  if (tokenizer.isError)
+  {
     arena_free(&arena);
     return false;
   }
 
   if (verbose)
     tokenizer_print(&tokenizer);
-  
+
   lexer_t lexer = lexer_execute(&arena, &tokenizer);
 
-  if (lexer.isError) {
+  if (lexer.isError)
+  {
     arena_free(&arena);
     return false;
   }
@@ -306,9 +472,10 @@ static bool handle_math_input(const char* input, bool verbose)
   if (verbose)
     lexer_print(&lexer);
 
-  node_t* rootNode = parser_execute(&arena, &lexer);
+  node_t *rootNode = parser_execute(&arena, &lexer);
 
-  if (!rootNode) {
+  if (!rootNode)
+  {
     arena_free(&arena);
     return false;
   }
@@ -316,9 +483,10 @@ static bool handle_math_input(const char* input, bool verbose)
   if (verbose)
     print_node(rootNode, true);
 
-  node_t* evaluatedNode = ast_eval(&arena, rootNode);
-  
-  if (!evaluatedNode) {
+  node_t *evaluatedNode = ast_eval(&arena, rootNode);
+
+  if (!evaluatedNode)
+  {
     arena_free(&arena);
     return false;
   }
@@ -329,19 +497,20 @@ static bool handle_math_input(const char* input, bool verbose)
   return true;
 }
 
-
-static void print_usage(e_program_function_flags flags, const char* programName, int argc, char** argv)
+static void print_usage(e_program_function_flags flags, const char *programName, int argc, char **argv)
 {
   ASSERT_NULL(programName);
-  
+
   // PROG_NAME: invalid option -- 'ALL GIVEN PARAMS'
   // Try 'PROG_NAME --help' or '-h' for more information.
 
   fprintf(stderr, "%s: invalid option -- '", programName);
   for (int i = 0; i < argc; ++i)
   {
-    if (i >= argc - 1) fprintf(stderr, "%s", *argv++);
-    else fprintf(stderr, "%s", *argv++);
+    if (i >= argc - 1)
+      fprintf(stderr, "%s", *argv++);
+    else
+      fprintf(stderr, "%s", *argv++);
   }
   fprintf(stderr, "'\n");
 
@@ -355,8 +524,7 @@ static void print_usage(e_program_function_flags flags, const char* programName,
   fprintf(stderr, "'%s " IDENTIFIER_STRING_ARGS "' or '" IDENTIFIER_STRING_ARGS "' for more information.\n", programName, long_full_identifier(PFT_HELP), short_full_identifier(PFT_HELP));
 }
 
-
-static void print_help(const char* programName)
+static void print_help(const char *programName)
 {
   ASSERT_NULL(programName);
 
@@ -368,15 +536,13 @@ static void print_help(const char* programName)
   printf("  %s \"10.5 + 30 - sqrt(PI * 5.2) / 8\"\n", programName);
   printf("\n");
 
-
   // Prints the cli options.
   printf("The options below may be used for printing the expression execution verbose\n");
   printf("or for example getting the current version.\n");
   for (size_t i = 0; i < PFT_COUNT; ++i)
     printf("  " IDENTIFIER_STRING_ARGS_COL_S " " IDENTIFIER_STRING_ARGS_COL_L "  %s\n", short_full_identifier(i), long_full_identifier(i), progFuncTypeDescriptions[i]);
-  
-  printf("\n");
 
+  printf("\n");
 
   // Prints program inforamtions.
   printf("Supported operators [USAGE, NAME]:\n");
@@ -387,28 +553,26 @@ static void print_help(const char* programName)
   printf("Supported functions [USAGE(x), DESCRIPTION]:\n");
   for (size_t i = 0; i < FT_COUNT; ++i)
     printf("  %-10s%s\n", functionTypeIdentifiers[i], functionTypeDescriptions[i]);
-  
+
   printf("\n");
 
   printf("Supported math-constants [USAGE, NAME]:\n");
   for (size_t i = 0; i < MC_COUNT; ++i)
     printf("  %-10s%s\n", mathConstantTypeIdentifiers[i], mathConstantTypeNames[i]);
-  
+
   printf("\n");
 
   print_global_program_config_help();
 
   printf("\n");
-  
+
   printf("Full documentation <" FULL_DOCUMENTATION_LINK ">\n");
 }
 
-
-static void print_current_version(const char* programName)
+static void print_current_version(const char *programName)
 {
-  ASSERT_NULL(programName);
-  
-  printf("%s " VERSION_FORMAT "\n", programName, VERSION_ARGS(current_program_version));
+  print_version(&current_program_version, programName);
+
   printf("Copyright (c): " COPYRIGHT_YEAR " " COPYRIGHT_CREATOR "\n");
   printf("License: " PROGRAM_LICENCE " <" PROGRAM_LICENCE_LINK ">\n\n");
   printf("This is FREE software, you are free to change and redistribute it.\n");
@@ -416,7 +580,6 @@ static void print_current_version(const char* programName)
   printf("\n");
   printf("Written by " WRITTEN_BY " <" CREATOR_LINK ">\n");
 }
-
 
 // INFO: Just for testing! Remove later!
 static void test_ast_eval()
@@ -432,27 +595,22 @@ static void test_ast_eval()
     // IN: "1 + 2 + (PI ^ 2) / 3"
     // AST: add(1.00000, add(2.00000, divide(paren(pow(3.14159, 2.00000)), 3.00000)))
     // = 6,28986
-    node_t* test =
-      node_binop(&arena, 0, NO_ADD,
-        node_constant(&arena, 0, 1),
+    node_t *test =
         node_binop(&arena, 0, NO_ADD,
-          node_constant(&arena, 0, 2),
-          node_binop(&arena, 0, NO_DIV,
-            node_paren(&arena, 0,
-              node_binop(&arena, 0, NO_POW,
-                node_constant(&arena, 0, mathConstantTypeValues[MC_PI]),
-                node_constant(&arena, 0, 2)
-              )
-            ),
-            node_constant(&arena, 0, 3)
-          )
-        )
-      );
+                   node_constant(&arena, 0, 1),
+                   node_binop(&arena, 0, NO_ADD,
+                              node_constant(&arena, 0, 2),
+                              node_binop(&arena, 0, NO_DIV,
+                                         node_paren(&arena, 0,
+                                                    node_binop(&arena, 0, NO_POW,
+                                                               node_constant(&arena, 0, mathConstantTypeValues[MC_PI]),
+                                                               node_constant(&arena, 0, 2))),
+                                         node_constant(&arena, 0, 3))));
 
     printf("Input = 1 + 2 + (PI ^ 2) / 3\n");
     print_node(test, true);
-    
-    node_t* evaluated = ast_eval(&arena, test);
+
+    node_t *evaluated = ast_eval(&arena, test);
     if (evaluated)
       printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
 
@@ -462,7 +620,6 @@ static void test_ast_eval()
       arena_free(&arena);
   }
 
-
   // TEST 2
   printf("Test 2:\n");
   {
@@ -470,20 +627,19 @@ static void test_ast_eval()
     // AST: add(100.0000, ln(10))
     // = 102.30258
 
-    node_t* args[] = {
-      node_constant(&arena, 0, 10),
+    node_t *args[] = {
+        node_constant(&arena, 0, 10),
     };
 
-    node_t* test = 
-      node_binop(&arena, 3, NO_ADD,
-        node_constant(&arena, 0, 100), 
-        node_func(&arena, 4, NF_LN, args, 1)
-      );
-    
+    node_t *test =
+        node_binop(&arena, 3, NO_ADD,
+                   node_constant(&arena, 0, 100),
+                   node_func(&arena, 4, NF_LN, args, 1));
+
     printf("Input = 100 + ln(10)\n");
     print_node(test, true);
-    
-    node_t* evaluated = ast_eval(&arena, test);
+
+    node_t *evaluated = ast_eval(&arena, test);
     if (evaluated)
       printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
 
@@ -543,7 +699,7 @@ static void test_ast_eval()
 
     printf("Input = 100.53 + sqrt(3.5 - EN) + cos(44.23 * 6.4^2) / 8.3 + ln(10) - PI + ln(5^EC)\n");
     print_node(test, true);
-    
+
     node_t* evaluated = ast_eval(&arena, test);
     if (evaluated)
       printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
@@ -568,10 +724,10 @@ static void test_ast_eval()
           node_constant(&arena, 0, 4)
         )
       );
-    
+
     printf("Input = 10.5 * exp(4)\n");
     print_node(test, true);
-    
+
     node_t* evaluated = ast_eval(&arena, test);
     if (evaluated)
       printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
@@ -583,31 +739,26 @@ static void test_ast_eval()
   }
   */
 
-
   // TEST 5
   printf("Test 5:\n");
   {
     // IN: "10 + 5 / (5 * 0)"
     // AST: "add(10, divide(5, paren(mult(5, 0))))"
     // = ERR (Divide by Zero)
-    node_t* test =
-      node_binop(&arena, 3, NO_ADD,
-        node_constant(&arena, 0, 10),
-        node_binop(&arena, 6, NO_DIV,
-          node_constant(&arena, 4, 5),
-          node_paren(&arena, 8,
-            node_binop(&arena, 10, NO_MUL,
-              node_constant(&arena, 9, 5),
-              node_constant(&arena, 11, 0)
-            )
-          )
-        )
-      );
+    node_t *test =
+        node_binop(&arena, 3, NO_ADD,
+                   node_constant(&arena, 0, 10),
+                   node_binop(&arena, 6, NO_DIV,
+                              node_constant(&arena, 4, 5),
+                              node_paren(&arena, 8,
+                                         node_binop(&arena, 10, NO_MUL,
+                                                    node_constant(&arena, 9, 5),
+                                                    node_constant(&arena, 11, 0)))));
 
     printf("Input = 10 + 5 / (5 * 0)\n");
     print_node(test, true);
 
-    node_t* evaluated = ast_eval(&arena, test);
+    node_t *evaluated = ast_eval(&arena, test);
     if (evaluated)
       printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
 
@@ -617,25 +768,22 @@ static void test_ast_eval()
       arena_free(&arena);
   }
 
-  
   // TEST 6
   printf("Test 6:\n");
   {
     // IN: "(5 * 0)"
     // AST: "paren(mult(5, 0))"
     // = 5
-    node_t* test =
-      node_paren(&arena, 0,
-        node_binop(&arena, 0, NO_MUL,
-          node_constant(&arena, 0, 5),
-          node_constant(&arena, 0, 0)
-        )
-      );
+    node_t *test =
+        node_paren(&arena, 0,
+                   node_binop(&arena, 0, NO_MUL,
+                              node_constant(&arena, 0, 5),
+                              node_constant(&arena, 0, 0)));
 
     printf("Input = (5 * 0)\n");
     print_node(test, true);
 
-    node_t* evaluated = ast_eval(&arena, test);
+    node_t *evaluated = ast_eval(&arena, test);
     if (evaluated)
       printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
 
@@ -645,23 +793,21 @@ static void test_ast_eval()
       arena_free(&arena);
   }
 
-  
   // TEST 7
   printf("Test 7:\n");
   {
     // IN: "10 / 0"
     // AST: "div(10, 0)"
     // = ERR (Divide by Zero)
-    node_t* test =
-      node_binop(&arena, 2, NO_DIV,
-        node_constant(&arena, 0, 10),
-        node_constant(&arena, 4, 0)
-      );
+    node_t *test =
+        node_binop(&arena, 2, NO_DIV,
+                   node_constant(&arena, 0, 10),
+                   node_constant(&arena, 4, 0));
 
     printf("Input = 10 / 0\n");
     print_node(test, true);
 
-    node_t* evaluated = ast_eval(&arena, test);
+    node_t *evaluated = ast_eval(&arena, test);
     if (evaluated)
       printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
 
@@ -670,7 +816,6 @@ static void test_ast_eval()
     if (freeAfterEachTest)
       arena_free(&arena);
   }
-
 
   // TEST 8
   printf("Test 8:\n");
@@ -678,18 +823,16 @@ static void test_ast_eval()
     // IN: "10 / (4)"
     // AST: "div(10, paren(4))"
     // = 2.5
-    node_t* test =
-      node_binop(&arena, 2, NO_DIV,
-        node_constant(&arena, 0, 10),
-        node_paren(&arena, 4,
-          node_constant(&arena, 5, 4)
-        )
-      );
+    node_t *test =
+        node_binop(&arena, 2, NO_DIV,
+                   node_constant(&arena, 0, 10),
+                   node_paren(&arena, 4,
+                              node_constant(&arena, 5, 4)));
 
     printf("Input = 10 / (4)\n");
     print_node(test, true);
 
-    node_t* evaluated = ast_eval(&arena, test);
+    node_t *evaluated = ast_eval(&arena, test);
     if (evaluated)
       printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
 
@@ -698,35 +841,31 @@ static void test_ast_eval()
     if (freeAfterEachTest)
       arena_free(&arena);
   }
-  
+
   printf("Test 9:\n");
   {
     // IN: "(2+2)*8/2"
     // AST "divide(mult(par(add(2,2)),8),2)"
     // = 16
-    node_t* test = 
-      node_binop(&arena, 8, NO_DIV,
-          node_binop(&arena, 6, NO_MUL,
-            node_paren(&arena, 1,
-              node_binop(&arena, 3, NO_ADD,
-                node_constant(&arena, 2, 2),
-                node_constant(&arena, 4, 2)
-              )
-            ),
-            node_constant(&arena, 2, 8)
-          ),
-          node_constant(&arena, 2, 2)
-        );
+    node_t *test =
+        node_binop(&arena, 8, NO_DIV,
+                   node_binop(&arena, 6, NO_MUL,
+                              node_paren(&arena, 1,
+                                         node_binop(&arena, 3, NO_ADD,
+                                                    node_constant(&arena, 2, 2),
+                                                    node_constant(&arena, 4, 2))),
+                              node_constant(&arena, 2, 8)),
+                   node_constant(&arena, 2, 2));
 
     printf("Input = (2+2)*8/2\n");
     print_node(test, true);
 
-    node_t* evaluated = ast_eval(&arena, test);
+    node_t *evaluated = ast_eval(&arena, test);
     if (evaluated)
       printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
- 
+
     printf("\n");
- 
+
     if (freeAfterEachTest)
       arena_free(&arena);
   }
@@ -736,31 +875,27 @@ static void test_ast_eval()
     // IN: "8/2*(2+2)"
     // AST "divide(8,mult(2,par(add(2,2))))"
     // = 16
-    node_t* test =
-      node_binop(&arena, 4, NO_MUL,
-          node_binop(&arena, 2, NO_DIV,
-            node_constant(&arena, 1, 8),
-            node_constant(&arena, 2, 2)
-          ),
-          node_paren(&arena, 5,
-            node_binop(&arena, 7, NO_ADD,
-              node_constant(&arena, 6, 2),
-              node_constant(&arena, 8, 2)
-            )
-          )
-        );
- 
-      printf("Input = 8/2*(2+2)\n");
-      print_node(test, true);
- 
-      node_t* evaluated = ast_eval(&arena, test);
-      if (evaluated)
-        printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
- 
-      printf("\n");
- 
-      if (freeAfterEachTest)
-        arena_free(&arena);
+    node_t *test =
+        node_binop(&arena, 4, NO_MUL,
+                   node_binop(&arena, 2, NO_DIV,
+                              node_constant(&arena, 1, 8),
+                              node_constant(&arena, 2, 2)),
+                   node_paren(&arena, 5,
+                              node_binop(&arena, 7, NO_ADD,
+                                         node_constant(&arena, 6, 2),
+                                         node_constant(&arena, 8, 2))));
+
+    printf("Input = 8/2*(2+2)\n");
+    print_node(test, true);
+
+    node_t *evaluated = ast_eval(&arena, test);
+    if (evaluated)
+      printf("= " DOUBLE_PRINT_FORMAT "\n", evaluated->as.constant);
+
+    printf("\n");
+
+    if (freeAfterEachTest)
+      arena_free(&arena);
   }
 
   if (!freeAfterEachTest)

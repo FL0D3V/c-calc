@@ -2,6 +2,7 @@ CC := gcc
 CFLAGS := -Wall -Wextra -Wpedantic -Wswitch-enum -std=c11 # -Werror -> Treat all warnings as errors
 LDLIBS := -lm
 LDFLAGS := 
+INCLUDE_DIRS := -Ithirdparty
 TARGET := ccalc
 
 SRC_DIR := src
@@ -23,7 +24,7 @@ $(EXE): $(OBJ) | $(BIN_DIR)
 	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(INCLUDE_DIRS) $(CFLAGS) -c $< -o $@
 
 $(BIN_DIR) $(OBJ_DIR):
 	mkdir -p $@
