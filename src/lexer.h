@@ -6,18 +6,17 @@
 // Error handling
 #define L_ERROR_NAME "LEXING-ERROR"
 #define L_ERROR_INVALID_NUMBER(cursor, tok) fprintf(stderr, L_ERROR_NAME ":%zu: A number can only contain 1 comma ('" IN_TOK_FMT "')!\n", (cursor), IN_TOK_ARG(tok))
-#define L_ERROR_INVALID_TOKEN(cursor, tok)  fprintf(stderr, L_ERROR_NAME ":%zu: '" IN_TOK_FMT "' is an invalid token!\n", (cursor), IN_TOK_ARG(tok))
-#define L_ERROR_GIVEN_LEXER_INVALID()       fprintf(stderr, L_ERROR_NAME ": Can't print the lexer because an error happend!\n")
-
+#define L_ERROR_INVALID_TOKEN(cursor, tok) fprintf(stderr, L_ERROR_NAME ":%zu: '" IN_TOK_FMT "' is an invalid token!\n", (cursor), IN_TOK_ARG(tok))
+#define L_ERROR_GIVEN_LEXER_INVALID() fprintf(stderr, L_ERROR_NAME ": Can't print the lexer because an error happend!\n")
 
 // TODO: Implement variables and variable assigning
 // Variables could look like e.g.: 'a', 'b', 'out1'
 // Variable assigning could look like: ':=' or '='
 // Also 'solve' could be a function which allows for using the '=' literal inside and variables for more complex expressions and equations.
 
-
 // All enums
-typedef enum {
+typedef enum
+{
   TT_NUMBER,
   TT_MATH_CONSTANT,
   TT_OPERATOR,
@@ -31,18 +30,18 @@ typedef enum {
 
 static_assert(TT_COUNT == 6, "Amount of token-types have changed");
 
-static const char* tokenTypeNames[TT_COUNT] = {
-	[TT_NUMBER] = "Number",
-  [TT_MATH_CONSTANT] = "Constant",
-  [TT_OPERATOR] = "Operator",
-  [TT_PAREN] = "Parenthesis",
-  [TT_FUNCTION] = "Function",
-  [TT_LITERAL] = "Literal",
+static const char *tokenTypeNames[TT_COUNT] = {
+    [TT_NUMBER] = "Number",
+    [TT_MATH_CONSTANT] = "Constant",
+    [TT_OPERATOR] = "Operator",
+    [TT_PAREN] = "Parenthesis",
+    [TT_FUNCTION] = "Function",
+    [TT_LITERAL] = "Literal",
 };
 
-
 // Type-Definitions
-typedef union {
+typedef union
+{
   // TODO: Change to big number type!
   double number;
   e_math_constant_type constant;
@@ -52,42 +51,40 @@ typedef union {
   e_common_literal_type literal;
 } u_token_as;
 
-typedef struct {
+typedef struct
+{
   e_token_type type;
   size_t cursor;
   u_token_as as;
 } token_t;
 
-typedef struct {
-  token_t* items;
+typedef struct
+{
+  token_t *items;
   size_t capacity;
   size_t count;
   bool isError;
 } lexer_t;
 
-
-#define add_number_token(a, lexer, num, curr)        arena_da_append((a), (lexer), ((token_t) { .type = TT_NUMBER,        .as.number   = (num), .cursor = (curr) }))
-#define add_math_constant_token(a, lexer, mc, curr)  arena_da_append((a), (lexer), ((token_t) { .type = TT_MATH_CONSTANT, .as.constant = (mc),  .cursor = (curr) }))
-#define add_operator_token(a, lexer, op, curr)       arena_da_append((a), (lexer), ((token_t) { .type = TT_OPERATOR,      .as.operator = (op),  .cursor = (curr) }))
-#define add_paren_token(a, lexer, pt, curr)          arena_da_append((a), (lexer), ((token_t) { .type = TT_PAREN,         .as.paren    = (pt),  .cursor = (curr) }))
-#define add_function_token(a, lexer, ft, curr)       arena_da_append((a), (lexer), ((token_t) { .type = TT_FUNCTION,      .as.function = (ft),  .cursor = (curr) }))
-#define add_literal_token(a, lexer, clt, curr)       arena_da_append((a), (lexer), ((token_t) { .type = TT_LITERAL,       .as.literal =  (clt), .cursor = (curr) }))
-
+#define add_number_token(a, lexer, num, curr) arena_da_append((a), (lexer), ((token_t){.type = TT_NUMBER, .as.number = (num), .cursor = (curr)}))
+#define add_math_constant_token(a, lexer, mc, curr) arena_da_append((a), (lexer), ((token_t){.type = TT_MATH_CONSTANT, .as.constant = (mc), .cursor = (curr)}))
+#define add_operator_token(a, lexer, op, curr) arena_da_append((a), (lexer), ((token_t){.type = TT_OPERATOR, .as.operator=(op), .cursor = (curr)}))
+#define add_paren_token(a, lexer, pt, curr) arena_da_append((a), (lexer), ((token_t){.type = TT_PAREN, .as.paren = (pt), .cursor = (curr)}))
+#define add_function_token(a, lexer, ft, curr) arena_da_append((a), (lexer), ((token_t){.type = TT_FUNCTION, .as.function = (ft), .cursor = (curr)}))
+#define add_literal_token(a, lexer, clt, curr) arena_da_append((a), (lexer), ((token_t){.type = TT_LITERAL, .as.literal = (clt), .cursor = (curr)}))
 
 // Helpers
-#define lex_at(lexer, idx)            (&(lexer)->items[(idx)])
+#define lex_at(lexer, idx) (&(lexer)->items[(idx)])
 #define lex_next_in_range(lexer, idx) ((idx) < (lexer)->count - 1)
 
-#define tok_is(tok, t)                ((tok)->type == (t))
-#define tok_not(tok, t)               ((tok)->type != (t))
+#define tok_is(tok, t) ((tok)->type == (t))
+#define tok_not(tok, t) ((tok)->type != (t))
 
-#define tok_is_paren(tok, pt)           (tok_is(tok, TT_PAREN) && (tok)->as.paren == (pt))
+#define tok_is_paren(tok, pt) (tok_is(tok, TT_PAREN) && (tok)->as.paren == (pt))
 #define tok_not_specific_paren(tok, pt) (tok_not((tok), TT_PAREN) || (tok)->as.paren != (pt))
-#define tok_is_number_operator(tok)     (tok_is(tok, TT_OPERATOR) && ((tok)->as.operator == OP_ADD || (tok)->as.operator == OP_SUB))
+#define tok_is_number_operator(tok) (tok_is(tok, TT_OPERATOR) && ((tok)->as.operator== OP_ADD ||(tok)->as.operator== OP_SUB))
 
-
-
-lexer_t lexer_execute(arena_t* arena, tokenizer_t* tokenizer)
+lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(tokenizer);
@@ -96,7 +93,7 @@ lexer_t lexer_execute(arena_t* arena, tokenizer_t* tokenizer)
 
   for (size_t i = 0; i < tokenizer->count; ++i)
   {
-    const input_token_t* currentToken = &tokenizer->items[i];
+    const input_token_t *currentToken = &tokenizer->items[i];
 
     // Operator needs to be checked at first because else the double conversion fails on number parsing.
     if (cstr_is_operator_ex(currentToken->value, currentToken->length))
@@ -110,16 +107,16 @@ lexer_t lexer_execute(arena_t* arena, tokenizer_t* tokenizer)
       continue;
     }
 
-
     // Number checking
     num_check_t numCheck = cstr_is_number_ex(currentToken->value, currentToken->length);
 
-    if (numCheck.ret == 1) UNREACHABLE("Number-Token was NULL!");
+    if (numCheck.ret == 1)
+      UNREACHABLE("Number-Token was NULL!");
     else if (numCheck.ret == 0)
     {
-      char* endptr;
+      char *endptr;
       double number = strtof(currentToken->value, &endptr);
-      
+
       if (!endptr || endptr == currentToken->value || (size_t)(endptr - currentToken->value) != currentToken->length)
         UNREACHABLE("Error while converting a number!");
 
@@ -135,7 +132,6 @@ lexer_t lexer_execute(arena_t* arena, tokenizer_t* tokenizer)
     }
     // Else: Not a number.
 
-
     if (cstr_is_paren_ex(currentToken->value, currentToken->length))
     {
       e_paren_type pt = cstr_to_paren_type_ex(currentToken->value, currentToken->length);
@@ -146,7 +142,6 @@ lexer_t lexer_execute(arena_t* arena, tokenizer_t* tokenizer)
       add_paren_token(arena, &lexer, pt, currentToken->cursor);
       continue;
     }
-
 
     if (cstr_is_math_constant_ex(currentToken->value, currentToken->length))
     {
@@ -159,7 +154,6 @@ lexer_t lexer_execute(arena_t* arena, tokenizer_t* tokenizer)
       continue;
     }
 
-
     if (cstr_is_function_ex(currentToken->value, currentToken->length))
     {
       e_function_type ft = cstr_to_function_type_ex(currentToken->value, currentToken->length);
@@ -170,7 +164,6 @@ lexer_t lexer_execute(arena_t* arena, tokenizer_t* tokenizer)
       add_function_token(arena, &lexer, ft, currentToken->cursor);
       continue;
     }
-
 
     if (cstr_is_common_literal_ex(currentToken->value, currentToken->length))
     {
@@ -183,7 +176,6 @@ lexer_t lexer_execute(arena_t* arena, tokenizer_t* tokenizer)
       continue;
     }
 
-    
     // ERROR: Invalid token.
     L_ERROR_INVALID_TOKEN(currentToken->cursor, currentToken);
     lexer.isError = true;
@@ -192,11 +184,10 @@ lexer_t lexer_execute(arena_t* arena, tokenizer_t* tokenizer)
   return lexer;
 }
 
-
-void lexer_print(const lexer_t* lexer)
+void lexer_print(const lexer_t *lexer)
 {
   ASSERT_NULL(lexer);
-  
+
   if (lexer->isError || lexer->count == 0)
   {
     L_ERROR_GIVEN_LEXER_INVALID();
@@ -204,37 +195,39 @@ void lexer_print(const lexer_t* lexer)
   }
 
   printf("Printing lexed tokens (%zu tokens):\n", lexer->count);
-  
-  for (size_t i = 0; i < lexer->count; ++i) {
-    token_t* token = &lexer->items[i];
+
+  for (size_t i = 0; i < lexer->count; ++i)
+  {
+    token_t *token = &lexer->items[i];
 
     printf("%s", tokenTypeNames[token->type]);
 
-    switch (token->type) {
-      case TT_NUMBER:
-        printf("(" DOUBLE_PRINT_FORMAT ")", token->as.number);
-        break;
-      case TT_MATH_CONSTANT:
-        printf("(" DOUBLE_PRINT_FORMAT ", %s)", mathConstantTypeValues[token->as.constant], mathConstantTypeNames[token->as.constant]);
-        break;
-      case TT_OPERATOR:
+    switch (token->type)
+    {
+    case TT_NUMBER:
+      printf("(" DOUBLE_PRINT_FORMAT ")", token->as.number);
+      break;
+    case TT_MATH_CONSTANT:
+      printf("(" DOUBLE_PRINT_FORMAT ", %s)", mathConstantTypeValues[token->as.constant], mathConstantTypeNames[token->as.constant]);
+      break;
+    case TT_OPERATOR:
         printf("(%s) precedence: %d, right-associative: %s", operatorTypeNames[token->as.operator], operatorPrecedence[token->as.operator], operatorRightAssociative[token->as.operator] ? "true" : "false");
         break;
-      case TT_PAREN:
-        printf("(%s)", parenTypeNames[token->as.paren]);
-        break;
-      case TT_FUNCTION:
-        printf("(%s, %s)", functionTypeIdentifiers[token->as.function], functionTypeNames[token->as.function]);
-        break;
-      case TT_LITERAL:
-        printf("(%s)", commonLiteralTypeNames[token->as.literal]);
-        break;
-      case TT_COUNT:
-      default:
-        UNREACHABLE("Invalid token-type!");
-        break;
+    case TT_PAREN:
+      printf("(%s)", parenTypeNames[token->as.paren]);
+      break;
+    case TT_FUNCTION:
+      printf("(%s, %s)", functionTypeIdentifiers[token->as.function], functionTypeNames[token->as.function]);
+      break;
+    case TT_LITERAL:
+      printf("(%s)", commonLiteralTypeNames[token->as.literal]);
+      break;
+    case TT_COUNT:
+    default:
+      UNREACHABLE("Invalid token-type!");
+      break;
     }
-    
+
     printf("\n");
   }
 }

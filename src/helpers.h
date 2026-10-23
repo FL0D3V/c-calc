@@ -7,37 +7,43 @@
 #include <assert.h>
 #include <string.h>
 #include <stdbool.h>
-
+#include <math.h>
 
 // Errors
-#define UNREACHABLE_MSG(message)    fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message)
-#define UNREACHABLE(message)        do { UNREACHABLE_MSG(message); abort(); } while(0)
-#define UNREACHABLE_DEFER(message)  do { UNREACHABLE_MSG(message); goto defer; } while(0)
-#define ASSERT_NULL(value)          assert((value) && #value)
-#define return_defer()              goto defer
-
+#define UNREACHABLE_MSG(message) fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message)
+#define UNREACHABLE(message)  \
+  do                          \
+  {                           \
+    UNREACHABLE_MSG(message); \
+    abort();                  \
+  } while (0)
+#define UNREACHABLE_DEFER(message) \
+  do                               \
+  {                                \
+    UNREACHABLE_MSG(message);      \
+    goto defer;                    \
+  } while (0)
+#define ASSERT_NULL(value) assert((value) && #value)
+#define return_defer() goto defer
 
 // Bool functions
 #define bool_cstr(flag) (flag) ? "true" : "false"
 
-
-
 // String functions
-void cstr_chop_till_last_delim(char** cstr, char delimiter)
+void cstr_chop_till_last_delim(char **cstr, char delimiter)
 {
   if (!cstr)
     return;
 
   size_t len = strlen(*cstr);
   size_t index = 0;
-  
+
   for (size_t i = 0; i < len; ++i)
     if ((*cstr)[i] == delimiter)
       index = i;
-  
+
   *cstr += index + 1;
 }
-
 
 // Bit-Operations
 #define set_bit(flags, bit) flags |= bit
@@ -62,5 +68,15 @@ bool is_not_only_bit_set(int flags, int bit)
   return false;
 }
 
+// Compares two doubles up to a specific number of decimal places.
+// Returns true if they match up to the given precision.
+bool compare_doubles(double a, double b, int decimal_places)
+{
+  // Calculate epsilon (e.g., 2 decimal places -> 0.01, 3 -> 0.001)
+  double epsilon = pow(10, -decimal_places);
+
+  // fabs() gets the absolute difference between the two numbers
+  return fabs(a - b) < epsilon;
+}
 
 #endif // !_HELPERS_H_

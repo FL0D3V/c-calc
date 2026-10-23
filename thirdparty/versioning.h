@@ -20,16 +20,4 @@ typedef struct
 #define VERSION_FORMAT "v%zu.%zu.%zu-%zu"
 #define VERSION_ARGS(v) (v)->major, (v)->minor, (v)->revision, (v)->build
 
-void print_version(const version_t *version, const char *programName)
-{
-  if (programName)
-    printf("%s " VERSION_FORMAT "\n", programName, VERSION_ARGS(version));
-  else
-    printf(VERSION_FORMAT "\n", VERSION_ARGS(version));
-
-#ifdef COMPILER_VERSION
-  printf("Compiler: %s\n", COMPILER_VERSION);
-#endif
-}
-
 #endif // !_VERSIONING_H_
