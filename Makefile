@@ -20,6 +20,9 @@ all: $(EXE)
 debug: CFLAGS += -ggdb
 debug: $(EXE)
 
+release: CFLAGS += -O3
+release: $(EXE)
+
 $(EXE): $(OBJ) | $(BIN_DIR)
 	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
@@ -29,11 +32,14 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
 $(BIN_DIR) $(OBJ_DIR):
 	mkdir -p $@
 
-check: $(EXE)
-	valgrind -s --leak-check=full --track-origins=yes --show-leak-kinds=all $^ -vv $(TEST_INPUT)
+check1: $(EXE)
+	valgrind -s --leak-check=full --track-origins=yes --show-leak-kinds=all $^ input -v $(TEST_INPUT)
+
+check2: $(EXE)
+	valgrind -s --leak-check=full --track-origins=yes --show-leak-kinds=all $^ test -v
 
 test: $(EXE)
-	$^ -ta
+	$^ test
 
 clean:
 	@$(RM) -rv $(BIN_DIR) $(OBJ_DIR)
@@ -42,7 +48,7 @@ remake: clean all
 remakeDebug: clean debug
 
 run: $(EXE)
-	./$(EXE) -vv $(TEST_INPUT)
+	./$(EXE) input -v $(TEST_INPUT)
 
 .PHONY: all check test clean remake run
 

@@ -120,12 +120,13 @@ static const char *globalProgramModeDescriptions[GPM_COUNT] = {
 static e_global_program_mode _globalProgramMode = GPM_SINGLE_CLI_EXPRESSION_ARG;
 
 // Used for changing the program mode.
-void change_global_program_mode(e_global_program_mode mode)
+bool change_global_program_mode(e_global_program_mode mode)
 {
   ASSERT_PROGRAM_MODE(mode);
   if (_globalProgramMode == mode)
-    return;
+    return false;
   _globalProgramMode = mode;
+  return true;
 }
 
 typedef enum

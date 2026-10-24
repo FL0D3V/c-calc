@@ -1,8 +1,6 @@
 #ifndef _PARSER_H_
 #define _PARSER_H_
 
-#include <math.h>
-
 #include "lexer.h"
 
 // Errors
@@ -556,16 +554,16 @@ node_t *parser_execute(arena_t *arena, lexer_t *lexer)
   // Paren checking: 2 Open '(' should have 2 Closing ')' after.
   // After a constant / number MUST come an operator, function, or closing paren
 
+  printf("INFO: AST generator and parser is currently under developement.\n");
+
   // TODO: Rethink!
-  if (!check_semantics(lexer))
-    return NULL;
+  // if (!check_semantics(lexer))
+  //   return NULL;
 
   // IN: "EN + 5 / (5 * 0)"
   // AST: "add(EN, divide(5, paren(mult(5, 0))))"
 
   node_t *root = NULL;
-
-  printf("INFO: AST generator and parser is currently under developement.\n");
 
   /*for (size_t i = 0; i < lexer->count; ++i)
   {
@@ -893,6 +891,72 @@ void print_node(node_t *node, bool indented)
 {
   print_node_ex(node, indented, 0);
   printf("\n");
+}
+
+typedef struct
+{
+  const char *inputExpression;
+  double expectedResult;
+  bool shouldFail;
+  node_t *expressionTree;
+} node_test_t;
+
+bool execute_test(arena_t *arena, node_test_t *test, bool verbose, bool freeArena)
+{
+  if (verbose)
+  {
+    printf("\n");
+    print_node(test->expressionTree, true);
+    printf("\n");
+  }
+
+  printf("Input       = %s\n", test->inputExpression);
+  if (!test->shouldFail)
+    printf("Expected    = " DOUBLE_PRINT_FORMAT "\n", test->expectedResult);
+
+  node_t *evaluatedNode = ast_eval(arena, test->expressionTree);
+
+  if (test->shouldFail)
+  {
+    if (evaluatedNode)
+    {
+      fprintf(stderr, "ERROR: Evaluation should have failed but did not!\n");
+
+      if (freeArena)
+        arena_free(arena);
+
+      return false;
+    }
+
+    printf("Evaluation failed as expected.\n");
+  }
+  else
+  {
+    if (!evaluatedNode)
+    {
+      fprintf(stderr, "ERROR: Evaluation failed!\n");
+
+      if (freeArena)
+        arena_free(arena);
+
+      return false;
+    }
+
+    double result = evaluatedNode->as.constant;
+
+    if (freeArena)
+      arena_free(arena);
+
+    printf("Result      = " DOUBLE_PRINT_FORMAT "\n", result);
+
+    if (!compare_doubles(result, test->expectedResult, 5))
+    {
+      fprintf(stderr, "ERROR: Evaluated result not equal to expected value!\n");
+      return false;
+    }
+  }
+
+  return true;
 }
 
 #endif // _PARSER_H_

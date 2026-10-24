@@ -1,7 +1,6 @@
 #ifndef _TOKENIZER_H_
 #define _TOKENIZER_H_
 
-#define ARENA_IMPLEMENTATION
 #include <arena.h>
 #include <stringslice.h>
 #include "global.h"
@@ -31,7 +30,8 @@ typedef struct
   bool isError;
 } tokenizer_t;
 
-#define tokenizer_append(a, tokenizer, val, len, curr) arena_da_append((a), (tokenizer), ((input_token_t){.value = (val), .length = (len), .cursor = (curr)}))
+#define tokenizer_append(a, tokenizer, val, len, curr) \
+  arena_da_append((a), (tokenizer), ((input_token_t){.value = (val), .length = (len), .cursor = (curr)}))
 
 // Tokenizes a collection of characters into a symbol which are not spaces and literal characters.
 static bool next_symbol(arena_t *arena, string_slice_t *ss, tokenizer_t *tokenizer)
