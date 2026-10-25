@@ -39,7 +39,7 @@ check2: $(EXE)
 	valgrind -s --leak-check=full --track-origins=yes --show-leak-kinds=all $^ test -v
 
 test: $(EXE)
-	$^ test
+	$^ test -v
 
 clean:
 	@$(RM) -rv $(BIN_DIR) $(OBJ_DIR)

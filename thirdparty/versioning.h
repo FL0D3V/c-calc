@@ -1,7 +1,6 @@
 #ifndef _VERSIONING_H_
 #define _VERSIONING_H_
 
-#include <stdio.h>
 #include <stdlib.h>
 
 // Versioning

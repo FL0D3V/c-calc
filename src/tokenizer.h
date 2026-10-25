@@ -43,7 +43,7 @@ static bool next_symbol(arena_t *arena, string_slice_t *ss, tokenizer_t *tokeniz
   if (!ss_in_range(ss))
     return true;
 
-  const char *startPtr = ss_get_current_ptr(ss);
+  const char *currentPtr = ss_get_current_ptr(ss);
   char current;
   size_t length = 0;
 
@@ -59,7 +59,7 @@ static bool next_symbol(arena_t *arena, string_slice_t *ss, tokenizer_t *tokeniz
   } while (ss_in_range(ss));
 
   if (length > 0)
-    tokenizer_append(arena, tokenizer, startPtr, length, ss_current_pos(ss) - length);
+    tokenizer_append(arena, tokenizer, currentPtr, length, ss_current_pos(ss) - length);
 
   return length > 0;
 }
@@ -105,16 +105,13 @@ tokenizer_t tokenizer_execute(arena_t *arena, const char *input)
   {
     ss_seek_spaces(&ss);
 
-    if (next_symbol(arena, &ss, &tokenizer))
+    if (next_symbol(arena, &ss, &tokenizer) || next_literal(arena, &ss, &tokenizer))
       continue;
-    else if (next_literal(arena, &ss, &tokenizer))
-      continue;
-    else
-    {
-      UNREACHABLE_MSG("Unhandled character!");
-      tokenizer.isError = true;
-      break;
-    }
+
+    // Error
+    UNREACHABLE_MSG("Unhandled character!");
+    tokenizer.isError = true;
+    break;
   }
 
   return tokenizer;

@@ -101,23 +101,40 @@ bool compare_doubles(double a, double b, int decimal_places)
   return fabs(a - b) < epsilon;
 }
 
+// The 'ret' value variations
+typedef enum
+{
+  // Input was NULL or empty. Cursor will be set to 0.
+  NCR_NULL_OR_EMPTY,
+
+  // Input IS a valid number and the cursor will be set to the length of the input.
+  NCR_VALID,
+
+  // Input has too many commas. Cursor will be set to the error position in the string.
+  NCR_TOO_MANY_COMMAS,
+
+  // Input was NOT a number. Cursor will be set to the error position in the string.
+  NCR_NOT_A_NUMBER,
+
+  // Count of return values.
+  NCR_COUNT
+} num_check_ret_t;
+
+static_assert(NCR_COUNT == 4, "Amount of number-check-return-values have changed");
+
+#define ASSERT_NUM_CHECK_RETURN_VALUE(mode) assert((mode) < NCR_COUNT && "Invalid number-check-return-value!")
+
 typedef struct
 {
-  int ret;
+  num_check_ret_t ret;
   int cursor;
 } num_check_t;
 
-#define _NUM_CHECK_NULL() ((num_check_t){.ret = 1, .cursor = 0})
-#define _NUM_CHECK_SUCCESS(cur) ((num_check_t){.ret = 0, .cursor = (cur)})
-#define _NUM_CHECK_COMMA_ERR(cur) ((num_check_t){.ret = -1, .cursor = (cur)})
-#define _NUM_CHECK_INVALID(cur) ((num_check_t){.ret = -2, .cursor = (cur)})
+#define _NUM_CHECK_NULL() ((num_check_t){.ret = NCR_NULL_OR_EMPTY, .cursor = 0})
+#define _NUM_CHECK_SUCCESS(cur) ((num_check_t){.ret = NCR_VALID, .cursor = (cur)})
+#define _NUM_CHECK_COMMA_ERR(cur) ((num_check_t){.ret = NCR_TOO_MANY_COMMAS, .cursor = (cur)})
+#define _NUM_CHECK_INVALID(cur) ((num_check_t){.ret = NCR_NOT_A_NUMBER, .cursor = (cur)})
 
-// Returns an 'num_check_t'.
-// The 'ret' value variations:
-//  1: Input was NULL or empty. Cursor will be set to 0.
-//  0: Input IS a valid number and the cursor will be set to the length of the input.
-// -1: Input has too many commas. Cursor will be set to the error position in the string.
-// -2: Input was NOT a number. Cursor will be set to the error position in the string.
 num_check_t cstr_is_number_ex(const char *cstr, size_t len)
 {
   if (!cstr || len == 0)
@@ -152,7 +169,6 @@ num_check_t cstr_is_number_ex(const char *cstr, size_t len)
 
 num_check_t cstr_is_number(const char *cstr)
 {
-  // Needs to check for null before trying to get the length.
   if (!cstr)
     return _NUM_CHECK_NULL();
 

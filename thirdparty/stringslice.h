@@ -6,6 +6,9 @@
 #include <string.h>
 #include <assert.h>
 
+#define SS_FMT "%.*s"
+#define SS_ARG(ss) (int)(ss)->len, (ss)->src
+
 typedef struct
 {
   const char *src;
@@ -26,6 +29,19 @@ typedef struct
   } while (0)
 #define _SS_IS_IN_RANGE(slice) (ss_current_pos(slice) < (slice)->len)
 #define _SS_IS_NEXT_IN_RANGE(slice) (ss_current_pos(slice) + 1 < (slice)->len)
+
+void ss_init_ex(string_slice_t *slice, const char *src, size_t len)
+{
+  _SS_ASSERT_SLICE_NOT_NULL(slice);
+  assert(src && "Given source was NULL!");
+  assert(len > 0 && "Given len too small!");
+  assert(len <= strlen(src) && "Given len too big!");
+
+  slice->src = src;
+  slice->len = len;
+  slice->start_ptr = (size_t)src;
+  slice->current_ptr = (size_t)src;
+}
 
 void ss_init(string_slice_t *slice, const char *src)
 {

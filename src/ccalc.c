@@ -19,8 +19,8 @@
 
 // TODO: Rethink!
 #define COMPILER_VERSION "gcc version 14.2.0 (Debian 14.2.0-6)"
-#define GIT_HASH "c1b2777"
-#define BUILD_TIME "2026-10-23 03:12:00"
+#define GIT_HASH "ca4cfbe4eb4217a42dcc832bbdd47e7849160764"
+#define BUILD_TIME "2026-10-25 03:45:00"
 
 typedef struct command command_t;
 
@@ -254,11 +254,13 @@ static bool version_run(command_t *self, const char *programName, int argc, char
 
   printf("\n");
   printf("Copyright (c): " COPYRIGHT_YEAR " " COPYRIGHT_CREATOR "\n");
-  printf("License: " PROGRAM_LICENCE " <" PROGRAM_LICENCE_LINK ">\n\n");
+  printf("License: " PROGRAM_LICENCE " <" PROGRAM_LICENCE_LINK ">\n");
+  printf("More information: <" FULL_DOCUMENTATION_LINK ">\n");
+  printf("\n");
   printf("This is FREE software, you are free to change and redistribute it.\n");
   printf("There is NO WARRANTY, to the extent permitted by law.\n");
   printf("\n");
-  printf("More information: <" CREATOR_LINK ">\n");
+  printf("More about me: <" CREATOR_LINK ">\n");
 
   return true;
 }
@@ -587,6 +589,7 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
     arena_free(&arena);
 
   printf("Tests executed: %zu\n", totalTests);
+  printf("Successful tests: %zu\n", totalTests - failedTests);
   printf("Failed tests: %zu\n", failedTests);
 
   return failedTests == 0;

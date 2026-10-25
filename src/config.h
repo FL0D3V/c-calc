@@ -214,24 +214,28 @@ static const char *specificProgramModeConfigDescriptions[SPMC_COUNT] = {
 };
 
 // The specific configurations for each program mode.
-static const e_config_flags globalProgramModeConfigurations[GPM_COUNT] =
+e_config_flags globalProgramModeConfigurations[GPM_COUNT] =
     {
-        [GPM_SINGLE_CLI_EXPRESSION_ARG] = CF_EXPRESSION_EVALUATION_ALLOWED,
+        [GPM_SINGLE_CLI_EXPRESSION_ARG] =
+            (e_config_flags)(CF_EXPRESSION_EVALUATION_ALLOWED),
 
-        [GPM_FULL_CLI] = CF_EXPRESSION_EVALUATION_ALLOWED |
-                         CF_VARIABLE_DEFINITIONS_ALLOWED |
-                         CF_FUNCTION_DEFINITIONS_ALLOWED,
+        [GPM_FULL_CLI] =
+            (e_config_flags)(CF_EXPRESSION_EVALUATION_ALLOWED |
+                             CF_VARIABLE_DEFINITIONS_ALLOWED |
+                             CF_FUNCTION_DEFINITIONS_ALLOWED),
 
-        [GPM_EXPRESSION_FILE] = CF_EXPRESSION_EVALUATION_ALLOWED |
-                                CF_COMMENTS_ALLOWED |
-                                CF_NEW_LINES_ALLOWED |
-                                CF_VARIABLE_DEFINITIONS_ALLOWED |
-                                CF_FUNCTION_DEFINITIONS_ALLOWED,
+        [GPM_EXPRESSION_FILE] =
+            (e_config_flags)(CF_EXPRESSION_EVALUATION_ALLOWED |
+                             CF_COMMENTS_ALLOWED |
+                             CF_NEW_LINES_ALLOWED |
+                             CF_VARIABLE_DEFINITIONS_ALLOWED |
+                             CF_FUNCTION_DEFINITIONS_ALLOWED),
 
-        [GPM_LINKER_FILE] = CF_COMMENTS_ALLOWED |
-                            CF_NEW_LINES_ALLOWED |
-                            CF_VARIABLE_DEFINITIONS_ALLOWED |
-                            CF_FUNCTION_DEFINITIONS_ALLOWED,
+        [GPM_LINKER_FILE] =
+            (e_config_flags)(CF_COMMENTS_ALLOWED |
+                             CF_NEW_LINES_ALLOWED |
+                             CF_VARIABLE_DEFINITIONS_ALLOWED |
+                             CF_FUNCTION_DEFINITIONS_ALLOWED),
 };
 
 // Loads a specifc configuration from the currently set program mode.

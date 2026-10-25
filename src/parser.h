@@ -270,14 +270,16 @@ static bool check_semantics(lexer_t *lexer)
         token_t *lastTok = lex_at(lexer, i - 1);
 
         if (tok_is(lastTok, TT_OPERATOR) ||
+            tok_is_specific_literal(lastTok, CLT_EQUALS) ||
             tok_is_paren(lastTok, PT_OPAREN))
           continue;
 
-        S_ERROR(tok->cursor, "Expected an operator or an open paren before a number or constant!");
+        S_ERROR(tok->cursor, "Unexpected token before the number!");
         isError = true;
         continue;
       }
 
+      // Valid number placement.
       continue;
     }
     case TT_OPERATOR:
@@ -443,8 +445,124 @@ static bool check_semantics(lexer_t *lexer)
       // > '=': for equations like '10 + 5 = 20 - 5'. This could return f.e. 'true' or 'false'.
       //        Also it could maybe be used for assigning an expression to a variable.
 
+      switch (tok->as.literal)
+      {
+      case CLT_COMMA:
+      {
+        if (i <= 0)
+        {
+          S_ERROR(tok->cursor, "This literal can't be at the start!");
+          isError = true;
+          continue;
+        }
+
+        token_t *lastTok = lex_at(lexer, i + 1);
+
+        if (tok_is(lastTok, TT_LITERAL) ||
+            tok_is(lastTok, TT_FUNCTION) ||
+            tok_is_paren(lastTok, PT_OPAREN) ||
+            tok_is(lastTok, TT_OPERATOR) ||
+            tok_is(lastTok, TT_SYMBOL))
+        {
+          S_ERROR(tok->cursor, "Before this literal there must be a valid argument!");
+          isError = true;
+          continue;
+        }
+
+        if (!lex_next_in_range(lexer, i + 1))
+        {
+          S_ERROR(tok->cursor, "This literal must have a valid argument after it!");
+          isError = true;
+          continue;
+        }
+
+        token_t *nextTok = lex_at(lexer, i + 1);
+
+        if (tok_is(nextTok, TT_LITERAL) ||
+            tok_is(nextTok, TT_SYMBOL) ||
+            tok_is_paren(nextTok, PT_CPAREN) ||
+            tok_is(nextTok, TT_OPERATOR))
+        {
+          S_ERROR(tok->cursor, "After this literal must be a valid argument!");
+          isError = true;
+          continue;
+        }
+
+        // TODO: Implement the checks to make sure this is only used inside a function definition!
+
+        break;
+      }
+      case CLT_EQUALS:
+      {
+        if (i <= 0)
+        {
+          S_ERROR(tok->cursor, "A variable assignment literal can't be at the start!");
+          isError = true;
+          continue;
+        }
+
+        token_t *lastTok = lex_at(lexer, i - 1);
+
+        // Checks if the last token was an operator or an open paren.
+        if (tok_not(lastTok, TT_SYMBOL))
+        {
+          S_ERROR(lastTok->cursor, "Before a variable assignment literal must be a variable name symbol!");
+          isError = true;
+          continue;
+        }
+
+        continue;
+      }
+      case CLT_COUNT:
+      case CLT_INVALID:
+      default:
+        UNREACHABLE("Unreachable literal type!");
+      }
+
       S_ERROR(tok->cursor, "Literal not implemented yet!");
-      isError = true; // TODO: Rethink!
+      isError = true;
+      continue;
+    }
+    case TT_SYMBOL:
+    {
+      if (i != 0)
+      {
+        S_ERROR(tok->cursor, "Variable name definition must be at the start!");
+        isError = true;
+        continue;
+      }
+
+      // Checks that after the current initializer there are still at least 2 more tokens because a variable definition needs
+      // an variable definition literal and at least a single argument.
+      if (!lex_next_in_range(lexer, i + 2))
+      {
+        S_ERROR(tok->cursor, "A variable name definition can't be the last token because it needs a variable assignment literal and at least a single argument!");
+        isError = true;
+        continue;
+      }
+
+      token_t *nextTok = lex_at(lexer, i + 1);
+
+      if (tok_not_specific_literal(nextTok, CLT_EQUALS))
+      {
+        S_ERROR(nextTok->cursor, "Expected a variable assignment literal after variable name definition!");
+        isError = true;
+        continue;
+      }
+
+      ++i;
+
+      nextTok = lex_at(lexer, i + 1);
+
+      // Valid variable name definition.
+      if (tok_is(nextTok, TT_NUMBER) ||
+          tok_is(nextTok, TT_MATH_CONSTANT) ||
+          tok_is(nextTok, TT_FUNCTION) ||
+          tok_is_paren(nextTok, PT_OPAREN))
+        continue;
+
+      S_ERROR(nextTok->cursor, "Expected a valid argument after variable assignment literal!");
+      isError = true;
       continue;
     }
     case TT_COUNT:
@@ -554,36 +672,17 @@ node_t *parser_execute(arena_t *arena, lexer_t *lexer)
   // Paren checking: 2 Open '(' should have 2 Closing ')' after.
   // After a constant / number MUST come an operator, function, or closing paren
 
-  printf("INFO: AST generator and parser is currently under developement.\n");
+  fprintf(stderr, "ERROR: Parser is currently under developement!\n");
 
   // TODO: Rethink!
-  // if (!check_semantics(lexer))
-  //   return NULL;
+  if (!check_semantics(lexer))
+    return NULL;
 
   // IN: "EN + 5 / (5 * 0)"
   // AST: "add(EN, divide(5, paren(mult(5, 0))))"
 
   node_t *root = NULL;
 
-  /*for (size_t i = 0; i < lexer->count; ++i)
-  {
-    token_t* tok = lex_at(lexer, i);
-
-    // TODO: Implement!
-    (void) tok;
-
-    break;
-
-    switch (tok->type)
-    {
-
-      case TT_COUNT:
-      default:
-        UNREACHABLE("Invalid token-type!");
-    }
-  }*/
-
-  // TODO: Return root node!
   return root;
 }
 

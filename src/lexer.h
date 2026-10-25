@@ -1,11 +1,13 @@
 #ifndef _LEXER_H_
 #define _LEXER_H_
 
+#include <stringslice.h>
 #include "tokenizer.h"
 
 // Error handling
 #define L_ERROR_NAME "LEXING-ERROR"
-#define L_ERROR_INVALID_NUMBER(cursor, tok) fprintf(stderr, L_ERROR_NAME ":%zu: A number can only contain 1 comma ('" IN_TOK_FMT "')!\n", (cursor), IN_TOK_ARG(tok))
+#define L_ERROR_INVALID_AMOUNT_OF_COMMAS_IN_NUMBER(cursor, tok) fprintf(stderr, L_ERROR_NAME ":%zu: A number can only contain 1 comma ('" IN_TOK_FMT "')!\n", (cursor), IN_TOK_ARG(tok))
+#define L_ERROR_INVALID_NUMBER(cursor, tok) fprintf(stderr, L_ERROR_NAME ":%zu: Not a number ('" IN_TOK_FMT "')!\n", (cursor), IN_TOK_ARG(tok))
 #define L_ERROR_INVALID_TOKEN(cursor, tok) fprintf(stderr, L_ERROR_NAME ":%zu: '" IN_TOK_FMT "' is an invalid token!\n", (cursor), IN_TOK_ARG(tok))
 #define L_ERROR_GIVEN_LEXER_INVALID() fprintf(stderr, L_ERROR_NAME ": Can't print the lexer because an error happend!\n")
 
@@ -17,18 +19,32 @@
 // All enums
 typedef enum
 {
+  // Only numbers like '109', '53.23531'
   TT_NUMBER,
+
+  // All math constants like 'PI', 'EN', ...
   TT_MATH_CONSTANT,
+
+  // All operators like '+', '-', ...
   TT_OPERATOR,
+
+  // All paren types
   TT_PAREN,
+
+  // All function definitions
   TT_FUNCTION,
-  // Here are all not connected literals like ',' or '='.
+
+  // Here are all not connected literals like ',' or '='
   TT_LITERAL,
 
+  // All for example variable names.
+  TT_SYMBOL,
+
+  // Count of all token types.
   TT_COUNT
 } e_token_type;
 
-static_assert(TT_COUNT == 6, "Amount of token-types have changed");
+static_assert(TT_COUNT == 7, "Amount of token-types have changed");
 
 static const char *tokenTypeNames[TT_COUNT] = {
     [TT_NUMBER] = "Number",
@@ -37,6 +53,7 @@ static const char *tokenTypeNames[TT_COUNT] = {
     [TT_PAREN] = "Parenthesis",
     [TT_FUNCTION] = "Function",
     [TT_LITERAL] = "Literal",
+    [TT_SYMBOL] = "Symbol",
 };
 
 // Type-Definitions
@@ -49,6 +66,7 @@ typedef union
   e_paren_type paren;
   e_function_type function;
   e_common_literal_type literal;
+  string_slice_t symbol;
 } u_token_as;
 
 typedef struct
@@ -72,6 +90,7 @@ typedef struct
 #define add_paren_token(a, lexer, pt, curr) arena_da_append((a), (lexer), ((token_t){.type = TT_PAREN, .as.paren = (pt), .cursor = (curr)}))
 #define add_function_token(a, lexer, ft, curr) arena_da_append((a), (lexer), ((token_t){.type = TT_FUNCTION, .as.function = (ft), .cursor = (curr)}))
 #define add_literal_token(a, lexer, clt, curr) arena_da_append((a), (lexer), ((token_t){.type = TT_LITERAL, .as.literal = (clt), .cursor = (curr)}))
+#define add_symbol_token(a, lexer, sym, curr) arena_da_append((a), (lexer), ((token_t){.type = TT_SYMBOL, .as.symbol = (sym), .cursor = (curr)}))
 
 // Helpers
 #define lex_at(lexer, idx) (&(lexer)->items[(idx)])
@@ -83,6 +102,8 @@ typedef struct
 #define tok_is_paren(tok, pt) (tok_is(tok, TT_PAREN) && (tok)->as.paren == (pt))
 #define tok_not_specific_paren(tok, pt) (tok_not((tok), TT_PAREN) || (tok)->as.paren != (pt))
 #define tok_is_number_operator(tok) (tok_is(tok, TT_OPERATOR) && ((tok)->as.operator== OP_ADD ||(tok)->as.operator== OP_SUB))
+#define tok_is_specific_literal(tok, lt) (tok_is(tok, TT_LITERAL) && (tok)->as.literal == (lt))
+#define tok_not_specific_literal(tok, lt) (tok_not(tok, TT_LITERAL) || (tok)->as.literal != (lt))
 
 lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
 {
@@ -109,10 +130,12 @@ lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
 
     // Number checking
     num_check_t numCheck = cstr_is_number_ex(currentToken->value, currentToken->length);
-
-    if (numCheck.ret == 1)
+    switch (numCheck.ret)
+    {
+    case NCR_NULL_OR_EMPTY:
       UNREACHABLE("Number-Token was NULL!");
-    else if (numCheck.ret == 0)
+      break;
+    case NCR_VALID:
     {
       char *endptr;
       double number = strtof(currentToken->value, &endptr);
@@ -123,14 +146,22 @@ lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
       add_number_token(arena, &lexer, number, currentToken->cursor);
       continue;
     }
-    else if (numCheck.ret == -1)
+    break;
+    case NCR_TOO_MANY_COMMAS:
     {
-      // Too many commas
-      L_ERROR_INVALID_NUMBER(currentToken->cursor + numCheck.cursor, currentToken);
+      L_ERROR_INVALID_AMOUNT_OF_COMMAS_IN_NUMBER(currentToken->cursor + numCheck.cursor, currentToken);
       lexer.isError = true;
       continue;
     }
-    // Else: Not a number.
+    break;
+    case NCR_NOT_A_NUMBER:
+      // Literal, operator, ...
+      break;
+    case NCR_COUNT:
+    default:
+      UNREACHABLE("Invalid number check return value!");
+      break;
+    }
 
     if (cstr_is_paren_ex(currentToken->value, currentToken->length))
     {
@@ -176,9 +207,10 @@ lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
       continue;
     }
 
-    // ERROR: Invalid token.
-    L_ERROR_INVALID_TOKEN(currentToken->cursor, currentToken);
-    lexer.isError = true;
+    string_slice_t symbol = {0};
+    ss_init_ex(&symbol, currentToken->value, currentToken->length);
+
+    add_symbol_token(arena, &lexer, symbol, currentToken->cursor);
   }
 
   return lexer;
@@ -217,10 +249,13 @@ void lexer_print(const lexer_t *lexer)
       printf("(%s)", parenTypeNames[token->as.paren]);
       break;
     case TT_FUNCTION:
-      printf("(%s, %s)", functionTypeIdentifiers[token->as.function], functionTypeNames[token->as.function]);
+      printf("(%s)", functionTypeNames[token->as.function]);
       break;
     case TT_LITERAL:
       printf("(%s)", commonLiteralTypeNames[token->as.literal]);
+      break;
+    case TT_SYMBOL:
+      printf("('" SS_FMT "')", SS_ARG(&token->as.symbol));
       break;
     case TT_COUNT:
     default:
