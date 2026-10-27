@@ -3,14 +3,13 @@
 
 #include "lexer.h"
 
-// Errors
 #define _S_ERROR_NAME "SEMANTIC-ERROR"
 #define _E_ERROR_NAME "EVALUATION-ERROR"
-#define _PARSER_ERROR(type, cursor, message) fprintf(stderr, type ":%zu: %s\n", (cursor), (message));
+#define _PARSER_ERROR(type, cursor, message) \
+  fprintf(stderr, type ":%zu: %s\n", (cursor), (message));
 #define S_ERROR(cursor, message) _PARSER_ERROR(_S_ERROR_NAME, cursor, message)
 #define E_ERROR(cursor, message) _PARSER_ERROR(_E_ERROR_NAME, cursor, message)
 
-// All enums
 typedef enum
 {
   NT_CONSTANT,
@@ -161,7 +160,6 @@ typedef struct
   node_t *rhs;
 } node_binop_t;
 
-// TODO: Rethink!
 typedef struct
 {
   node_t **items;
@@ -169,14 +167,12 @@ typedef struct
   size_t count;
 } node_func_args_t;
 
-#define node_func_args_append(a, args, item) arena_da_append(a, args, item);
+#define node_func_args_append(a, args, item) \
+  arena_da_append(a, args, item);
 
-// TODO: Rethink!
 typedef struct
 {
   e_node_func_type type;
-  // node_t *args;
-  // size_t count;
   node_func_args_t args;
 } node_function_t;
 
@@ -227,14 +223,10 @@ node_t *node_binop(arena_t *arena, size_t cursor, e_node_binop_type type, node_t
   return node;
 }
 
-// TODO: Rethink!
-// node_t *node_func(arena_t *arena, size_t cursor, e_node_func_type type, node_t **args, size_t count)
 node_t *node_func(arena_t *arena, size_t cursor, e_node_func_type type, node_func_args_t args)
 {
   node_t *node = base_node(arena, cursor, NT_FUNCTION);
   node->as.func.type = type;
-  // node->as.func.args = *args;
-  // node->as.func.count = count;
   node->as.func.args = args;
   return node;
 }
@@ -443,7 +435,10 @@ static bool check_semantics(lexer_t *lexer)
       // Current literals:
       // > ',': for multi argument functions like '... funcTest(arg1, arg2, arg3) ...'.
       // > '=': for equations like '10 + 5 = 20 - 5'. This could return f.e. 'true' or 'false'.
-      //        Also it could maybe be used for assigning an expression to a variable.
+      //        Also it could be used for assigning an expression to a variable or creating a new function.
+      //        Like:
+      //            'test = 10 + 5'
+      //            'test(x, y) = 20 * 5 - sqrt(x) ^ y'
 
       switch (tok->as.literal)
       {
@@ -686,7 +681,7 @@ node_t *parser_execute(arena_t *arena, lexer_t *lexer)
   return root;
 }
 
-node_t *ast_eval(arena_t *arena, node_t *expr)
+node_t *ast_eval_ex(arena_t *arena, node_t *expr)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(expr);
@@ -697,10 +692,10 @@ node_t *ast_eval(arena_t *arena, node_t *expr)
     return expr;
   case NT_BINOP:
   {
-    node_t *lhs = ast_eval(arena, expr->as.binop.lhs);
+    node_t *lhs = ast_eval_ex(arena, expr->as.binop.lhs);
     if (!lhs)
       return NULL;
-    node_t *rhs = ast_eval(arena, expr->as.binop.rhs);
+    node_t *rhs = ast_eval_ex(arena, expr->as.binop.rhs);
     if (!rhs)
       return NULL;
 
@@ -741,7 +736,7 @@ node_t *ast_eval(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "sqrt() takes one argument!");
         return NULL;
       }
-      node_t *func = ast_eval(arena, expr->as.func.args.items[0]);
+      node_t *func = ast_eval_ex(arena, expr->as.func.args.items[0]);
       if (!func)
         return NULL;
       return node_constant(arena, func->cursor, sqrt(func->as.constant));
@@ -753,7 +748,7 @@ node_t *ast_eval(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "exp() takes one argument!");
         return NULL;
       }
-      node_t *func = ast_eval(arena, expr->as.func.args.items[0]);
+      node_t *func = ast_eval_ex(arena, expr->as.func.args.items[0]);
       if (!func)
         return NULL;
       return node_constant(arena, func->cursor, exp(func->as.constant));
@@ -765,7 +760,7 @@ node_t *ast_eval(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "sin() takes one argument!");
         return NULL;
       }
-      node_t *func = ast_eval(arena, expr->as.func.args.items[0]);
+      node_t *func = ast_eval_ex(arena, expr->as.func.args.items[0]);
       if (!func)
         return NULL;
       return node_constant(arena, func->cursor, sin(func->as.constant));
@@ -777,7 +772,7 @@ node_t *ast_eval(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "asin() takes one argument!");
         return NULL;
       }
-      node_t *func = ast_eval(arena, expr->as.func.args.items[0]);
+      node_t *func = ast_eval_ex(arena, expr->as.func.args.items[0]);
       if (!func)
         return NULL;
       return node_constant(arena, func->cursor, asin(func->as.constant));
@@ -789,7 +784,7 @@ node_t *ast_eval(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "sinh() takes one argument!");
         return NULL;
       }
-      node_t *func = ast_eval(arena, expr->as.func.args.items[0]);
+      node_t *func = ast_eval_ex(arena, expr->as.func.args.items[0]);
       if (!func)
         return NULL;
       return node_constant(arena, func->cursor, sinh(func->as.constant));
@@ -801,7 +796,7 @@ node_t *ast_eval(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "cos() takes one argument!");
         return NULL;
       }
-      node_t *func = ast_eval(arena, expr->as.func.args.items[0]);
+      node_t *func = ast_eval_ex(arena, expr->as.func.args.items[0]);
       if (!func)
         return NULL;
       return node_constant(arena, func->cursor, cos(func->as.constant));
@@ -813,7 +808,7 @@ node_t *ast_eval(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "acos() takes one argument!");
         return NULL;
       }
-      node_t *func = ast_eval(arena, expr->as.func.args.items[0]);
+      node_t *func = ast_eval_ex(arena, expr->as.func.args.items[0]);
       if (!func)
         return NULL;
       return node_constant(arena, func->cursor, acos(func->as.constant));
@@ -825,7 +820,7 @@ node_t *ast_eval(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "cosh() takes one argument!");
         return NULL;
       }
-      node_t *func = ast_eval(arena, expr->as.func.args.items[0]);
+      node_t *func = ast_eval_ex(arena, expr->as.func.args.items[0]);
       if (!func)
         return NULL;
       return node_constant(arena, func->cursor, cosh(func->as.constant));
@@ -837,7 +832,7 @@ node_t *ast_eval(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "tanh() takes one argument!");
         return NULL;
       }
-      node_t *func = ast_eval(arena, expr->as.func.args.items[0]);
+      node_t *func = ast_eval_ex(arena, expr->as.func.args.items[0]);
       if (!func)
         return NULL;
       return node_constant(arena, func->cursor, tan(func->as.constant));
@@ -849,7 +844,7 @@ node_t *ast_eval(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "atan() takes one argument!");
         return NULL;
       }
-      node_t *func = ast_eval(arena, expr->as.func.args.items[0]);
+      node_t *func = ast_eval_ex(arena, expr->as.func.args.items[0]);
       if (!func)
         return NULL;
       return node_constant(arena, func->cursor, atan(func->as.constant));
@@ -861,7 +856,7 @@ node_t *ast_eval(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "tanh() takes one argument!");
         return NULL;
       }
-      node_t *func = ast_eval(arena, expr->as.func.args.items[0]);
+      node_t *func = ast_eval_ex(arena, expr->as.func.args.items[0]);
       if (!func)
         return NULL;
       return node_constant(arena, func->cursor, tanh(func->as.constant));
@@ -873,7 +868,7 @@ node_t *ast_eval(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "ln() takes one argument!");
         return NULL;
       }
-      node_t *func = ast_eval(arena, expr->as.func.args.items[0]);
+      node_t *func = ast_eval_ex(arena, expr->as.func.args.items[0]);
       if (!func)
         return NULL;
       return node_constant(arena, func->cursor, log(func->as.constant));
@@ -885,7 +880,7 @@ node_t *ast_eval(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "log10() takes one argument!");
         return NULL;
       }
-      node_t *func = ast_eval(arena, expr->as.func.args.items[0]);
+      node_t *func = ast_eval_ex(arena, expr->as.func.args.items[0]);
       if (!func)
         return NULL;
       return node_constant(arena, func->cursor, log10(func->as.constant));
@@ -898,7 +893,7 @@ node_t *ast_eval(arena_t *arena, node_t *expr)
   }
   case NT_PAREN:
   {
-    node_t *argEval = ast_eval(arena, expr->as.paren.arg);
+    node_t *argEval = ast_eval_ex(arena, expr->as.paren.arg);
     if (!argEval)
       return NULL;
     return node_constant(arena, expr->cursor, argEval->as.constant);
@@ -907,6 +902,39 @@ node_t *ast_eval(arena_t *arena, node_t *expr)
   default:
     UNREACHABLE("Invalid node-type!");
   }
+}
+
+typedef struct
+{
+  bool error;
+  // TODO: Change to big number!
+  double value;
+} ast_eval_res_t;
+
+ast_eval_res_t ast_eval(arena_t *arena, node_t *expr)
+{
+  ASSERT_NULL(arena);
+  ASSERT_NULL(expr);
+
+  ast_eval_res_t result = {0};
+
+  node_t *evaluatedNode = ast_eval_ex(arena, expr);
+  if (!evaluatedNode)
+  {
+    E_ERROR(expr->cursor, "Evaluation failed!");
+    result.error = true;
+    return result;
+  }
+
+  if (evaluatedNode->type != NT_CONSTANT)
+  {
+    E_ERROR(expr->cursor, "Evaluation failed! Return-Type not of type 'constant'!");
+    result.error = true;
+    return result;
+  }
+
+  result.value = evaluatedNode->as.constant;
+  return result;
 }
 
 #define _PRINT_DEPTH_SPACES(indented, deph) \
@@ -1013,7 +1041,7 @@ bool execute_test(arena_t *arena, node_test_t *test, bool verbose, bool freeAren
   if (!test->shouldFail)
     printf("Expected    = " DOUBLE_PRINT_FORMAT "\n", test->expectedResult);
 
-  node_t *evaluatedNode = ast_eval(arena, test->expressionTree);
+  node_t *evaluatedNode = ast_eval_ex(arena, test->expressionTree);
 
   if (test->shouldFail)
   {

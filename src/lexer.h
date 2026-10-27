@@ -4,19 +4,16 @@
 #include <stringslice.h>
 #include "tokenizer.h"
 
-// Error handling
 #define L_ERROR_NAME "LEXING-ERROR"
-#define L_ERROR_INVALID_AMOUNT_OF_COMMAS_IN_NUMBER(cursor, tok) fprintf(stderr, L_ERROR_NAME ":%zu: A number can only contain 1 comma ('" IN_TOK_FMT "')!\n", (cursor), IN_TOK_ARG(tok))
-#define L_ERROR_INVALID_NUMBER(cursor, tok) fprintf(stderr, L_ERROR_NAME ":%zu: Not a number ('" IN_TOK_FMT "')!\n", (cursor), IN_TOK_ARG(tok))
-#define L_ERROR_INVALID_TOKEN(cursor, tok) fprintf(stderr, L_ERROR_NAME ":%zu: '" IN_TOK_FMT "' is an invalid token!\n", (cursor), IN_TOK_ARG(tok))
-#define L_ERROR_GIVEN_LEXER_INVALID() fprintf(stderr, L_ERROR_NAME ": Can't print the lexer because an error happend!\n")
+#define L_ERROR_INVALID_AMOUNT_OF_COMMAS_IN_NUMBER(cursor, tok) \
+  fprintf(stderr, L_ERROR_NAME ":%zu: A number can only contain 1 comma ('" IN_TOK_FMT "')!\n", (cursor), IN_TOK_ARG(tok))
+#define L_ERROR_INVALID_NUMBER(cursor, tok) \
+  fprintf(stderr, L_ERROR_NAME ":%zu: Not a number ('" IN_TOK_FMT "')!\n", (cursor), IN_TOK_ARG(tok))
+#define L_ERROR_INVALID_TOKEN(cursor, tok) \
+  fprintf(stderr, L_ERROR_NAME ":%zu: '" IN_TOK_FMT "' is an invalid token!\n", (cursor), IN_TOK_ARG(tok))
+#define L_ERROR_GIVEN_LEXER_INVALID() \
+  fprintf(stderr, L_ERROR_NAME ": Can't print the lexer because an error happend!\n")
 
-// TODO: Implement variables and variable assigning
-// Variables could look like e.g.: 'a', 'b', 'out1'
-// Variable assigning could look like: ':=' or '='
-// Also 'solve' could be a function which allows for using the '=' literal inside and variables for more complex expressions and equations.
-
-// All enums
 typedef enum
 {
   // Only numbers like '109', '53.23531'
@@ -56,7 +53,6 @@ static const char *tokenTypeNames[TT_COUNT] = {
     [TT_SYMBOL] = "Symbol",
 };
 
-// Type-Definitions
 typedef union
 {
   // TODO: Change to big number type!
@@ -92,7 +88,6 @@ typedef struct
 #define add_literal_token(a, lexer, clt, curr) arena_da_append((a), (lexer), ((token_t){.type = TT_LITERAL, .as.literal = (clt), .cursor = (curr)}))
 #define add_symbol_token(a, lexer, sym, curr) arena_da_append((a), (lexer), ((token_t){.type = TT_SYMBOL, .as.symbol = (sym), .cursor = (curr)}))
 
-// Helpers
 #define lex_at(lexer, idx) (&(lexer)->items[(idx)])
 #define lex_next_in_range(lexer, idx) ((idx) < (lexer)->count - 1)
 
@@ -209,7 +204,6 @@ lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
 
     string_slice_t symbol = {0};
     ss_init_ex(&symbol, currentToken->value, currentToken->length);
-
     add_symbol_token(arena, &lexer, symbol, currentToken->cursor);
   }
 

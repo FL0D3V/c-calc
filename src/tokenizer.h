@@ -6,12 +6,12 @@
 #include "global.h"
 #include "helpers.h"
 
-// Error handling
 #define T_ERROR_NAME "TOKENIZATION-ERROR"
-#define T_ERROR_NO_INPUT_GIVEN() fprintf(stderr, T_ERROR_NAME ": No input given!\n")
-#define T_ERROR_GIVEN_TOKENIZER_INVALID() fprintf(stderr, T_ERROR_NAME ": Can't print the tokenizer because an error happend!\n")
+#define T_ERROR_NO_INPUT_GIVEN() \
+  fprintf(stderr, T_ERROR_NAME ": No input given!\n")
+#define T_ERROR_GIVEN_TOKENIZER_INVALID() \
+  fprintf(stderr, T_ERROR_NAME ": Can't print the tokenizer because an error happend!\n")
 
-// For printing
 #define IN_TOK_FMT "%.*s"
 #define IN_TOK_ARG(tok) (int)(tok)->length, (tok)->value
 

@@ -48,18 +48,21 @@ command_t commands[] = {
     },
     {
         .name = "help",
+        .signature = "[OPTIONS]",
         .short_description = "Display this help and exit.",
         .run = help_run,
     },
     {
         .name = "version",
+        .signature = "[OPTIONS]",
         .short_description = "Output version information and exit.",
         .run = version_run,
     },
     {
         .name = "test",
+        .signature = "[OPTIONS]",
         .short_description =
-            "Tests the ast generation and evaluation of pre defined expressions.",
+            "Tests the AST generation and evaluation of pre defined expressions.",
         .run = test_run,
     },
 };
@@ -97,8 +100,10 @@ void print_command_usage(FILE *sink, command_t *command, const char *program_nam
 
 void print_available_commands(FILE *sink, const char *programName, bool deprecated)
 {
+  const size_t arrLen = ARRAY_LEN(commands);
+
   int max_width = 0;
-  for (size_t i = 0; i < ARRAY_LEN(commands); ++i)
+  for (size_t i = 0; i < arrLen; ++i)
   {
     int width = strlen(commands[i].name);
     if (width > max_width)
@@ -106,24 +111,32 @@ void print_available_commands(FILE *sink, const char *programName, bool deprecat
   }
 
   fprintf(sink, "Available commands:\n");
-  for (size_t i = 0; i < ARRAY_LEN(commands); ++i)
+  for (size_t i = 0; i < arrLen; ++i)
   {
-    if (commands[i].deprecated)
+    const command_t *current = &commands[i];
+    if (current->deprecated)
       continue;
-    fprintf(sink, "    %-*s - %s\n", max_width, commands[i].name, commands[i].short_description);
+    fprintf(sink, "    %-*s   %s\n", max_width, current->name, current->short_description);
   }
   fprintf(sink, "\n");
+
   if (deprecated)
   {
+    int deprecatedCommands = 0;
     fprintf(sink, "Deprecated commands:\n");
-    for (size_t i = 0; i < ARRAY_LEN(commands); ++i)
+    for (size_t i = 0; i < arrLen; ++i)
     {
-      if (!commands[i].deprecated)
+      const command_t *current = &commands[i];
+      if (!current->deprecated)
         continue;
-      fprintf(sink, "    %-*s - %s\n", max_width, commands[i].name, commands[i].short_description);
+      fprintf(sink, "    %-*s - %s\n", max_width, current->name, current->short_description);
+      deprecatedCommands++;
     }
+    if (deprecatedCommands == 0)
+      fprintf(sink, "    No deprecated commands found.\n");
     fprintf(sink, "\n");
   }
+
   fprintf(sink, "Use `%s <COMMAND> -h` to learn more about a command.\n", programName);
 }
 
@@ -133,8 +146,8 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
   bool help = false;
 
   void *c = flag_c_new(programName);
-  flag_c_bool_var(c, &verbose, "v", NULL, "Execute the given expression with verbose logging");
   flag_c_bool_var(c, &help, "h", false, "Print this help message");
+  flag_c_bool_var(c, &verbose, "v", NULL, "Execute the given expression with verbose logging");
 
   if (!flag_c_parse(c, argc, argv))
   {
@@ -152,11 +165,17 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
     return true;
   }
 
-  // TODO: Check!
   if (argc <= 0)
   {
     print_command_usage(stderr, self, programName, c);
-    fprintf(stderr, "ERROR: no math expression provided\n");
+    fprintf(stderr, "ERROR: No math expression provided!\n");
+    return false;
+  }
+
+  if (argc != 1)
+  {
+    print_command_usage(stderr, self, programName, c);
+    fprintf(stderr, "ERROR: Too many arguments provided! Expected only a math expression.\n");
     return false;
   }
 
@@ -198,16 +217,16 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
   if (verbose)
     print_node(rootNode, true);
 
-  node_t *evaluatedNode = ast_eval(&arena, rootNode);
+  ast_eval_res_t result = ast_eval(&arena, rootNode);
 
-  if (!evaluatedNode)
+  if (result.error)
   {
     arena_free(&arena);
     return false;
   }
 
   // Print result
-  printf(">>> " DOUBLE_PRINT_FORMAT "\n", evaluatedNode->as.constant);
+  printf(">>> " DOUBLE_PRINT_FORMAT "\n", result.value);
 
   // Cleanup
   arena_free(&arena);
@@ -239,11 +258,11 @@ static bool version_run(command_t *self, const char *programName, int argc, char
 
   flag_c_free(c);
 
+  const version_t v = CURRENT_PROGRAM_VERSION;
 #ifdef GIT_HASH
-  version_t v = CURRENT_PROGRAM_VERSION;
   printf("%s " VERSION_FORMAT " commit %s\n", programName, VERSION_ARGS(v), GIT_HASH);
 #else
-  printf("%s " VERSION_FORMAT "\n", programName, VERSION_ARGS(&current_program_version));
+  printf("%s " VERSION_FORMAT "\n", programName, VERSION_ARGS(v));
 #endif // GIT_HASH
 #ifdef BUILD_TIME
   printf("Build time: %s\n", BUILD_TIME);
@@ -271,8 +290,8 @@ static bool help_run(command_t *self, const char *programName, int argc, char **
   bool deprecated = false;
 
   void *c = flag_c_new(programName);
-  flag_c_bool_var(c, &deprecated, "d", false, "Print deprecated commands");
   flag_c_bool_var(c, &help, "h", false, "Print this help message");
+  flag_c_bool_var(c, &deprecated, "d", false, "Print deprecated commands");
 
   if (!flag_c_parse(c, argc, argv))
   {
@@ -299,29 +318,42 @@ static bool help_run(command_t *self, const char *programName, int argc, char **
     printf("\n");
     printf("Execute simple to more complex math expressions in the terminal.\n");
     printf("\n");
-    printf("Example usage:\n");
-    printf("  %s input \"10.5 + 30 - sqrt(PI * 5.2) / 8\"\n", programName);
+    printf("Example:\n");
+    printf(">>> %s input \"10.5 + 30 - sqrt(PI * 5.2) / 8\"\n", programName);
     printf("\n");
 
     print_available_commands(stdout, programName, deprecated);
+    printf("\n");
+
+    int max_width = 0;
 
     // Prints program inforamtions.
-    printf("\n");
     printf("Supported operators [USAGE, NAME]:\n");
     for (size_t i = 0; i < OP_COUNT; ++i)
-      printf("  %-10c%s\n", operatorTypeIdentifiers[i], operatorTypeNames[i]);
+      printf("    '%-*c'   %s\n", 1, operatorTypeIdentifiers[i], operatorTypeNames[i]);
     printf("\n");
 
     printf("Supported functions [USAGE(x), DESCRIPTION]:\n");
     for (size_t i = 0; i < FT_COUNT; ++i)
-      printf("  %-10s%s\n", functionTypeIdentifiers[i], functionTypeDescriptions[i]);
-
+    {
+      int width = strlen(functionTypeIdentifiers[i]);
+      if (width > max_width)
+        max_width = width;
+    }
+    for (size_t i = 0; i < FT_COUNT; ++i)
+      printf("    %-*s   %s\n", max_width, functionTypeIdentifiers[i], functionTypeDescriptions[i]);
     printf("\n");
 
     printf("Supported math-constants [USAGE, NAME]:\n");
+    max_width = 0;
     for (size_t i = 0; i < MC_COUNT; ++i)
-      printf("  %-10s%s\n", mathConstantTypeIdentifiers[i], mathConstantTypeNames[i]);
-
+    {
+      int width = strlen(mathConstantTypeIdentifiers[i]);
+      if (width > max_width)
+        max_width = width;
+    }
+    for (size_t i = 0; i < MC_COUNT; ++i)
+      printf("    %-*s   %s\n", max_width, mathConstantTypeIdentifiers[i], mathConstantTypeNames[i]);
     printf("\n");
 
     // TODO: Implement later when cli mode is implemented!
@@ -336,11 +368,13 @@ static bool help_run(command_t *self, const char *programName, int argc, char **
 
   for (size_t i = 0; i < ARRAY_LEN(commands); ++i)
   {
-    if (strcmp(command_name, commands[i].name) == 0)
+    command_t *current = &commands[i];
+
+    if (strcmp(command_name, current->name) == 0)
     {
       char *help_flag = "-h";
 
-      if (!commands[i].run(&commands[i], programName, 1, &help_flag))
+      if (!current->run(current, programName, 1, &help_flag))
         return false;
       return true;
     }
@@ -361,8 +395,8 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
   bool help = false;
 
   void *c = flag_c_new(programName);
-  flag_c_bool_var(c, &verbose, "v", NULL, "Execute all tests with verbose logging");
   flag_c_bool_var(c, &help, "h", false, "Print this help message");
+  flag_c_bool_var(c, &verbose, "v", NULL, "Execute all tests with verbose logging");
 
   if (!flag_c_parse(c, argc, argv))
   {
@@ -383,7 +417,7 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
   if (argc != 0)
   {
     print_command_usage(stderr, self, programName, c);
-    fprintf(stderr, "ERROR: too many parameters given\n");
+    fprintf(stderr, "ERROR: Too many parameters given\n");
     return false;
   }
 
@@ -573,10 +607,10 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
 
   printf("Executing all tests:\n\n");
 
-  size_t totalTests = ARRAY_LEN(tests);
+  const size_t totalTests = ARRAY_LEN(tests);
   size_t failedTests = 0;
 
-  for (size_t i = 0; i < ARRAY_LEN(tests); ++i)
+  for (size_t i = 0; i < totalTests; ++i)
   {
     printf("Test %zu:\n", i + 1);
     if (!execute_test(&arena, &tests[i], verbose, freeAfterEachTest))
@@ -592,14 +626,13 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
   printf("Successful tests: %zu\n", totalTests - failedTests);
   printf("Failed tests: %zu\n", failedTests);
 
-  return failedTests == 0;
+  return failedTests != 0;
 }
 
 int main(int argc, char **argv)
 {
   char *programName = flag_shift_args(&argc, &argv);
 
-  // TODO: Rethink!
   // Store only the current program name without path: './bin/PROGRAM_NAME' -> 'PROGRAM_NAME'
   cstr_chop_till_last_delim(&programName, '/');
 
@@ -607,7 +640,7 @@ int main(int argc, char **argv)
   {
     print_available_commands(stderr, programName, false);
     fprintf(stderr, "\n");
-    fprintf(stderr, "ERROR: No command is provided\n");
+    fprintf(stderr, "ERROR: No command is provided!\n");
     return 0;
   }
 
@@ -617,10 +650,8 @@ int main(int argc, char **argv)
   {
     if (strcmp(command_name, commands[i].name) == 0)
     {
-      command_t c = commands[i];
-      if (!c.run(&c, programName, argc, argv))
-        return 1;
-      return 0;
+      command_t *c = &commands[i];
+      return c->run(c, programName, argc, argv);
     }
   }
 

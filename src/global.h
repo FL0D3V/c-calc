@@ -99,21 +99,24 @@ const char operatorTypeIdentifiers[OP_COUNT] = {
     [OP_SUB] = '-',
     [OP_MUL] = '*',
     [OP_DIV] = '/',
-    [OP_POW] = '^'};
+    [OP_POW] = '^',
+};
 
 const int operatorPrecedence[OP_COUNT] = {
     [OP_ADD] = 0,
     [OP_SUB] = 0,
     [OP_MUL] = 1,
     [OP_DIV] = 1,
-    [OP_POW] = 2};
+    [OP_POW] = 2,
+};
 
 const bool operatorRightAssociative[OP_COUNT] = {
     [OP_ADD] = false,
     [OP_SUB] = false,
     [OP_MUL] = false,
     [OP_DIV] = false,
-    [OP_POW] = true};
+    [OP_POW] = true,
+};
 
 const char *operatorTypeNames[OP_COUNT] = {
     [OP_ADD] = "Add",
@@ -199,7 +202,8 @@ const char *functionTypeIdentifiers[FT_COUNT] = {
     [FT_TANH] = "tanh",
     // Log
     [FT_LN] = "ln",
-    [FT_LOG10] = "log10"};
+    [FT_LOG10] = "log10",
+};
 
 const char *functionTypeNames[FT_COUNT] = {
     // Other
@@ -219,7 +223,8 @@ const char *functionTypeNames[FT_COUNT] = {
     [FT_TANH] = "Hyperbolic-Tangents",
     // Log
     [FT_LN] = "Natural-Logarithm",
-    [FT_LOG10] = "Logarithm"};
+    [FT_LOG10] = "Logarithm",
+};
 
 const char *functionTypeDescriptions[FT_COUNT] = {
     // Other
@@ -239,7 +244,8 @@ const char *functionTypeDescriptions[FT_COUNT] = {
     [FT_TANH] = "Returns the hyperbolic tangent of x.",
     // Log
     [FT_LN] = "Returns the natural logarithm (base-e logarithm) of x.",
-    [FT_LOG10] = "Returns the common logarithm (base-10 logarithm) of x."};
+    [FT_LOG10] = "Returns the common logarithm (base-10 logarithm) of x.",
+};
 
 e_function_type cstr_to_function_type_ex(const char *cstr, size_t len)
 {
@@ -281,11 +287,13 @@ static_assert(PT_COUNT == 2, "Amount of paren-types have changed");
 
 const char parenTypeIdentifiers[PT_COUNT] = {
     [PT_OPAREN] = '(',
-    [PT_CPAREN] = ')'};
+    [PT_CPAREN] = ')',
+};
 
 const char *parenTypeNames[PT_COUNT] = {
     [PT_OPAREN] = "Open",
-    [PT_CPAREN] = "Close"};
+    [PT_CPAREN] = "Close",
+};
 
 e_paren_type char_to_paren_type(const char c)
 {
@@ -332,11 +340,13 @@ static_assert(CLT_COUNT == 2, "Amount of common-literal-types have changed");
 
 const char commonLiteralTypeIdentifiers[CLT_COUNT] = {
     [CLT_COMMA] = ',',
-    [CLT_EQUALS] = '='};
+    [CLT_EQUALS] = '=',
+};
 
 const char *commonLiteralTypeNames[CLT_COUNT] = {
     [CLT_COMMA] = "Comma",
-    [CLT_EQUALS] = "Equals"};
+    [CLT_EQUALS] = "Equals",
+};
 
 e_common_literal_type char_to_common_literal_type(const char c)
 {
