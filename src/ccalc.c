@@ -140,51 +140,42 @@ void print_available_commands(FILE *sink, const char *programName, bool deprecat
   fprintf(sink, "Use `%s <COMMAND> -h` to learn more about a command.\n", programName);
 }
 
-static bool math_run(command_t *self, const char *programName, int argc, char **argv)
+static void print_detail_info(const char *arg)
 {
-  bool verbose = false;
-  bool help = false;
+  bool found = false;
 
-  void *c = flag_c_new(programName);
-  flag_c_bool_var(c, &help, "h", false, "Print this help message");
-  flag_c_bool_var(c, &verbose, "v", NULL, "Execute the given expression with verbose logging");
-
-  if (!flag_c_parse(c, argc, argv))
+  for (size_t j = 0; j < ARRAY_LEN(functionTypeIdentifiers); ++j)
   {
-    print_command_usage(stderr, self, programName, c);
-    flag_c_print_error(c, stderr);
-    return false;
+    if (strcmp(arg, functionTypeIdentifiers[j]) == 0)
+    {
+      printf("Function '%s(...)':\n", functionTypeIdentifiers[j]);
+      printf("    %s\n", functionTypeDescriptions[j]);
+      found = true;
+      break;
+    }
   }
 
-  argc = flag_c_rest_argc(c);
-  argv = flag_c_rest_argv(c);
-
-  if (help)
+  for (size_t j = 0; !found && j < ARRAY_LEN(mathConstantTypeIdentifiers); ++j)
   {
-    print_command_usage(stdout, self, programName, c);
-    return true;
+    if (strcmp(arg, mathConstantTypeIdentifiers[j]) == 0)
+    {
+      printf("Constant '%s':\n", mathConstantTypeIdentifiers[j]);
+      printf("    %s\n", mathConstantTypeNames[j]);
+      printf("    = %f\n", mathConstantTypeValues[j]);
+      found = true;
+      break;
+    }
   }
 
-  if (argc <= 0)
-  {
-    print_command_usage(stderr, self, programName, c);
-    fprintf(stderr, "ERROR: No math expression provided!\n");
-    return false;
-  }
+  if (!found)
+    fprintf(stderr, "ERROR: Unknown value '%s'! Only inbuild functions and constants are supported.\n", arg);
+}
 
-  if (argc != 1)
-  {
-    print_command_usage(stderr, self, programName, c);
-    fprintf(stderr, "ERROR: Too many arguments provided! Expected only a math expression.\n");
-    return false;
-  }
-
-  flag_c_free(c);
-
+static bool execute_math_expression(const char *input, bool verbose)
+{
   arena_t arena = {0};
 
-  // TODO: Rethink!
-  tokenizer_t tokenizer = tokenizer_execute(&arena, *argv);
+  tokenizer_t tokenizer = tokenizer_execute(&arena, input);
 
   if (tokenizer.isError)
   {
@@ -193,7 +184,10 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
   }
 
   if (verbose)
+  {
     tokenizer_print(&tokenizer);
+    printf("\n");
+  }
 
   lexer_t lexer = lexer_execute(&arena, &tokenizer);
 
@@ -204,7 +198,10 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
   }
 
   if (verbose)
+  {
     lexer_print(&lexer);
+    printf("\n");
+  }
 
   node_t *rootNode = parser_execute(&arena, &lexer);
 
@@ -215,7 +212,10 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
   }
 
   if (verbose)
+  {
     print_node(rootNode, true);
+    printf("\n");
+  }
 
   ast_eval_res_t result = ast_eval(&arena, rootNode);
 
@@ -228,9 +228,125 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
   // Print result
   printf(">>> " DOUBLE_PRINT_FORMAT "\n", result.value);
 
-  // Cleanup
   arena_free(&arena);
   return true;
+}
+
+static bool math_run(command_t *self, const char *programName, int argc, char **argv)
+{
+  bool verbose = false;
+  bool help = false;
+
+  void *c = flag_c_new(programName);
+  flag_c_bool_var(c, &help, "h", false, "Print this help message");
+  char **detailHelpArg = flag_c_str(c, "d", NULL, "Get detail informations about buildin functions and constants");
+  flag_c_bool_var(c, &verbose, "v", false, "Execute the given expression with verbose logging");
+  char **mathExpression = flag_c_str(c, "i", NULL, "Input expression to evaluate");
+
+  if (!flag_c_parse(c, argc, argv))
+  {
+    print_command_usage(stderr, self, programName, c);
+    flag_c_print_error(c, stderr);
+
+    // Cleanup
+    flag_c_free(c);
+    return false;
+  }
+
+  // The help flag has the highest priority and will be executed first.
+  if (help)
+  {
+    if (argc != 0)
+    {
+      print_command_usage(stderr, self, programName, c);
+      fprintf(stderr, "ERROR: Invalid arguments!\n");
+
+      // Cleanup
+      flag_c_free(c);
+      return false;
+    }
+
+    print_command_usage(stderr, self, programName, c);
+
+    // Cleanup
+    flag_c_free(c);
+    return true;
+  }
+
+  // The detail help flag has the second highest priority and will be executed second.
+  if (*detailHelpArg)
+  {
+    if (argc != 0)
+    {
+      print_command_usage(stderr, self, programName, c);
+      fprintf(stderr, "ERROR: Invalid arguments!\n");
+
+      // Cleanup
+      flag_c_free(c);
+      return false;
+    }
+
+    print_detail_info(*detailHelpArg);
+
+    // Cleanup
+    flag_c_free(c);
+    return true;
+  }
+
+  // The math expression has the third highest priority and will be executed third.
+  argc = flag_c_rest_argc(c);
+  argv = flag_c_rest_argv(c);
+
+  const char *input = *mathExpression;
+
+  if (argc > 0 && !input)
+    input = flag_shift_args(&argc, &argv);
+
+  if (argc > 0)
+  {
+    // Try to parse the remaining arguments to check for invalid flags or options.
+    if (!flag_c_parse(c, argc, argv))
+    {
+      print_command_usage(stderr, self, programName, c);
+      flag_c_print_error(c, stderr);
+
+      // Cleanup
+      flag_c_free(c);
+      return false;
+    }
+
+    argc = flag_c_rest_argc(c);
+    argv = flag_c_rest_argv(c);
+
+    if (*mathExpression && input)
+    {
+      print_command_usage(stderr, self, programName, c);
+      fprintf(stderr, "ERROR: Invalid arguments!\n");
+
+      // Cleanup
+      flag_c_free(c);
+      return false;
+    }
+
+    if (*mathExpression)
+      input = *mathExpression;
+  }
+
+  if (!input)
+  {
+    print_command_usage(stderr, self, programName, c);
+    fprintf(stderr, "ERROR: No math expression provided!\n");
+
+    // Cleanup
+    flag_c_free(c);
+    return false;
+  }
+
+  bool result = execute_math_expression(input, verbose);
+
+  // Cleanup
+  flag_c_free(c);
+  return result;
 }
 
 static bool version_run(command_t *self, const char *programName, int argc, char **argv)
@@ -279,7 +395,7 @@ static bool version_run(command_t *self, const char *programName, int argc, char
   printf("This is FREE software, you are free to change and redistribute it.\n");
   printf("There is NO WARRANTY, to the extent permitted by law.\n");
   printf("\n");
-  printf("More about me: <" CREATOR_LINK ">\n");
+  printf("<" CREATOR_LINK ">\n");
 
   return true;
 }
@@ -626,7 +742,7 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
   printf("Successful tests: %zu\n", totalTests - failedTests);
   printf("Failed tests: %zu\n", failedTests);
 
-  return failedTests != 0;
+  return failedTests == 0;
 }
 
 int main(int argc, char **argv)
@@ -651,7 +767,7 @@ int main(int argc, char **argv)
     if (strcmp(command_name, commands[i].name) == 0)
     {
       command_t *c = &commands[i];
-      return c->run(c, programName, argc, argv);
+      return !c->run(c, programName, argc, argv);
     }
   }
 

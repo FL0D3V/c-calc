@@ -18,10 +18,16 @@ OBJ := $(SRC:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 all: $(EXE)
 
 debug: CFLAGS += -ggdb
-debug: $(EXE)
+debug: all
 
 release: CFLAGS += -O3
-release: $(EXE)
+release: all
+
+remake: clean all
+
+remakeDebug: clean debug
+
+remakeRelease: clean release
 
 $(EXE): $(OBJ) | $(BIN_DIR)
 	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
@@ -33,9 +39,15 @@ $(BIN_DIR) $(OBJ_DIR):
 	mkdir -p $@
 
 check1: $(EXE)
-	valgrind -s --leak-check=full --track-origins=yes --show-leak-kinds=all $^ input -v $(TEST_INPUT)
+	valgrind -s --leak-check=full --track-origins=yes --show-leak-kinds=all $^ input -i $(TEST_INPUT) -v
 
 check2: $(EXE)
+	valgrind -s --leak-check=full --track-origins=yes --show-leak-kinds=all $^ input $(TEST_INPUT) -v
+
+check3: $(EXE)
+	valgrind -s --leak-check=full --track-origins=yes --show-leak-kinds=all $^ input $(TEST_INPUT)
+
+check4: $(EXE)
 	valgrind -s --leak-check=full --track-origins=yes --show-leak-kinds=all $^ test -v
 
 test: $(EXE)
@@ -44,12 +56,9 @@ test: $(EXE)
 clean:
 	@$(RM) -rv $(BIN_DIR) $(OBJ_DIR)
 
-remake: clean all
-remakeDebug: clean debug
-
 run: $(EXE)
 	./$(EXE) input -v $(TEST_INPUT)
 
-.PHONY: all check test clean remake run
+.PHONY: all check1 check2 check3 test clean remake remakeDebug remakeRelease debug release run
 
 -include $(OBJ:.o=.d)

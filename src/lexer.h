@@ -237,7 +237,7 @@ void lexer_print(const lexer_t *lexer)
       printf("(" DOUBLE_PRINT_FORMAT ", %s)", mathConstantTypeValues[token->as.constant], mathConstantTypeNames[token->as.constant]);
       break;
     case TT_OPERATOR:
-        printf("(%s) precedence: %d, right-associative: %s", operatorTypeNames[token->as.operator], operatorPrecedence[token->as.operator], operatorRightAssociative[token->as.operator] ? "true" : "false");
+        printf("(%s): precedence: %d, right-associative: %s", operatorTypeNames[token->as.operator], operatorPrecedence[token->as.operator], bool_cstr(operatorRightAssociative[token->as.operator]));
         break;
     case TT_PAREN:
       printf("(%s)", parenTypeNames[token->as.paren]);
