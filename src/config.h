@@ -1,7 +1,7 @@
 #ifndef _CONFIG_H_
 #define _CONFIG_H_
 
-#include "helpers.h"
+#include <chelpers.h>
 
 // TODO: Rethink!
 /*

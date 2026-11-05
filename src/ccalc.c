@@ -5,6 +5,7 @@
 #define FLAG_PUSH_DASH_DASH_BACK
 #include <flag.h>
 
+#include "config.h"
 #include "parser.h"
 
 // Program informations
@@ -19,8 +20,8 @@
 
 // TODO: Rethink!
 #define COMPILER_VERSION "gcc version 14.2.0 (Debian 14.2.0-6)"
-#define GIT_HASH "ca4cfbe4eb4217a42dcc832bbdd47e7849160764"
-#define BUILD_TIME "2026-10-25 03:45:00"
+// #define GIT_HASH "ca4cfbe4eb4217a42dcc832bbdd47e7849160764"
+// #define BUILD_TIME "2026-10-25 03:45:00"
 
 typedef struct command command_t;
 
@@ -173,54 +174,58 @@ static void print_detail_info(const char *arg)
 
 static bool execute_math_expression(const char *input, bool verbose)
 {
+  // Set the currently available features. This function gets executed in the cli command.
+  change_global_program_mode(GPM_SINGLE_CLI_EXPRESSION_ARG);
+
   arena_t arena = {0};
 
+  // Execute tokenizer
   tokenizer_t tokenizer = tokenizer_execute(&arena, input);
-
   if (tokenizer.isError)
   {
+    // Cleanup
     arena_free(&arena);
     return false;
   }
-
   if (verbose)
   {
     tokenizer_print(&tokenizer);
     printf("\n");
   }
 
+  // Execute lexer
   lexer_t lexer = lexer_execute(&arena, &tokenizer);
-
   if (lexer.isError)
   {
+    // Cleanup
     arena_free(&arena);
     return false;
   }
-
   if (verbose)
   {
     lexer_print(&lexer);
     printf("\n");
   }
 
+  // Execute parser and generate AST
   node_t *rootNode = parser_execute(&arena, &lexer);
-
   if (!rootNode)
   {
+    // Cleanup
     arena_free(&arena);
     return false;
   }
-
   if (verbose)
   {
     print_node(rootNode, true);
     printf("\n");
   }
 
+  // Evaluate the AST
   ast_eval_res_t result = ast_eval(&arena, rootNode);
-
-  if (result.error)
+  if (result.isError)
   {
+    // Cleanup
     arena_free(&arena);
     return false;
   }
@@ -228,6 +233,7 @@ static bool execute_math_expression(const char *input, bool verbose)
   // Print result
   printf(">>> " DOUBLE_PRINT_FORMAT "\n", result.value);
 
+  // Cleanup
   arena_free(&arena);
   return true;
 }
@@ -342,6 +348,7 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
     return false;
   }
 
+  // Finally execute the math expression.
   bool result = execute_math_expression(input, verbose);
 
   // Cleanup
@@ -574,6 +581,12 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
   node_t *test4ArgsList1Item1 = node_constant(&arena, 0, 4);
   node_func_args_append(&arena, &test4ArgsList1, test4ArgsList1Item1);
 
+  node_func_args_t test11ArgsList1 = {0};
+  node_t *test11ArgsList1Item1 = node_constant(&arena, 17, 2);
+  node_t *test11ArgsList1Item2 = node_constant(&arena, 19, 1);
+  node_func_args_append(&arena, &test11ArgsList1, test11ArgsList1Item1);
+  node_func_args_append(&arena, &test11ArgsList1, test11ArgsList1Item2);
+
   node_test_t tests[] = {
       // Test 1
       {
@@ -719,6 +732,22 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
                                                              node_constant(&arena, 6, 2),
                                                              node_constant(&arena, 8, 2)))),
       },
+      // Test 11
+      {
+          // IN: "100/(2+3)*atan2(2,1)"
+          // AST "mult(divide(100,paren(add(2,3))),atan2(2,1))"
+          // = 22.142979999999998
+          .inputExpression = "100/(2+3)*atan2(2,1)",
+          .expectedResult = 22.142979999999998,
+          .expressionTree = node_binop(&arena, 10, NO_MUL,
+                                       node_binop(&arena, 4, NO_DIV,
+                                                  node_constant(&arena, 0, 100),
+                                                  node_paren(&arena, 5,
+                                                             node_binop(&arena, 7, NO_ADD,
+                                                                        node_constant(&arena, 6, 2),
+                                                                        node_constant(&arena, 8, 3)))),
+                                       node_func(&arena, 11, NF_ATAN2, test11ArgsList1)),
+      },
   };
 
   printf("Executing all tests:\n\n");
@@ -764,11 +793,9 @@ int main(int argc, char **argv)
 
   for (size_t i = 0; i < ARRAY_LEN(commands); ++i)
   {
-    if (strcmp(command_name, commands[i].name) == 0)
-    {
-      command_t *c = &commands[i];
+    command_t *c = &commands[i];
+    if (strcmp(command_name, c->name) == 0)
       return !c->run(c, programName, argc, argv);
-    }
   }
 
   print_available_commands(stderr, programName, false);

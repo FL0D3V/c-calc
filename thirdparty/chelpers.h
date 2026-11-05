@@ -1,5 +1,5 @@
-#ifndef _HELPERS_H_
-#define _HELPERS_H_
+#ifndef _C_HELPERS_H_
+#define _C_HELPERS_H_
 
 #include <stdio.h>
 #include <stddef.h>
@@ -142,7 +142,6 @@ num_check_t cstr_is_number_ex(const char *cstr, size_t len)
 
   bool decimalSeperatorFound = false;
 
-  // TODO: Rethink!
   char *current = (char *)cstr;
 
   for (size_t i = 0; i < len; ++i)
@@ -175,4 +174,4 @@ num_check_t cstr_is_number(const char *cstr)
   return cstr_is_number_ex(cstr, strlen(cstr));
 }
 
-#endif // !_HELPERS_H_
+#endif // !_C_HELPERS_H_

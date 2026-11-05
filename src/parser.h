@@ -85,6 +85,7 @@ typedef enum
   NF_TAN,
   NF_ATAN,
   NF_TANH,
+  NF_ATAN2,
 
   NF_LN,
   NF_LOG10,
@@ -92,7 +93,7 @@ typedef enum
   NF_COUNT
 } e_node_func_type;
 
-static_assert(NF_COUNT == 13, "Amount of function-node-types have changed");
+static_assert(NF_COUNT == 14, "Amount of function-node-types have changed");
 
 const char *nodeFunctionTypeNames[NF_COUNT] = {
     [NF_SQRT] = "sqrt",
@@ -109,6 +110,7 @@ const char *nodeFunctionTypeNames[NF_COUNT] = {
     [NF_TAN] = "tan",
     [NF_ATAN] = "atan",
     [NF_TANH] = "tanh",
+    [NF_ATAN2] = "atan2",
 
     [NF_LN] = "ln",
     [NF_LOG10] = "log10"};
@@ -139,6 +141,8 @@ static inline e_node_func_type to_local_func_type(e_function_type type)
     return NF_ATAN;
   case FT_TANH:
     return NF_TANH;
+  case FT_ATAN2:
+    return NF_ATAN2;
   case FT_LN:
     return NF_LN;
   case FT_LOG10:
@@ -238,6 +242,7 @@ node_t *node_paren(arena_t *arena, size_t cursor, node_t *arg)
   return node;
 }
 
+// TODO: Rethink if needed! Can be checked while generating the AST with recursive descent parsing.
 static bool check_semantics(lexer_t *lexer)
 {
   ASSERT_NULL(lexer);
@@ -254,7 +259,7 @@ static bool check_semantics(lexer_t *lexer)
 
     switch (tok->type)
     {
-    case TT_MATH_CONSTANT:
+    // case TT_MATH_CONSTANT:
     case TT_NUMBER:
     {
       if (i > 0)
@@ -292,7 +297,9 @@ static bool check_semantics(lexer_t *lexer)
 
         // Checks if the last token was a number or a closing paren.
         if (tok_is(lastTok, TT_NUMBER) ||
-            tok_is(lastTok, TT_MATH_CONSTANT) ||
+            // TOOD: Rethink! Maybe change to TT_SYMBOL and check if it is a math constant in the parser.
+            // tok_is(lastTok, TT_MATH_CONSTANT) ||
+            tok_is(lastTok, TT_SYMBOL) ||
             tok_is_paren(lastTok, PT_CPAREN))
           continue;
 
@@ -388,47 +395,48 @@ static bool check_semantics(lexer_t *lexer)
 
       continue;
     }
-    case TT_FUNCTION:
-    {
-      // Checks that after the current initializer there are still at least 3 more tokens because a function needs
-      // an open paren, at least a single argument and a closing paren.
-      if (!lex_next_in_range(lexer, i + 2))
-      {
-        S_ERROR(tok->cursor, "A function initializer can't be the last token because it needs an open and a closing paren and an argument expression inside them!");
-        isError = true;
-        continue;
-      }
+    // TODO: Rethink! Maybe change to TT_SYMBOL and check if it is a function in the parser.
+    // case TT_FUNCTION:
+    // {
+    //   // Checks that after the current initializer there are still at least 3 more tokens because a function needs
+    //   // an open paren, at least a single argument and a closing paren.
+    //   if (!lex_next_in_range(lexer, i + 2))
+    //   {
+    //     S_ERROR(tok->cursor, "A function initializer can't be the last token because it needs an open and a closing paren and an argument expression inside them!");
+    //     isError = true;
+    //     continue;
+    //   }
 
-      token_t *nextTok = lex_at(lexer, i + 1);
+    //   token_t *nextTok = lex_at(lexer, i + 1);
 
-      // Checks if last token was a function initializer and also if the current is an open paren ("FUNC(<-...)").
-      if (tok_not_specific_paren(nextTok, PT_OPAREN))
-      {
-        S_ERROR(nextTok->cursor, "Expected an open paren after a function initializer!");
-        isError = true;
-        continue;
-      }
+    //   // Checks if last token was a function initializer and also if the current is an open paren ("FUNC(<-...)").
+    //   if (tok_not_specific_paren(nextTok, PT_OPAREN))
+    //   {
+    //     S_ERROR(nextTok->cursor, "Expected an open paren after a function initializer!");
+    //     isError = true;
+    //     continue;
+    //   }
 
-      if (i > 0)
-      {
-        token_t *lastTok = lex_at(lexer, i - 1);
+    //   if (i > 0)
+    //   {
+    //     token_t *lastTok = lex_at(lexer, i - 1);
 
-        // Checks if the last token was an operator or an open paren.
-        if (tok_not(lastTok, TT_OPERATOR) &&
-            tok_not_specific_paren(lastTok, PT_OPAREN))
-        {
-          S_ERROR(lastTok->cursor, "Before a function initializer must be an operator or an open paren!");
-          isError = true;
-          continue;
-        }
-      }
+    //     // Checks if the last token was an operator or an open paren.
+    //     if (tok_not(lastTok, TT_OPERATOR) &&
+    //         tok_not_specific_paren(lastTok, PT_OPAREN))
+    //     {
+    //       S_ERROR(lastTok->cursor, "Before a function initializer must be an operator or an open paren!");
+    //       isError = true;
+    //       continue;
+    //     }
+    //   }
 
-      // This ignores the cheking for the next token because the checks here make sure that the next is an open paren.
-      parenCount++;
-      i++;
+    //   // This ignores the cheking for the next token because the checks here make sure that the next is an open paren.
+    //   parenCount++;
+    //   i++;
 
-      continue;
-    }
+    //   continue;
+    // }
     case TT_LITERAL:
     {
       // TODO: Implement!
@@ -454,7 +462,8 @@ static bool check_semantics(lexer_t *lexer)
         token_t *lastTok = lex_at(lexer, i + 1);
 
         if (tok_is(lastTok, TT_LITERAL) ||
-            tok_is(lastTok, TT_FUNCTION) ||
+            // TODO: Rethink! Maybe change to TT_SYMBOL and check if it is a function in the parser.
+            // tok_is(lastTok, TT_FUNCTION) ||
             tok_is_paren(lastTok, PT_OPAREN) ||
             tok_is(lastTok, TT_OPERATOR) ||
             tok_is(lastTok, TT_SYMBOL))
@@ -551,9 +560,13 @@ static bool check_semantics(lexer_t *lexer)
 
       // Valid variable name definition.
       if (tok_is(nextTok, TT_NUMBER) ||
-          tok_is(nextTok, TT_MATH_CONSTANT) ||
-          tok_is(nextTok, TT_FUNCTION) ||
-          tok_is_paren(nextTok, PT_OPAREN))
+          // TODO: Rethink! Maybe change to TT_SYMBOL and check if it is a math constant in the parser.
+          // tok_is(nextTok, TT_MATH_CONSTANT) ||
+          // TODO: Rethink! Maybe change to TT_SYMBOL and check if it is a function in the parser.
+          // tok_is(nextTok, TT_FUNCTION) ||
+          tok_is_paren(nextTok, PT_OPAREN) ||
+          tok_is(nextTok, TT_SYMBOL) ||
+          (lex_next_in_range(lexer, i + 2) && tok_is_paren(lex_at(lexer, i + 2), PT_OPAREN)))
         continue;
 
       S_ERROR(nextTok->cursor, "Expected a valid argument after variable assignment literal!");
@@ -589,8 +602,16 @@ static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer, size_t index)
 
   if (tok_is(token, TT_NUMBER))
     return node_constant(arena, token->cursor, token->as.number);
-  else if (tok_is(token, TT_MATH_CONSTANT))
-    return node_constant(arena, token->cursor, mathConstantTypeValues[token->as.constant]);
+  // TODO: Rethink! Maybe change to TT_SYMBOL and check if it is a math constant in the parser.
+  // else if (tok_is(token, TT_MATH_CONSTANT))
+  //   return node_constant(arena, token->cursor, mathConstantTypeValues[token->as.constant]);
+  else if (tok_is(token, TT_SYMBOL) && cstr_is_math_constant_ex(token->as.symbol.src, token->as.symbol.len))
+  {
+    e_math_constant_type mc = cstr_to_math_constant_type_ex(token->as.symbol.src, token->as.symbol.len);
+    if (mc == MC_INVALID)
+      UNREACHABLE("Math-Constant-Type not implemented!");
+    return node_constant(arena, token->cursor, mathConstantTypeValues[mc]);
+  }
   else
     return NULL;
 }
@@ -618,18 +639,37 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t index)
 
   token_t *token = lex_at(lexer, index);
 
-  if (tok_is(token, TT_FUNCTION))
+  // TODO: Rethink! Maybe change to TT_SYMBOL and check if it is a function in the parser.
+  // if (tok_is(token, TT_FUNCTION))
+  if (tok_is(token, TT_SYMBOL))
   {
-    // TODO: Make sure that all function arguments get loaded.
-    node_t *arg = try_parse_paren(arena, lexer, index + 1);
-    if (!arg)
+    // Checks if the symbol is a valid function name.
+    e_function_type ft = cstr_to_function_type_ex(token->as.symbol.src, token->as.symbol.len);
+
+    if (ft == FT_INVALID)
       return NULL;
 
-    // TODO: Rethink!
-    node_func_args_t argsList = {0};
-    node_func_args_append(arena, &argsList, arg);
+    // Next token must be an open paren.
+    if (!lex_next_in_range(lexer, index + 1))
+      return NULL;
 
-    return node_func(arena, token->cursor, to_local_func_type(token->as.function), argsList);
+    token_t *nextTok = lex_at(lexer, index + 1);
+
+    if (!tok_is_paren(nextTok, PT_OPAREN))
+      return NULL;
+
+    // Next token must be an argument of the function. This can be a number, math constant, function, or an open paren.
+    // Can also be multiple arguments separated by a comma.
+    // Make sure that all function arguments get loaded. NOT JUST ONE!
+    // node_func_args_t argsList = {0};
+
+    // node_t *argX = node_constant(&arena, ...);
+    // node_func_args_append(arena, &argsList, argx);
+
+    // Next token must be a closing paren.
+
+    // return node_func(arena, token->cursor, to_local_func_type(token->as.function), argsList);
+    return NULL;
   }
   else
     return NULL;
@@ -652,6 +692,43 @@ static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t index)
     return NULL;
 }
 
+static node_t *parser_execute_ex(arena_t *arena, lexer_t *lexer, size_t index)
+{
+  // TODO:
+  // Order checking: Brackets -> Exponents -> Multiplication / Division -> Addition / Substraction
+  // A stack for checking nested expressions in brackets. Also if the brackets are used correctly.
+  // Paren checking: 2 Open '(' should have 2 Closing ')' after.
+  // After a constant / number MUST come an operator, function, or closing paren
+
+  // IN: "EN + 5 / (5 * 0)"
+  // AST: "add(EN, divide(5, paren(mult(5, 0))))"
+
+  ASSERT_NULL(arena);
+  ASSERT_NULL(lexer);
+  assert(index < lexer->count && "Lexer out of range!");
+
+  // TODO: Implement!
+  fprintf(stderr, "ERROR: Parser is currently under developement!\n");
+  return NULL;
+
+  token_t *token = lex_at(lexer, index);
+
+  if (tok_is(token, TT_OPERATOR))
+  {
+    // TODO: Implement! Parse left and right argument tree.
+    return NULL;
+  }
+  else
+    return NULL;
+
+  // node_t *node = NULL;
+  // node = try_parse_constant(arena, lexer, index);
+  // if (node)
+  //   return node;
+
+  return NULL;
+}
+
 node_t *parser_execute(arena_t *arena, lexer_t *lexer)
 {
   ASSERT_NULL(arena);
@@ -660,25 +737,11 @@ node_t *parser_execute(arena_t *arena, lexer_t *lexer)
   if (lexer->isError || lexer->count <= 0)
     return NULL;
 
-  // TODO:
-  // The parser needs to reed to the next operator, paren, or func for every node.
-  // Order checking: Brackets -> Exponents -> Multiplication / Division -> Addition / Substraction
-  // A stack for checking nested expressions in brackets. Also if the brackets are used correctly.
-  // Paren checking: 2 Open '(' should have 2 Closing ')' after.
-  // After a constant / number MUST come an operator, function, or closing paren
-
-  fprintf(stderr, "ERROR: Parser is currently under developement!\n");
-
   // TODO: Rethink!
   if (!check_semantics(lexer))
     return NULL;
 
-  // IN: "EN + 5 / (5 * 0)"
-  // AST: "add(EN, divide(5, paren(mult(5, 0))))"
-
-  node_t *root = NULL;
-
-  return root;
+  return parser_execute_ex(arena, lexer, 0);
 }
 
 node_t *ast_eval_ex(arena_t *arena, node_t *expr)
@@ -726,7 +789,6 @@ node_t *ast_eval_ex(arena_t *arena, node_t *expr)
   }
   case NT_FUNCTION:
   {
-    // TODO: Functions could support different numbers of arguments in the future.
     switch (expr->as.func.type)
     {
     case NF_SQRT:
@@ -861,6 +923,21 @@ node_t *ast_eval_ex(arena_t *arena, node_t *expr)
         return NULL;
       return node_constant(arena, func->cursor, tanh(func->as.constant));
     }
+    case NF_ATAN2:
+    {
+      if (expr->as.func.args.count != 2)
+      {
+        E_ERROR(expr->cursor, "atan2() takes two arguments!");
+        return NULL;
+      }
+      node_t *arg1 = ast_eval_ex(arena, expr->as.func.args.items[0]);
+      if (!arg1)
+        return NULL;
+      node_t *arg2 = ast_eval_ex(arena, expr->as.func.args.items[1]);
+      if (!arg2)
+        return NULL;
+      return node_constant(arena, expr->cursor, atan2(arg1->as.constant, arg2->as.constant));
+    }
     case NF_LN:
     {
       if (expr->as.func.args.count != 1)
@@ -906,9 +983,9 @@ node_t *ast_eval_ex(arena_t *arena, node_t *expr)
 
 typedef struct
 {
-  bool error;
   // TODO: Change to big number!
   double value;
+  bool isError;
 } ast_eval_res_t;
 
 ast_eval_res_t ast_eval(arena_t *arena, node_t *expr)
@@ -922,14 +999,14 @@ ast_eval_res_t ast_eval(arena_t *arena, node_t *expr)
   if (!evaluatedNode)
   {
     E_ERROR(expr->cursor, "Evaluation failed!");
-    result.error = true;
+    result.isError = true;
     return result;
   }
 
   if (evaluatedNode->type != NT_CONSTANT)
   {
     E_ERROR(expr->cursor, "Evaluation failed! Return-Type not of type 'constant'!");
-    result.error = true;
+    result.isError = true;
     return result;
   }
 
@@ -937,15 +1014,15 @@ ast_eval_res_t ast_eval(arena_t *arena, node_t *expr)
   return result;
 }
 
-#define _PRINT_DEPTH_SPACES(indented, deph) \
-  do                                        \
-  {                                         \
-    if (indented)                           \
-      for (size_t i = 0; i < (deph); ++i)   \
-        printf(" ");                        \
+#define _PRINT_DEPTH_SPACES(indented, depth) \
+  do                                         \
+  {                                          \
+    if (indented)                            \
+      for (size_t i = 0; i < (depth); ++i)   \
+        printf(" ");                         \
   } while (0)
 
-void print_node_ex(node_t *node, bool indented, size_t deph)
+static void print_node_ex(node_t *node, bool indented, size_t depth)
 {
   ASSERT_NULL(node);
 
@@ -953,7 +1030,7 @@ void print_node_ex(node_t *node, bool indented, size_t deph)
   {
   case NT_CONSTANT:
   {
-    _PRINT_DEPTH_SPACES(indented, deph);
+    _PRINT_DEPTH_SPACES(indented, depth);
     printf(DOUBLE_PRINT_FORMAT, node->as.constant);
     break;
   }
@@ -962,49 +1039,74 @@ void print_node_ex(node_t *node, bool indented, size_t deph)
     if (node->as.binop.type >= NO_COUNT)
       UNREACHABLE("Invalid binop-node-type!");
 
-    _PRINT_DEPTH_SPACES(indented, deph);
+    _PRINT_DEPTH_SPACES(indented, depth);
     printf("%s(", nodeBinopTypeNames[node->as.binop.type]);
     if (indented)
       printf("\n");
-    print_node_ex(node->as.binop.lhs, indented, deph + 1);
+    print_node_ex(node->as.binop.lhs, indented, depth + 1);
     printf(",%s", indented ? "\n" : " ");
-    print_node_ex(node->as.binop.rhs, indented, deph + 1);
+    print_node_ex(node->as.binop.rhs, indented, depth + 1);
     if (indented)
       printf("\n");
-    _PRINT_DEPTH_SPACES(indented, deph);
+    _PRINT_DEPTH_SPACES(indented, depth);
     printf(")");
     break;
   }
   case NT_FUNCTION:
   {
-    // TODO: Implement multi argument function printing!
-    if (node->as.func.type >= NF_COUNT)
+    node_function_t *funcNode = &node->as.func;
+    if (funcNode->type >= NF_COUNT)
       UNREACHABLE("Invalid func-node-type!");
 
-    // TODO: Make sure that all function args get displayed!
-    _PRINT_DEPTH_SPACES(indented, deph);
-    printf("%s(", nodeFunctionTypeNames[node->as.func.type]);
-    bool isArgTypeConst = node->as.func.args.items[0]->type == NT_CONSTANT;
-    if (indented && !isArgTypeConst)
-      printf("\n");
-    print_node_ex(node->as.func.args.items[0], indented, !isArgTypeConst ? deph + 1 : 0);
-    if (indented && !isArgTypeConst)
-      printf("\n");
-    _PRINT_DEPTH_SPACES(indented, !isArgTypeConst ? deph : 0);
+    node_func_args_t *args = &funcNode->args;
+
+    if (args->count <= 0)
+      UNREACHABLE("Function node has no arguments!");
+
+    _PRINT_DEPTH_SPACES(indented, depth);
+    printf("%s(", nodeFunctionTypeNames[funcNode->type]);
+    if (args->count == 1)
+    {
+      bool isArgTypeConst = args->items[0]->type == NT_CONSTANT;
+
+      if (indented && !isArgTypeConst)
+        printf("\n");
+
+      print_node_ex(args->items[0], indented, !isArgTypeConst ? depth + 1 : 0);
+
+      if (indented && !isArgTypeConst)
+        printf("\n");
+
+      _PRINT_DEPTH_SPACES(indented, !isArgTypeConst ? depth : 0);
+    }
+    else
+    {
+      if (indented)
+        printf("\n");
+      for (size_t i = 0; i < args->count; ++i)
+      {
+        print_node_ex(args->items[i], indented, depth + 1);
+        if (i + 1 < args->count)
+          printf(",%s", indented ? "\n" : " ");
+      }
+      if (indented)
+        printf("\n");
+      _PRINT_DEPTH_SPACES(indented, depth);
+    }
     printf(")");
     break;
   }
   case NT_PAREN:
   {
-    _PRINT_DEPTH_SPACES(indented, deph);
+    _PRINT_DEPTH_SPACES(indented, depth);
     printf("paren(");
     bool isArgTypeConst = node->as.paren.arg->type == NT_CONSTANT;
     if (indented && !isArgTypeConst)
       printf("\n");
-    print_node_ex(node->as.paren.arg, indented, !isArgTypeConst ? deph + 1 : 0);
+    print_node_ex(node->as.paren.arg, indented, !isArgTypeConst ? depth + 1 : 0);
     if (indented && !isArgTypeConst)
       printf("\n");
-    _PRINT_DEPTH_SPACES(indented, !isArgTypeConst ? deph : 0);
+    _PRINT_DEPTH_SPACES(indented, !isArgTypeConst ? depth : 0);
     printf(")");
     break;
   }
