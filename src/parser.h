@@ -689,7 +689,7 @@ void node_variable_stack_print(const node_variable_stack_t *varStack)
       UNREACHABLE("Invalid variable-type!");
       break;
     }
-    printf(" = ");
+    printf(" := ");
     print_node_ex(variable->expression, false, 0);
     printf("\n");
   }
@@ -840,14 +840,13 @@ static node_variable_def_return_t try_parse_const_variable(node_variable_stack_t
   if (!tok_is_specific_literal(assignTok, CLT_EQUALS))
     return node_var_def_ret_empty();
 
-  ++(*index);
-
   if (!lex_next_in_range(lexer, *index))
   {
     S_ERROR(assignTok->cursor, "After a variable assignment must be an expression!");
     return node_var_def_ret_error();
   }
 
+  ++(*index);
   ++(*index);
 
   node_t *value = parser_execute_ex(varStack, arena, lexer, *index);
