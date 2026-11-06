@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <stdbool.h>
 #include <string.h>
+#include <stdint.h>
 #include <assert.h>
 
 #define SS_FMT "%.*s"
@@ -12,9 +13,9 @@
 typedef struct
 {
   const char *src;
+  uintptr_t start_ptr;
+  uintptr_t current_ptr;
   size_t len;
-  size_t start_ptr;
-  size_t current_ptr;
 } string_slice_t;
 
 #define ss_current_pos(slice) ((slice)->current_ptr - (slice)->start_ptr)
@@ -39,8 +40,8 @@ void ss_init_ex(string_slice_t *slice, const char *src, size_t len)
 
   slice->src = src;
   slice->len = len;
-  slice->start_ptr = (size_t)src;
-  slice->current_ptr = (size_t)src;
+  slice->start_ptr = (uintptr_t)src;
+  slice->current_ptr = (uintptr_t)src;
 }
 
 void ss_init(string_slice_t *slice, const char *src)
@@ -53,8 +54,8 @@ void ss_init(string_slice_t *slice, const char *src)
 
   slice->src = src;
   slice->len = len;
-  slice->start_ptr = (size_t)src;
-  slice->current_ptr = (size_t)src;
+  slice->start_ptr = (uintptr_t)src;
+  slice->current_ptr = (uintptr_t)src;
 }
 
 #define ss_get_current(slice) ss_get_current_ex((slice), __FILE__, __LINE__)
@@ -72,8 +73,6 @@ char ss_get_current_ex(string_slice_t *slice, const char *file, size_t line)
   return *((char *)slice->current_ptr);
 }
 
-#define ss_get_current_ptr(slice) ss_get_current_ptr_ex((slice), __FILE__, __LINE__)
-
 const char *ss_get_current_ptr_ex(string_slice_t *slice, const char *file, size_t line)
 {
   _SS_ASSERT_IF_NOT_VALID(slice);
@@ -87,6 +86,8 @@ const char *ss_get_current_ptr_ex(string_slice_t *slice, const char *file, size_
   return (char *)slice->current_ptr;
 }
 
+#define ss_get_current_ptr(slice) ss_get_current_ptr_ex((slice), __FILE__, __LINE__)
+
 bool ss_in_range(string_slice_t *slice)
 {
   _SS_ASSERT_IF_NOT_VALID(slice);
@@ -99,8 +100,7 @@ bool ss_can_peek(string_slice_t *slice)
   return _SS_IS_NEXT_IN_RANGE(slice);
 }
 
-#define ss_peek(slice) ss_peek_ex((slice), __FILE__, __LINE__)
-
+// Peaks the next character in the string-slice without seeking.
 char ss_peek_ex(string_slice_t *slice, const char *file, size_t line)
 {
   _SS_ASSERT_IF_NOT_VALID(slice);
@@ -114,19 +114,27 @@ char ss_peek_ex(string_slice_t *slice, const char *file, size_t line)
   return *(((char *)slice->current_ptr) + 1);
 }
 
+#define ss_peek(slice) ss_peek_ex((slice), __FILE__, __LINE__)
+
 // This function is UNSAFE because it can seek after the length of the input.
 // That is implemented because else there would be no way to fully traverse the input.
-void ss_seek(string_slice_t *slice)
+char ss_seek(string_slice_t *slice)
 {
   _SS_ASSERT_IF_NOT_VALID(slice);
-  slice->current_ptr++;
+  return *((char *)(++slice->current_ptr));
 }
 
-void ss_seek_spaces(string_slice_t *slice)
+// Returns the amount of spaces that were seeked over.
+size_t ss_seek_spaces(string_slice_t *slice)
 {
   _SS_ASSERT_IF_NOT_VALID(slice);
+  size_t count = 0;
   while (_SS_IS_IN_RANGE(slice) && isspace(ss_get_current(slice)))
+  {
     ss_seek(slice);
+    count++;
+  }
+  return count;
 }
 
 #endif // _STRING_SLICE_H_

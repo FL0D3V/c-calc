@@ -207,8 +207,10 @@ static bool execute_math_expression(const char *input, bool verbose)
     printf("\n");
   }
 
+  node_variable_stack_t varStack = {0};
+
   // Execute parser and generate AST
-  node_t *rootNode = parser_execute(&arena, &lexer);
+  node_t *rootNode = parser_execute(&varStack, &arena, &lexer);
   if (!rootNode)
   {
     // Cleanup
@@ -217,6 +219,10 @@ static bool execute_math_expression(const char *input, bool verbose)
   }
   if (verbose)
   {
+    // TODO: Rethink!
+    node_variable_stack_print(&varStack);
+    printf("\n");
+
     print_node(rootNode, true);
     printf("\n");
   }

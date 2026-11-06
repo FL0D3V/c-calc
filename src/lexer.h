@@ -146,6 +146,18 @@ const char *mathConstantTypeNames[MC_COUNT] = {
     [MC_GAUSS_CONSTANT] = "Gauss's constant",
 };
 
+e_math_constant_type cstr_to_math_constant_type_ex(const char *cstr, size_t len)
+{
+  if (!cstr || len == 0)
+    return MC_INVALID;
+
+  for (size_t i = 0; i < MC_COUNT; ++i)
+    if (strlen(mathConstantTypeIdentifiers[i]) == len && strncmp(cstr, mathConstantTypeIdentifiers[i], len) == 0)
+      return (e_math_constant_type)i;
+
+  return MC_INVALID;
+}
+
 e_math_constant_type cstr_to_math_constant_type(const char *cstr)
 {
   if (!cstr)
@@ -153,18 +165,6 @@ e_math_constant_type cstr_to_math_constant_type(const char *cstr)
 
   for (size_t i = 0; i < MC_COUNT; ++i)
     if (strcmp(cstr, mathConstantTypeIdentifiers[i]) == 0)
-      return (e_math_constant_type)i;
-
-  return MC_INVALID;
-}
-
-e_math_constant_type cstr_to_math_constant_type_ex(const char *cstr, size_t len)
-{
-  if (!cstr || len == 0)
-    return MC_INVALID;
-
-  for (size_t i = 0; i < MC_COUNT; ++i)
-    if (strncmp(cstr, mathConstantTypeIdentifiers[i], len) == 0)
       return (e_math_constant_type)i;
 
   return MC_INVALID;
@@ -223,6 +223,28 @@ const char *functionTypeIdentifiers[FT_COUNT] = {
     [FT_LOG10] = "log10",
 };
 
+const size_t functionTypeParameterCount[FT_COUNT] = {
+    // Other
+    [FT_SQRT] = 1,
+    [FT_EXP] = 1,
+    // Sin
+    [FT_SIN] = 1,
+    [FT_ASIN] = 1,
+    [FT_SINH] = 1,
+    // Cos
+    [FT_COS] = 1,
+    [FT_ACOS] = 1,
+    [FT_COSH] = 1,
+    // Tan
+    [FT_TAN] = 1,
+    [FT_ATAN] = 1,
+    [FT_TANH] = 1,
+    [FT_ATAN2] = 2,
+    // Log
+    [FT_LN] = 1,
+    [FT_LOG10] = 1,
+};
+
 const char *functionTypeNames[FT_COUNT] = {
     // Other
     [FT_SQRT] = "Square-Root",
@@ -261,32 +283,11 @@ const char *functionTypeDescriptions[FT_COUNT] = {
     [FT_TAN] = "Returns the tangent of a given angle x.",
     [FT_ATAN] = "Returns the arc tangent of x in radians.",
     [FT_TANH] = "Returns the hyperbolic tangent of x.",
-    [FT_ATAN2] = "Returns the angle theta from the conversion of rectangular coordinates (x, y) to polar coordinates (r, theta).",
+    [FT_ATAN2] = "Returns the angle theta from the conversion of rectangular coordinates "
+                 "(x, y) to polar coordinates (r, theta).",
     // Log
     [FT_LN] = "Returns the natural logarithm (base-e logarithm) of x.",
     [FT_LOG10] = "Returns the common logarithm (base-10 logarithm) of x.",
-};
-
-const size_t functionTypeParameterCount[FT_COUNT] = {
-    // Other
-    [FT_SQRT] = 1,
-    [FT_EXP] = 1,
-    // Sin
-    [FT_SIN] = 1,
-    [FT_ASIN] = 1,
-    [FT_SINH] = 1,
-    // Cos
-    [FT_COS] = 1,
-    [FT_ACOS] = 1,
-    [FT_COSH] = 1,
-    // Tan
-    [FT_TAN] = 1,
-    [FT_ATAN] = 1,
-    [FT_TANH] = 1,
-    [FT_ATAN2] = 2,
-    // Log
-    [FT_LN] = 1,
-    [FT_LOG10] = 1,
 };
 
 e_function_type cstr_to_function_type_ex(const char *cstr, size_t len)
@@ -295,7 +296,7 @@ e_function_type cstr_to_function_type_ex(const char *cstr, size_t len)
     return FT_INVALID;
 
   for (size_t i = 0; i < FT_COUNT; ++i)
-    if (strncmp(cstr, functionTypeIdentifiers[i], len) == 0)
+    if (strlen(functionTypeIdentifiers[i]) == len && strncmp(cstr, functionTypeIdentifiers[i], len) == 0)
       return (e_function_type)i;
 
   return FT_INVALID;
@@ -348,14 +349,6 @@ e_paren_type char_to_paren_type(const char c)
   return PT_INVALID;
 }
 
-e_paren_type cstr_to_paren_type(const char *cstr)
-{
-  if (!cstr || strlen(cstr) != 1)
-    return PT_INVALID;
-
-  return char_to_paren_type(cstr[0]);
-}
-
 e_paren_type cstr_to_paren_type_ex(const char *cstr, size_t len)
 {
   if (!cstr || len != 1)
@@ -364,9 +357,17 @@ e_paren_type cstr_to_paren_type_ex(const char *cstr, size_t len)
   return char_to_paren_type(cstr[0]);
 }
 
+e_paren_type cstr_to_paren_type(const char *cstr)
+{
+  if (!cstr || strlen(cstr) != 1)
+    return PT_INVALID;
+
+  return char_to_paren_type(cstr[0]);
+}
+
 #define c_is_paren(c) (char_to_paren_type(c) != PT_INVALID)
-#define cstr_is_paren(cstr) (cstr_to_paren_type(cstr) != PT_INVALID)
 #define cstr_is_paren_ex(cstr, len) (cstr_to_paren_type_ex(cstr, len) != PT_INVALID)
+#define cstr_is_paren(cstr) (cstr_to_paren_type(cstr) != PT_INVALID)
 
 // TODO: Rethink! Maybe add later here also !=, <=, >=, <, > or add it to symbols.
 typedef enum
@@ -401,14 +402,6 @@ e_common_literal_type char_to_common_literal_type(const char c)
   return CLT_INVALID;
 }
 
-e_common_literal_type cstr_to_common_literal_type(const char *cstr)
-{
-  if (!cstr || strlen(cstr) != 1)
-    return CLT_INVALID;
-
-  return char_to_common_literal_type(cstr[0]);
-}
-
 e_common_literal_type cstr_to_common_literal_type_ex(const char *cstr, size_t len)
 {
   if (!cstr || len != 1)
@@ -417,13 +410,22 @@ e_common_literal_type cstr_to_common_literal_type_ex(const char *cstr, size_t le
   return char_to_common_literal_type(cstr[0]);
 }
 
+e_common_literal_type cstr_to_common_literal_type(const char *cstr)
+{
+  if (!cstr || strlen(cstr) != 1)
+    return CLT_INVALID;
+
+  return char_to_common_literal_type(cstr[0]);
+}
+
 #define c_is_common_literal(c) (char_to_common_literal_type(c) != CLT_INVALID)
-#define cstr_is_common_literal(cstr) (cstr_to_common_literal_type(cstr) != CLT_INVALID)
 #define cstr_is_common_literal_ex(cstr, len) (cstr_to_common_literal_type_ex(cstr, len) != CLT_INVALID)
+#define cstr_is_common_literal(cstr) (cstr_to_common_literal_type(cstr) != CLT_INVALID)
 
 // Literals are all single character tokens.
 #define c_is_literal(c) (c_is_operator(c) || c_is_paren(c) || c_is_common_literal(c))
 
+// Input-Token printing macros
 #define IN_TOK_FMT "%.*s"
 #define IN_TOK_ARG(tok) (int)(tok)->length, (tok)->value
 
@@ -463,6 +465,7 @@ static bool next_symbol(arena_t *arena, string_slice_t *ss, tokenizer_t *tokeniz
   {
     current = ss_get_current(ss);
 
+    // If the current character is a space or a literal character, we stop the symbol tokenization.
     if (isspace(current) || c_is_literal(current))
       break;
 
@@ -549,18 +552,10 @@ typedef enum
 {
   // Only numbers like '109', '53.23531'
   TT_NUMBER,
-  // TODO: Rethink! Maybe change to TT_SYMBOL and check if it is a math constant in the parser.
-  // All math constants like 'PI', 'EN', ...
-  // TT_MATH_CONSTANT,
-
   // All operators like '+', '-', ...
   TT_OPERATOR,
   // All paren types
   TT_PAREN,
-  // TODO: Rethink! Maybe change to TT_SYMBOL and check if it is a function in the parser.
-  // All function definitions
-  // TT_FUNCTION,
-
   // Here are all not connected literals like ',' or '='
   TT_LITERAL,
   // All for example variable names.
@@ -573,14 +568,8 @@ static_assert(TT_COUNT == 5, "Amount of token-types have changed");
 
 static const char *tokenTypeNames[TT_COUNT] = {
     [TT_NUMBER] = "Number",
-    // TODO: Rethink! Maybe change to TT_SYMBOL and check if it is a math constant in the parser.
-    // [TT_MATH_CONSTANT] = "Constant",
-
     [TT_OPERATOR] = "Operator",
     [TT_PAREN] = "Parenthesis",
-    // TODO: Rethink! Maybe change to TT_SYMBOL and check if it is a function in the parser.
-    // [TT_FUNCTION] = "Function",
-
     [TT_LITERAL] = "Literal",
     [TT_SYMBOL] = "Symbol",
 };
@@ -589,13 +578,8 @@ typedef union
 {
   // TODO: Change to big number type!
   double number;
-  // TODO: Rethink! Maybe change to TT_SYMBOL and check if it is a math constant in the parser.
-  // This could allow for example to define a variable with the name of a math constant like 'PI' or 'EN' and easier check for errors.
-  // e_math_constant_type constant;
   e_operator_type operator;
   e_paren_type paren;
-  // TODO: Rethink! Maybe change to TT_SYMBOL and check if it is a function in the parser.
-  // e_function_type function;
   e_common_literal_type literal;
   string_slice_t symbol;
 } u_token_as;
@@ -615,29 +599,34 @@ typedef struct
   bool isError;
 } lexer_t;
 
-#define add_number_token(a, lexer, num, curr) arena_da_append((a), (lexer), ((token_t){.type = TT_NUMBER, .as.number = (num), .cursor = (curr)}))
-// TODO: Rethink! Maybe change to TT_SYMBOL and check if it is a math constant in the parser.
-// #define add_math_constant_token(a, lexer, mc, curr) arena_da_append((a), (lexer), ((token_t){.type = TT_MATH_CONSTANT, .as.constant = (mc), .cursor = (curr)}))
-
-#define add_operator_token(a, lexer, op, curr) arena_da_append((a), (lexer), ((token_t){.type = TT_OPERATOR, .as.operator=(op), .cursor = (curr)}))
-#define add_paren_token(a, lexer, pt, curr) arena_da_append((a), (lexer), ((token_t){.type = TT_PAREN, .as.paren = (pt), .cursor = (curr)}))
-// TODO: Rethink! Maybe change to TT_SYMBOL and check if it is a function in the parser.
-// #define add_function_token(a, lexer, ft, curr) arena_da_append((a), (lexer), ((token_t){.type = TT_FUNCTION, .as.function = (ft), .cursor = (curr)}))
-
-#define add_literal_token(a, lexer, clt, curr) arena_da_append((a), (lexer), ((token_t){.type = TT_LITERAL, .as.literal = (clt), .cursor = (curr)}))
-#define add_symbol_token(a, lexer, sym, curr) arena_da_append((a), (lexer), ((token_t){.type = TT_SYMBOL, .as.symbol = (sym), .cursor = (curr)}))
+#define add_number_token(a, lexer, num, curr) \
+  arena_da_append((a), (lexer), ((token_t){.type = TT_NUMBER, .as.number = (num), .cursor = (curr)}))
+#define add_operator_token(a, lexer, op, curr) \
+  arena_da_append((a), (lexer), ((token_t){.type = TT_OPERATOR, .as.operator=(op), .cursor = (curr)}))
+#define add_paren_token(a, lexer, pt, curr) \
+  arena_da_append((a), (lexer), ((token_t){.type = TT_PAREN, .as.paren = (pt), .cursor = (curr)}))
+#define add_literal_token(a, lexer, clt, curr) \
+  arena_da_append((a), (lexer), ((token_t){.type = TT_LITERAL, .as.literal = (clt), .cursor = (curr)}))
+#define add_symbol_token(a, lexer, sym, curr) \
+  arena_da_append((a), (lexer), ((token_t){.type = TT_SYMBOL, .as.symbol = (sym), .cursor = (curr)}))
 
 #define lex_at(lexer, idx) (&(lexer)->items[(idx)])
-#define lex_next_in_range(lexer, idx) ((idx) < (lexer)->count - 1)
+#define lex_in_range(lexer, idx) ((idx) < (lexer)->count - 1)
+#define lex_next_in_range(lexer, idx) ((idx) + 1 < (lexer)->count - 1)
 
 #define tok_is(tok, t) ((tok)->type == (t))
 #define tok_not(tok, t) ((tok)->type != (t))
 
-#define tok_is_paren(tok, pt) (tok_is(tok, TT_PAREN) && (tok)->as.paren == (pt))
-#define tok_not_specific_paren(tok, pt) (tok_not((tok), TT_PAREN) || (tok)->as.paren != (pt))
-#define tok_is_number_operator(tok) (tok_is(tok, TT_OPERATOR) && ((tok)->as.operator== OP_ADD ||(tok)->as.operator== OP_SUB))
-#define tok_is_specific_literal(tok, lt) (tok_is(tok, TT_LITERAL) && (tok)->as.literal == (lt))
-#define tok_not_specific_literal(tok, lt) (tok_not(tok, TT_LITERAL) || (tok)->as.literal != (lt))
+#define tok_is_paren(tok, pt) \
+  (tok_is(tok, TT_PAREN) && (tok)->as.paren == (pt))
+#define tok_not_specific_paren(tok, pt) \
+  (tok_not((tok), TT_PAREN) || (tok)->as.paren != (pt))
+#define tok_is_number_operator(tok) \
+  (tok_is(tok, TT_OPERATOR) && ((tok)->as.operator== OP_ADD ||(tok)->as.operator== OP_SUB))
+#define tok_is_specific_literal(tok, lt) \
+  (tok_is(tok, TT_LITERAL) && (tok)->as.literal == (lt))
+#define tok_not_specific_literal(tok, lt) \
+  (tok_not(tok, TT_LITERAL) || (tok)->as.literal != (lt))
 
 lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
 {
@@ -719,30 +708,6 @@ lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
       continue;
     }
 
-    // TODO: Rethink! Maybe change to TT_SYMBOL and check if it is a math constant in the parser.
-    // if (cstr_is_math_constant_ex(currentToken->value, currentToken->length))
-    // {
-    //   e_math_constant_type mc = cstr_to_math_constant_type_ex(currentToken->value, currentToken->length);
-
-    //   if (mc == MC_INVALID)
-    //     UNREACHABLE("Invalid math-constant-type!");
-
-    //   add_math_constant_token(arena, &lexer, mc, currentToken->cursor);
-    //   continue;
-    // }
-
-    // TODO: Rethink! Maybe change to TT_SYMBOL and check if it is a function in the parser.
-    // if (cstr_is_function_ex(currentToken->value, currentToken->length))
-    // {
-    //   e_function_type ft = cstr_to_function_type_ex(currentToken->value, currentToken->length);
-
-    //   if (ft == FT_INVALID)
-    //     UNREACHABLE("Invalid function-type!");
-
-    //   add_function_token(arena, &lexer, ft, currentToken->cursor);
-    //   continue;
-    // }
-
     // variable names, math constants, function names, ...
     string_slice_t symbol = {0};
     ss_init_ex(&symbol, currentToken->value, currentToken->length);
@@ -766,29 +731,20 @@ void lexer_print(const lexer_t *lexer)
 
   for (size_t i = 0; i < lexer->count; ++i)
   {
-    token_t *token = &lexer->items[i];
+    token_t *token = lex_at(lexer, i);
 
     printf("%s", tokenTypeNames[token->type]);
-
     switch (token->type)
     {
     case TT_NUMBER:
       printf("(" DOUBLE_PRINT_FORMAT ")", token->as.number);
       break;
-    // TODO: Rethink! Maybe change to TT_SYMBOL and check if it is a math constant in the parser.
-    // case TT_MATH_CONSTANT:
-    //   printf("(" DOUBLE_PRINT_FORMAT ", %s)", mathConstantTypeValues[token->as.constant], mathConstantTypeNames[token->as.constant]);
-    //   break;
     case TT_OPERATOR:
         printf("(%s): precedence: %d, right-associative: %s", operatorTypeNames[token->as.operator], operatorPrecedence[token->as.operator], bool_cstr(operatorRightAssociative[token->as.operator]));
         break;
     case TT_PAREN:
       printf("(%s)", parenTypeNames[token->as.paren]);
       break;
-    // TODO: Rethink! Maybe change to TT_SYMBOL and check if it is a function in the parser.
-    // case TT_FUNCTION:
-    //   printf("(%s)", functionTypeNames[token->as.function]);
-    //   break;
     case TT_LITERAL:
       printf("(%s)", commonLiteralTypeNames[token->as.literal]);
       break;
@@ -810,7 +766,6 @@ void lexer_print(const lexer_t *lexer)
       UNREACHABLE("Invalid token-type!");
       break;
     }
-
     printf("\n");
   }
 }
