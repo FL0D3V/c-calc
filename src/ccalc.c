@@ -207,10 +207,33 @@ static bool execute_math_expression(const char *input, bool verbose)
     printf("\n");
   }
 
-  node_variable_stack_t varStack = {0};
+  // Parse the variables
+  node_variable_stack_t vs = {0};
+  bool varParsingRes = parse_node_variable(&vs, &arena, &lexer);
+  // if (!varParsingRes)
+  // {
+  //   fprintf(stderr, "ERROR: Variable parsing failed!\n");
+
+  //   // Cleanup
+  //   arena_free(&arena);
+  //   return false;
+  // }
+  if (verbose)
+  {
+    node_variable_stack_print(&vs, true);
+    printf("\n");
+  }
+
+  // TODO: Rethink!
+  if (varParsingRes && vs.count > 0)
+  {
+    // Cleanup
+    arena_free(&arena);
+    return true;
+  }
 
   // Execute parser and generate AST
-  node_t *rootNode = parser_execute(&varStack, &arena, &lexer);
+  node_t *rootNode = parser_execute(&vs, &arena, &lexer);
   if (!rootNode)
   {
     // Cleanup
@@ -219,10 +242,6 @@ static bool execute_math_expression(const char *input, bool verbose)
   }
   if (verbose)
   {
-    // TODO: Rethink!
-    node_variable_stack_print(&varStack);
-    printf("\n");
-
     print_node(rootNode, true);
     printf("\n");
   }
@@ -589,7 +608,10 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
 
   node_func_args_t test11ArgsList1 = {0};
   node_t *test11ArgsList1Item1 = node_constant(&arena, 17, 2);
-  node_t *test11ArgsList1Item2 = node_constant(&arena, 19, 1);
+  // node_t *test11ArgsList1Item2 = node_constant(&arena, 19, 1);
+  node_t *test11ArgsList1Item2 = node_binop(&arena, 0, NO_POW,
+                                            node_constant(&arena, 0, 5),
+                                            node_constant(&arena, 0, mathConstantTypeValues[MC_EULERS_CONSTANT]));
   node_func_args_append(&arena, &test11ArgsList1, test11ArgsList1Item1);
   node_func_args_append(&arena, &test11ArgsList1, test11ArgsList1Item2);
 
@@ -740,11 +762,11 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
       },
       // Test 11
       {
-          // IN: "100/(2+3)*atan2(2,1)"
-          // AST "mult(divide(100,paren(add(2,3))),atan2(2,1))"
-          // = 22.142979999999998
-          .inputExpression = "100/(2+3)*atan2(2,1)",
-          .expectedResult = 22.142979999999998,
+          // IN: "100/(2+3)*atan2(2.5^EC)"
+          // AST "mult(divide(100,paren(add(2,3))),atan2(2,pow(5,EC)))"
+          // = 13.37107
+          .inputExpression = "100/(2+3)*atan2(2.5^EC)",
+          .expectedResult = 13.37107,
           .expressionTree = node_binop(&arena, 10, NO_MUL,
                                        node_binop(&arena, 4, NO_DIV,
                                                   node_constant(&arena, 0, 100),
@@ -764,7 +786,7 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
   for (size_t i = 0; i < totalTests; ++i)
   {
     printf("Test %zu:\n", i + 1);
-    if (!execute_test(&arena, &tests[i], verbose, freeAfterEachTest))
+    if (!execute_test(&arena, &tests[i], freeAfterEachTest, verbose, true))
       ++failedTests;
     printf("\n");
   }

@@ -560,6 +560,11 @@ typedef enum
   TT_LITERAL,
   // All for example variable names.
   TT_SYMBOL,
+
+  // TODO: Rethink both!
+  // TT_NEW_LINE,
+  // TT_EOF,
+
   // Count of all token types.
   TT_COUNT
 } e_token_type;
@@ -597,6 +602,9 @@ typedef struct
   size_t capacity;
   size_t count;
   bool isError;
+
+  // TODO: Rethink! Could be used to internally traverse from first to last token without having to check an external variable.
+  size_t cursor;
 } lexer_t;
 
 #define add_number_token(a, lexer, num, curr) \
