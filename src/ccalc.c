@@ -174,9 +174,6 @@ static void print_detail_info(const char *arg)
 
 static bool execute_math_expression(const char *input, bool verbose)
 {
-  // Set the currently available features. This function gets executed in the cli command.
-  change_global_program_mode(GPM_SINGLE_CLI_EXPRESSION_ARG);
-
   arena_t arena = {0};
 
   // Execute tokenizer
@@ -210,21 +207,11 @@ static bool execute_math_expression(const char *input, bool verbose)
   // Parse the variables
   node_variable_stack_t vs = {0};
   bool varParsingRes = parse_node_variable(&vs, &arena, &lexer);
-  // if (!varParsingRes)
-  // {
-  //   fprintf(stderr, "ERROR: Variable parsing failed!\n");
-
-  //   // Cleanup
-  //   arena_free(&arena);
-  //   return false;
-  // }
   if (verbose)
   {
     node_variable_stack_print(&vs, true);
     printf("\n");
   }
-
-  // TODO: Rethink!
   if (varParsingRes && vs.count > 0)
   {
     // Cleanup
@@ -247,7 +234,7 @@ static bool execute_math_expression(const char *input, bool verbose)
   }
 
   // Evaluate the AST
-  ast_eval_res_t result = ast_eval(&arena, rootNode);
+  ast_eval_res_t result = ast_eval(&arena, &vs, rootNode);
   if (result.isError)
   {
     // Cleanup
@@ -372,6 +359,10 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
     flag_c_free(c);
     return false;
   }
+
+  // TODO: Rethink!
+  // Set the currently available features. This function gets executed in the cli command.
+  change_global_program_mode(GPM_SINGLE_CLI_EXPRESSION_ARG);
 
   // Finally execute the math expression.
   bool result = execute_math_expression(input, verbose);
@@ -572,46 +563,47 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
   flag_c_free(c);
 
   arena_t arena = {0};
+  // The variable stack.
+  node_variable_stack_t varStack = {0};
   bool freeAfterEachTest = false;
 
   node_func_args_t test2ArgsList1 = {0};
-  node_t *test2ArgsList1Item1 = node_constant(&arena, 0, 10);
+  node_t *test2ArgsList1Item1 = node_constant(&arena, 0, node_constant_value(10));
   node_func_args_append(&arena, &test2ArgsList1, test2ArgsList1Item1);
 
   node_func_args_t test3ArgsList1 = {0};
   node_t *test3ArgsList1Item1 = node_binop(&arena, 0, NO_SUB,
-                                           node_constant(&arena, 0, 3.5),
-                                           node_constant(&arena, 0, mathConstantTypeValues[MC_EULERS_NUMBER]));
+                                           node_constant(&arena, 0, node_constant_value(3.5)),
+                                           node_constant(&arena, 0, node_constant_inbuild_const(MC_EULERS_NUMBER)));
   node_func_args_append(&arena, &test3ArgsList1, test3ArgsList1Item1);
 
   node_func_args_t test3ArgsList2 = {0};
   node_t *test3ArgsList2Item1 = node_binop(&arena, 0, NO_MUL,
-                                           node_constant(&arena, 0, 44.23),
+                                           node_constant(&arena, 0, node_constant_value(44.23)),
                                            node_binop(&arena, 0, NO_POW,
-                                                      node_constant(&arena, 0, 6.4),
-                                                      node_constant(&arena, 0, 2)));
+                                                      node_constant(&arena, 0, node_constant_value(6.4)),
+                                                      node_constant(&arena, 0, node_constant_value(2))));
   node_func_args_append(&arena, &test3ArgsList2, test3ArgsList2Item1);
 
   node_func_args_t test3ArgsList3 = {0};
-  node_t *test3ArgsList3Item1 = node_constant(&arena, 0, 10);
+  node_t *test3ArgsList3Item1 = node_constant(&arena, 0, node_constant_value(10));
   node_func_args_append(&arena, &test3ArgsList3, test3ArgsList3Item1);
 
   node_func_args_t test3ArgsList4 = {0};
   node_t *test3ArgsList4Item1 = node_binop(&arena, 0, NO_POW,
-                                           node_constant(&arena, 0, 5),
-                                           node_constant(&arena, 0, mathConstantTypeValues[MC_EULERS_CONSTANT]));
+                                           node_constant(&arena, 0, node_constant_value(5)),
+                                           node_constant(&arena, 0, node_constant_inbuild_const(MC_EULERS_CONSTANT)));
   node_func_args_append(&arena, &test3ArgsList4, test3ArgsList4Item1);
 
   node_func_args_t test4ArgsList1 = {0};
-  node_t *test4ArgsList1Item1 = node_constant(&arena, 0, 4);
+  node_t *test4ArgsList1Item1 = node_constant(&arena, 0, node_constant_value(4));
   node_func_args_append(&arena, &test4ArgsList1, test4ArgsList1Item1);
 
   node_func_args_t test11ArgsList1 = {0};
-  node_t *test11ArgsList1Item1 = node_constant(&arena, 17, 2);
-  // node_t *test11ArgsList1Item2 = node_constant(&arena, 19, 1);
+  node_t *test11ArgsList1Item1 = node_constant(&arena, 17, node_constant_value(2));
   node_t *test11ArgsList1Item2 = node_binop(&arena, 0, NO_POW,
-                                            node_constant(&arena, 0, 5),
-                                            node_constant(&arena, 0, mathConstantTypeValues[MC_EULERS_CONSTANT]));
+                                            node_constant(&arena, 0, node_constant_value(5)),
+                                            node_constant(&arena, 0, node_constant_inbuild_const(MC_EULERS_CONSTANT)));
   node_func_args_append(&arena, &test11ArgsList1, test11ArgsList1Item1);
   node_func_args_append(&arena, &test11ArgsList1, test11ArgsList1Item2);
 
@@ -624,15 +616,15 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
           .inputExpression = "1 + 2 + (PI ^ 2) / 3",
           .expectedResult = 6.28986,
           .expressionTree = node_binop(&arena, 0, NO_ADD,
-                                       node_constant(&arena, 0, 1),
+                                       node_constant(&arena, 0, node_constant_value(1)),
                                        node_binop(&arena, 0, NO_ADD,
-                                                  node_constant(&arena, 0, 2),
+                                                  node_constant(&arena, 0, node_constant_value(2)),
                                                   node_binop(&arena, 0, NO_DIV,
                                                              node_paren(&arena, 0,
                                                                         node_binop(&arena, 0, NO_POW,
-                                                                                   node_constant(&arena, 0, mathConstantTypeValues[MC_PI]),
-                                                                                   node_constant(&arena, 0, 2))),
-                                                             node_constant(&arena, 0, 3)))),
+                                                                                   node_constant(&arena, 0, node_constant_inbuild_const(MC_PI)),
+                                                                                   node_constant(&arena, 0, node_constant_value(2)))),
+                                                             node_constant(&arena, 0, node_constant_value(3))))),
       },
       // Test 2
       {
@@ -642,7 +634,7 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
           .inputExpression = "100 + ln(10)",
           .expectedResult = 102.30258,
           .expressionTree = node_binop(&arena, 3, NO_ADD,
-                                       node_constant(&arena, 0, 100),
+                                       node_constant(&arena, 0, node_constant_value(100)),
                                        node_func(&arena, 4, NF_LN, test2ArgsList1)),
       },
       // Test 3
@@ -653,17 +645,17 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
           .inputExpression = "100.53 + sqrt(3.5 - EN) + cos(44.23 * 6.4^2) / 8.3 + ln(10) - PI + ln(5^EC)",
           .expectedResult = 99.58497,
           .expressionTree = node_binop(&arena, 0, NO_ADD,
-                                       node_constant(&arena, 0, 100.53),
+                                       node_constant(&arena, 0, node_constant_value(100.53)),
                                        node_binop(&arena, 0, NO_ADD,
                                                   node_func(&arena, 0, NF_SQRT, test3ArgsList1),
                                                   node_binop(&arena, 0, NO_ADD,
                                                              node_binop(&arena, 0, NO_DIV,
                                                                         node_func(&arena, 0, NF_COS, test3ArgsList2),
-                                                                        node_constant(&arena, 0, 8.3)),
+                                                                        node_constant(&arena, 0, node_constant_value(8.3))),
                                                              node_binop(&arena, 0, NO_SUB,
                                                                         node_func(&arena, 0, NF_LN, test3ArgsList3),
                                                                         node_binop(&arena, 0, NO_ADD,
-                                                                                   node_constant(&arena, 0, mathConstantTypeValues[MC_PI]),
+                                                                                   node_constant(&arena, 0, node_constant_inbuild_const(MC_PI)),
                                                                                    node_func(&arena, 0, NF_LN, test3ArgsList4)))))),
       },
       // Test 4
@@ -674,7 +666,7 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
           .inputExpression = "10.5 * exp(4)",
           .expectedResult = 573.28058,
           .expressionTree = node_binop(&arena, 0, NO_MUL,
-                                       node_constant(&arena, 0, 10.5),
+                                       node_constant(&arena, 0, node_constant_value(10.5)),
                                        node_func(&arena, 0, NF_EXP, test4ArgsList1)),
       },
       // Test 5
@@ -685,13 +677,13 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
           .inputExpression = "10 + 5 / (5 * 0)",
           .shouldFail = true,
           .expressionTree = node_binop(&arena, 3, NO_ADD,
-                                       node_constant(&arena, 0, 10),
+                                       node_constant(&arena, 0, node_constant_value(10)),
                                        node_binop(&arena, 6, NO_DIV,
-                                                  node_constant(&arena, 4, 5),
+                                                  node_constant(&arena, 4, node_constant_value(5)),
                                                   node_paren(&arena, 8,
                                                              node_binop(&arena, 10, NO_MUL,
-                                                                        node_constant(&arena, 9, 5),
-                                                                        node_constant(&arena, 11, 0))))),
+                                                                        node_constant(&arena, 9, node_constant_value(5)),
+                                                                        node_constant(&arena, 11, node_constant_value(0)))))),
       },
       // Test 6
       {
@@ -702,8 +694,8 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
           .expectedResult = 0,
           .expressionTree = node_paren(&arena, 0,
                                        node_binop(&arena, 3, NO_MUL,
-                                                  node_constant(&arena, 1, 5),
-                                                  node_constant(&arena, 5, 0))),
+                                                  node_constant(&arena, 1, node_constant_value(5)),
+                                                  node_constant(&arena, 5, node_constant_value(0)))),
       },
       // Test 7
       {
@@ -713,8 +705,8 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
           .inputExpression = "10 / 0",
           .shouldFail = true,
           .expressionTree = node_binop(&arena, 2, NO_DIV,
-                                       node_constant(&arena, 0, 10),
-                                       node_constant(&arena, 4, 0)),
+                                       node_constant(&arena, 0, node_constant_value(10)),
+                                       node_constant(&arena, 4, node_constant_value(0))),
       },
       // Test 8
       {
@@ -724,9 +716,9 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
           .inputExpression = "10 / (4)",
           .expectedResult = 2.5,
           .expressionTree = node_binop(&arena, 3, NO_DIV,
-                                       node_constant(&arena, 0, 10),
+                                       node_constant(&arena, 0, node_constant_value(10)),
                                        node_paren(&arena, 5,
-                                                  node_constant(&arena, 6, 4))),
+                                                  node_constant(&arena, 6, node_constant_value(4)))),
       },
       // Test 9
       {
@@ -739,10 +731,10 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
                                        node_binop(&arena, 6, NO_MUL,
                                                   node_paren(&arena, 1,
                                                              node_binop(&arena, 3, NO_ADD,
-                                                                        node_constant(&arena, 2, 2),
-                                                                        node_constant(&arena, 4, 2))),
-                                                  node_constant(&arena, 2, 8)),
-                                       node_constant(&arena, 2, 2)),
+                                                                        node_constant(&arena, 2, node_constant_value(2)),
+                                                                        node_constant(&arena, 4, node_constant_value(2)))),
+                                                  node_constant(&arena, 2, node_constant_value(8))),
+                                       node_constant(&arena, 2, node_constant_value(2))),
       },
       // Test 10
       {
@@ -753,12 +745,12 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
           .expectedResult = 16.0,
           .expressionTree = node_binop(&arena, 4, NO_MUL,
                                        node_binop(&arena, 2, NO_DIV,
-                                                  node_constant(&arena, 1, 8),
-                                                  node_constant(&arena, 2, 2)),
+                                                  node_constant(&arena, 1, node_constant_value(8)),
+                                                  node_constant(&arena, 2, node_constant_value(2))),
                                        node_paren(&arena, 5,
                                                   node_binop(&arena, 7, NO_ADD,
-                                                             node_constant(&arena, 6, 2),
-                                                             node_constant(&arena, 8, 2)))),
+                                                             node_constant(&arena, 6, node_constant_value(2)),
+                                                             node_constant(&arena, 8, node_constant_value(2))))),
       },
       // Test 11
       {
@@ -769,11 +761,11 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
           .expectedResult = 13.37107,
           .expressionTree = node_binop(&arena, 10, NO_MUL,
                                        node_binop(&arena, 4, NO_DIV,
-                                                  node_constant(&arena, 0, 100),
+                                                  node_constant(&arena, 0, node_constant_value(100)),
                                                   node_paren(&arena, 5,
                                                              node_binop(&arena, 7, NO_ADD,
-                                                                        node_constant(&arena, 6, 2),
-                                                                        node_constant(&arena, 8, 3)))),
+                                                                        node_constant(&arena, 6, node_constant_value(2)),
+                                                                        node_constant(&arena, 8, node_constant_value(3))))),
                                        node_func(&arena, 11, NF_ATAN2, test11ArgsList1)),
       },
   };
@@ -786,7 +778,7 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
   for (size_t i = 0; i < totalTests; ++i)
   {
     printf("Test %zu:\n", i + 1);
-    if (!execute_test(&arena, &tests[i], freeAfterEachTest, verbose, true))
+    if (!execute_test(&arena, &varStack, &tests[i], freeAfterEachTest, verbose, true))
       ++failedTests;
     printf("\n");
   }

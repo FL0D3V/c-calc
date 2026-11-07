@@ -429,11 +429,30 @@ e_common_literal_type cstr_to_common_literal_type(const char *cstr)
 #define IN_TOK_FMT "%.*s"
 #define IN_TOK_ARG(tok) (int)(tok)->length, (tok)->value
 
+typedef enum
+{
+  IT_LITERAL,
+  IT_ID,
+  IT_NEW_LINE,
+
+  IT_COUNT
+} e_in_tok_type;
+
+static_assert(IT_COUNT == 3, "Amount of input token types changed");
+
+const char *inputTokenTypeNames[IT_COUNT] = {
+    [IT_LITERAL] = "Literal",
+    [IT_ID] = "Identifier",
+    [IT_NEW_LINE] = "New-Line",
+};
+
 typedef struct
 {
   const char *value;
   size_t length;
   size_t cursor;
+
+  e_in_tok_type type;
 } input_token_t;
 
 typedef struct
@@ -441,14 +460,21 @@ typedef struct
   input_token_t *items;
   size_t capacity;
   size_t count;
+
   bool isError;
 } tokenizer_t;
 
-#define tokenizer_append(a, tokenizer, val, len, curr) \
-  arena_da_append((a), (tokenizer), ((input_token_t){.value = (val), .length = (len), .cursor = (curr)}))
+#define tokenizer_append(a, tokenizer, val, len, curr, t) \
+  arena_da_append((a), (tokenizer), ((input_token_t){.value = (val), .length = (len), .cursor = (curr), .type = (t)}))
 
-// Tokenizes a collection of characters into a symbol which are not spaces and literal characters.
-static bool next_symbol(arena_t *arena, string_slice_t *ss, tokenizer_t *tokenizer)
+static bool next_identifier(arena_t *arena, string_slice_t *ss, tokenizer_t *tokenizer);
+static bool next_literal(arena_t *arena, string_slice_t *ss, tokenizer_t *tokenizer);
+static bool next_new_line(arena_t *arena, string_slice_t *ss, tokenizer_t *tokenizer);
+void tokenizer_print(const tokenizer_t *tokenizer);
+tokenizer_t tokenizer_execute(arena_t *arena, const char *input);
+
+// Tokenizes a collection of characters into an identifier which are not whitespace or literals.
+static bool next_identifier(arena_t *arena, string_slice_t *ss, tokenizer_t *tokenizer)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(ss);
@@ -474,7 +500,7 @@ static bool next_symbol(arena_t *arena, string_slice_t *ss, tokenizer_t *tokeniz
   } while (ss_in_range(ss));
 
   if (length > 0)
-    tokenizer_append(arena, tokenizer, currentPtr, length, ss_current_pos(ss) - length);
+    tokenizer_append(arena, tokenizer, currentPtr, length, ss_current_pos(ss) - length, IT_ID);
 
   return length > 0;
 }
@@ -493,11 +519,26 @@ static bool next_literal(arena_t *arena, string_slice_t *ss, tokenizer_t *tokeni
   bool isLiteral = c_is_literal(*currentPtr);
 
   if (isLiteral)
-    tokenizer_append(arena, tokenizer, currentPtr, 1, ss_current_pos(ss));
-
-  ss_seek(ss);
+  {
+    tokenizer_append(arena, tokenizer, currentPtr, 1, ss_current_pos(ss), IT_LITERAL);
+    ss_seek(ss);
+  }
 
   return isLiteral;
+}
+
+static bool next_new_line(arena_t *arena, string_slice_t *ss, tokenizer_t *tokenizer)
+{
+  if (!ss_in_range(ss))
+    return true;
+
+  bool isNL = c_is_new_line(ss_get_current(ss));
+  if (isNL)
+  {
+    tokenizer_append(arena, tokenizer, ss_get_current_ptr(ss), 1, ss_current_pos(ss), IT_NEW_LINE);
+    ss_seek(ss);
+  }
+  return isNL;
 }
 
 tokenizer_t tokenizer_execute(arena_t *arena, const char *input)
@@ -518,9 +559,11 @@ tokenizer_t tokenizer_execute(arena_t *arena, const char *input)
 
   while (ss_in_range(&ss))
   {
-    ss_seek_spaces(&ss);
+    ss_seek_spaces_ex(&ss, false);
 
-    if (next_symbol(arena, &ss, &tokenizer) || next_literal(arena, &ss, &tokenizer))
+    if (next_new_line(arena, &ss, &tokenizer) ||
+        next_identifier(arena, &ss, &tokenizer) ||
+        next_literal(arena, &ss, &tokenizer))
       continue;
 
     // Error
@@ -544,8 +587,14 @@ void tokenizer_print(const tokenizer_t *tokenizer)
 
   printf("Printing tokenenized input (%zu tokens):\n", tokenizer->count);
 
-  for (size_t i = 0; i < tokenizer->count; i++)
-    printf("Token('" IN_TOK_FMT "')\n", IN_TOK_ARG(&tokenizer->items[i]));
+  for (size_t i = 0; i < tokenizer->count; ++i)
+  {
+    input_token_t *currTok = &tokenizer->items[i];
+    printf("%s", inputTokenTypeNames[currTok->type]);
+    if (!cstr_is_new_line_ex(currTok->value, currTok->length))
+      printf("('" IN_TOK_FMT "', len=%zu)", IN_TOK_ARG(currTok), currTok->length);
+    printf("\n");
+  }
 }
 
 typedef enum
@@ -560,16 +609,17 @@ typedef enum
   TT_LITERAL,
   // All for example variable names.
   TT_SYMBOL,
-
-  // TODO: Rethink both!
-  // TT_NEW_LINE,
-  // TT_EOF,
-
+  // TODO: Rethink!
+  // End of current line
+  TT_EOL,
+  // TODO: Rethink!
+  // End of file
+  TT_EOF,
   // Count of all token types.
   TT_COUNT
 } e_token_type;
 
-static_assert(TT_COUNT == 5, "Amount of token-types have changed");
+static_assert(TT_COUNT == 7, "Amount of token-types have changed");
 
 static const char *tokenTypeNames[TT_COUNT] = {
     [TT_NUMBER] = "Number",
@@ -577,6 +627,8 @@ static const char *tokenTypeNames[TT_COUNT] = {
     [TT_PAREN] = "Parenthesis",
     [TT_LITERAL] = "Literal",
     [TT_SYMBOL] = "Symbol",
+    [TT_EOL] = "EndOfLine",
+    [TT_EOF] = "EndOfFile",
 };
 
 typedef union
@@ -601,9 +653,10 @@ typedef struct
   token_t *items;
   size_t capacity;
   size_t count;
+
   bool isError;
 
-  // TODO: Rethink! Could be used to internally traverse from first to last token without having to check an external variable.
+  // Could be used to internally traverse from first to last token without having to check an external variable.
   size_t cursor;
 } lexer_t;
 
@@ -617,7 +670,58 @@ typedef struct
   arena_da_append((a), (lexer), ((token_t){.type = TT_LITERAL, .as.literal = (clt), .cursor = (curr)}))
 #define add_symbol_token(a, lexer, sym, curr) \
   arena_da_append((a), (lexer), ((token_t){.type = TT_SYMBOL, .as.symbol = (sym), .cursor = (curr)}))
+#define add_eol_token(a, lexer, curr) \
+  arena_da_append((a), (lexer), ((token_t){.type = TT_EOL, .cursor = (curr)}))
+#define add_eof_token(a, lexer, curr) \
+  arena_da_append((a), (lexer), ((token_t){.type = TT_EOF, .cursor = (curr)}))
 
+inline token_t *lex_current(lexer_t *lexer)
+{
+  assert(lexer);
+  return &lexer->items[lexer->cursor];
+}
+
+inline bool lex_can_peek_ex(lexer_t *lexer, size_t count)
+{
+  assert(lexer);
+  return (lexer->cursor + count) < lexer->count;
+}
+
+inline bool lex_can_peek(lexer_t *lexer)
+{
+  assert(lexer);
+  return lexer->cursor + 1 < lexer->count;
+}
+
+inline token_t *lex_peek_ex(lexer_t *lexer, size_t count)
+{
+  assert(lexer);
+  assert((lexer->cursor + count) < lexer->count);
+  return &lexer->items[lexer->cursor + count];
+}
+
+inline token_t *lex_peek(lexer_t *lexer)
+{
+  assert(lexer);
+  return &lexer->items[lexer->cursor + 1];
+}
+
+inline token_t *lex_seek_ex(lexer_t *lexer, size_t count)
+{
+  assert(lexer);
+  assert((lexer->cursor + count) < lexer->count);
+  lexer->cursor += count;
+  return &lexer->items[lexer->cursor];
+}
+
+inline token_t *lex_seek(lexer_t *lexer)
+{
+  assert(lexer);
+  assert((lexer->cursor + 1) < lexer->count);
+  return &lexer->items[++lexer->cursor];
+}
+
+// TODO: Implement internal cursor handling, this will get rid of externally managed indexes
 #define lex_at(lexer, idx) (&(lexer)->items[(idx)])
 #define lex_in_range(lexer, idx) ((idx) < (lexer)->count - 1)
 #define lex_next_in_range(lexer, idx) ((idx) + 1 < (lexer)->count - 1)
@@ -646,6 +750,13 @@ lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
   for (size_t i = 0; i < tokenizer->count; ++i)
   {
     const input_token_t *currentToken = &tokenizer->items[i];
+
+    // TODO: Rethink!
+    if (cstr_is_new_line_ex(currentToken->value, currentToken->length))
+    {
+      add_eol_token(arena, &lexer, currentToken->cursor);
+      continue;
+    }
 
     // Operator needs to be checked at first because else the double conversion fails on number parsing.
     if (cstr_is_operator_ex(currentToken->value, currentToken->length))
@@ -722,6 +833,9 @@ lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
     add_symbol_token(arena, &lexer, symbol, currentToken->cursor);
   }
 
+  // Add the eof token at the end
+  add_eof_token(arena, &lexer, tokenizer->count);
+
   return lexer;
 }
 
@@ -768,6 +882,9 @@ void lexer_print(const lexer_t *lexer)
         e_function_type ft = cstr_to_function_type_ex(token->as.symbol.src, token->as.symbol.len);
         printf(": Function(%s)", functionTypeNames[ft]);
       }
+      break;
+    case TT_EOL:
+    case TT_EOF:
       break;
     case TT_COUNT:
     default:

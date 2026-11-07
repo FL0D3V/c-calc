@@ -26,7 +26,8 @@ const char *nodeTypeNames[NT_COUNT] = {
     [NT_CONSTANT] = "constant",
     [NT_BINOP] = "operator",
     [NT_FUNCTION] = "function",
-    [NT_PAREN] = "parenthesis"};
+    [NT_PAREN] = "parenthesis",
+};
 
 typedef enum
 {
@@ -46,7 +47,8 @@ const char *nodeBinopTypeNames[NO_COUNT] = {
     [NO_SUB] = "substract",
     [NO_MUL] = "multiply",
     [NO_DIV] = "divide",
-    [NO_POW] = "pow"};
+    [NO_POW] = "pow",
+};
 
 static inline e_node_binop_type to_local_binop_type(e_operator_type type)
 {
@@ -185,10 +187,53 @@ typedef struct
   node_t *arg;
 } node_paren_t;
 
+// TODO: Rethink! Functions must be later also used similar.
+// This means there can be build in functions and user defined functions.
+typedef enum
+{
+  CN_VALUE,
+  CN_INBUILD_CONST,
+  CN_VARIABLE,
+
+  CN_COUNT
+} e_const_node_type;
+
+static_assert(CN_COUNT == 3, "Amount of value node types have changed");
+
+const char *constNodeTypeNames[CN_COUNT] = {
+    [CN_VALUE] = "Value",
+    [CN_INBUILD_CONST] = "Math-Constant",
+    [CN_VARIABLE] = "Variable",
+};
+
 typedef union
 {
   // TODO: Change to big number type!
-  double constant;
+  double value;
+  e_math_constant_type inbuildConstant;
+  // TODO: Rethink! Directly linking to the variable store could be easier than decoupling it with the name only.
+  // node_variable_t *variable;
+  string_slice_t variableName;
+} u_const_node_as;
+
+typedef struct
+{
+  e_const_node_type type;
+  u_const_node_as as;
+} node_const_t;
+
+#define node_constant_value(val) \
+  (node_const_t) { .type = CN_VALUE, .as.value = (val) }
+#define node_constant_inbuild_const(val) \
+  (node_const_t) { .type = CN_INBUILD_CONST, .as.inbuildConstant = (val) }
+#define node_constant_variable(val) \
+  (node_const_t) { .type = CN_VARIABLE, .as.variableName = (val) }
+
+typedef union
+{
+  // TODO: Change to big number type!
+  // double constant;
+  node_const_t constant;
   node_binop_t binop;
   node_function_t func;
   node_paren_t paren;
@@ -210,8 +255,7 @@ static node_t *base_node(arena_t *arena, size_t cursor, e_node_type type)
   return newNode;
 }
 
-// TODO: Change to big number type!
-node_t *node_constant(arena_t *arena, size_t cursor, double constant)
+node_t *node_constant(arena_t *arena, size_t cursor, node_const_t constant)
 {
   node_t *node = base_node(arena, cursor, NT_CONSTANT);
   node->as.constant = constant;
@@ -242,353 +286,13 @@ node_t *node_paren(arena_t *arena, size_t cursor, node_t *arg)
   return node;
 }
 
+// static bool check_semantics(lexer_t *lexer);
+static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer, size_t *index);
+static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *index);
+static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *index);
+static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *index);
 static void print_node_ex(node_t *node, bool indented, size_t depth);
-
-// TODO: Rethink if needed! Can be checked while generating the AST with recursive descent parsing.
-static bool check_semantics(lexer_t *lexer)
-{
-  ASSERT_NULL(lexer);
-
-  if (lexer->count <= 0)
-    return false;
-
-  bool isError = false;
-  size_t parenCount = 0;
-
-  for (size_t i = 0; i < lexer->count; ++i)
-  {
-    token_t *tok = lex_at(lexer, i);
-
-    switch (tok->type)
-    {
-    // case TT_MATH_CONSTANT:
-    case TT_NUMBER:
-    {
-      if (i > 0)
-      {
-        token_t *lastTok = lex_at(lexer, i - 1);
-
-        if (tok_is(lastTok, TT_OPERATOR) ||
-            tok_is_specific_literal(lastTok, CLT_EQUALS) ||
-            tok_is_paren(lastTok, PT_OPAREN))
-          continue;
-
-        S_ERROR(tok->cursor, "Unexpected token before the number!");
-        isError = true;
-        continue;
-      }
-
-      // Valid number placement.
-      continue;
-    }
-    case TT_OPERATOR:
-    {
-      // Checks if this is the last token (the last must not be an opeartor).
-      if (!lex_next_in_range(lexer, i))
-      {
-        S_ERROR(tok->cursor, "An operator can't be the last token!");
-        isError = true;
-        continue;
-      }
-
-      token_t *nextTok = lex_at(lexer, i + 1);
-
-      if (i > 0)
-      {
-        token_t *lastTok = lex_at(lexer, i - 1);
-
-        // Checks if the last token was a number or a closing paren.
-        if (tok_is(lastTok, TT_NUMBER) ||
-            // TOOD: Rethink! Maybe change to TT_SYMBOL and check if it is a math constant in the parser.
-            // tok_is(lastTok, TT_MATH_CONSTANT) ||
-            tok_is(lastTok, TT_SYMBOL) ||
-            tok_is_paren(lastTok, PT_CPAREN))
-          continue;
-
-        // Checks for ".. ')' OPERATOR NUMBER ..".
-        if (tok_is_paren(lastTok, PT_CPAREN) &&
-            tok_is(nextTok, TT_NUMBER))
-          continue;
-
-        // Checks for ".. '(' '+'/'-' NUMBER ..".
-        if (tok_is_paren(lastTok, PT_OPAREN) &&
-            tok_is_number_operator(tok) &&
-            tok_is(nextTok, TT_NUMBER))
-          continue;
-
-        // Checks if last token was an operator, the current is a number operator and the next is a number ".. OPERATOR '+'/'-' NUMBER ..".
-        if (tok_is(lastTok, TT_OPERATOR) &&
-            tok_is_number_operator(tok) &&
-            tok_is(nextTok, TT_NUMBER))
-          continue;
-      }
-
-      if (tok_is_number_operator(tok) && tok_is(nextTok, TT_NUMBER))
-        continue;
-
-      S_ERROR(tok->cursor, "Invalid usage of an operator!");
-      isError = true;
-      continue;
-    }
-    case TT_PAREN:
-    {
-      e_paren_type ptype = tok->as.paren;
-
-      if (ptype == PT_OPAREN)
-      {
-        parenCount++;
-
-        if (i > 0)
-        {
-          token_t *lastTok = lex_at(lexer, i - 1);
-
-          if (tok_is_paren(lastTok, PT_CPAREN))
-          {
-            S_ERROR(tok->cursor, "Expected operator! Before an open paren must NOT be a closing paren.");
-            isError = true;
-            continue;
-          }
-
-          if (tok_not(lastTok, TT_OPERATOR) && !tok_is_paren(lastTok, PT_OPAREN))
-          {
-            S_ERROR(tok->cursor, "Expected operator or open paren!");
-            isError = true;
-            continue;
-          }
-        }
-      }
-      else if (ptype == PT_CPAREN)
-      {
-        if (parenCount <= 0)
-        {
-          S_ERROR(tok->cursor, "Too many closing parens!");
-          isError = true;
-          continue;
-        }
-
-        parenCount--;
-
-        if (i > 0)
-        {
-          token_t *lastTok = lex_at(lexer, i - 1);
-
-          if (tok_is(lastTok, TT_OPERATOR))
-          {
-            S_ERROR(tok->cursor, "Expected an expression after an operator but got a closing paren!");
-            isError = true;
-            continue;
-          }
-
-          if (tok_is_paren(lastTok, PT_OPAREN))
-          {
-            S_ERROR(tok->cursor, "Expected an argument expression inside the parens!");
-            isError = true;
-            continue;
-          }
-        }
-      }
-
-      if (!lex_next_in_range(lexer, i) && parenCount > 0)
-      {
-        S_ERROR(tok->cursor, "Expected closing paren!");
-        isError = true;
-        continue;
-      }
-
-      continue;
-    }
-    // TODO: Rethink! Maybe change to TT_SYMBOL and check if it is a function in the parser.
-    // case TT_FUNCTION:
-    // {
-    //   // Checks that after the current initializer there are still at least 3 more tokens because a function needs
-    //   // an open paren, at least a single argument and a closing paren.
-    //   if (!lex_in_range(lexer, i + 2))
-    //   {
-    //     S_ERROR(tok->cursor, "A function initializer can't be the last token because it needs an open and a closing paren and an argument expression inside them!");
-    //     isError = true;
-    //     continue;
-    //   }
-
-    //   token_t *nextTok = lex_at(lexer, i + 1);
-
-    //   // Checks if last token was a function initializer and also if the current is an open paren ("FUNC(<-...)").
-    //   if (tok_not_specific_paren(nextTok, PT_OPAREN))
-    //   {
-    //     S_ERROR(nextTok->cursor, "Expected an open paren after a function initializer!");
-    //     isError = true;
-    //     continue;
-    //   }
-
-    //   if (i > 0)
-    //   {
-    //     token_t *lastTok = lex_at(lexer, i - 1);
-
-    //     // Checks if the last token was an operator or an open paren.
-    //     if (tok_not(lastTok, TT_OPERATOR) &&
-    //         tok_not_specific_paren(lastTok, PT_OPAREN))
-    //     {
-    //       S_ERROR(lastTok->cursor, "Before a function initializer must be an operator or an open paren!");
-    //       isError = true;
-    //       continue;
-    //     }
-    //   }
-
-    //   // This ignores the cheking for the next token because the checks here make sure that the next is an open paren.
-    //   parenCount++;
-    //   i++;
-
-    //   continue;
-    // }
-    case TT_LITERAL:
-    {
-      // TODO: Implement!
-      // Current literals:
-      // > ',': for multi argument functions like '... funcTest(arg1, arg2, arg3) ...'.
-      // > '=': for equations like '10 + 5 = 20 - 5'. This could return f.e. 'true' or 'false'.
-      //        Also it could be used for assigning an expression to a variable or creating a new function.
-      //        Like:
-      //            'test = 10 + 5'
-      //            'test(x, y) = 20 * 5 - sqrt(x) ^ y'
-
-      switch (tok->as.literal)
-      {
-      case CLT_COMMA:
-      {
-        if (i <= 0)
-        {
-          S_ERROR(tok->cursor, "This literal can't be at the start!");
-          isError = true;
-          continue;
-        }
-
-        token_t *lastTok = lex_at(lexer, i - 1);
-
-        if (tok_is(lastTok, TT_LITERAL) ||
-            // TODO: Rethink! Maybe change to TT_SYMBOL and check if it is a function in the parser.
-            // tok_is(lastTok, TT_FUNCTION) ||
-            tok_is_paren(lastTok, PT_OPAREN) ||
-            tok_is(lastTok, TT_OPERATOR) ||
-            tok_is(lastTok, TT_SYMBOL))
-        {
-          S_ERROR(tok->cursor, "Before this literal there must be a valid argument!");
-          isError = true;
-          continue;
-        }
-
-        if (!lex_next_in_range(lexer, i))
-        {
-          S_ERROR(tok->cursor, "This literal must have a valid argument after it!");
-          isError = true;
-          continue;
-        }
-
-        token_t *nextTok = lex_at(lexer, i + 1);
-
-        if (tok_is(nextTok, TT_LITERAL) ||
-            tok_is(nextTok, TT_SYMBOL) ||
-            tok_is_paren(nextTok, PT_CPAREN) ||
-            tok_is(nextTok, TT_OPERATOR))
-        {
-          S_ERROR(tok->cursor, "After this literal must be a valid argument!");
-          isError = true;
-          continue;
-        }
-
-        // TODO: Implement the checks to make sure this is only used inside a function definition!
-
-        break;
-      }
-      case CLT_EQUALS:
-      {
-        if (i <= 0)
-        {
-          S_ERROR(tok->cursor, "A variable assignment literal can't be at the start!");
-          isError = true;
-          continue;
-        }
-
-        token_t *lastTok = lex_at(lexer, i - 1);
-
-        // Checks if the last token was an operator or an open paren.
-        if (tok_not(lastTok, TT_SYMBOL))
-        {
-          S_ERROR(lastTok->cursor, "Before a variable assignment literal must be a variable name symbol!");
-          isError = true;
-          continue;
-        }
-
-        continue;
-      }
-      case CLT_COUNT:
-      case CLT_INVALID:
-      default:
-        UNREACHABLE("Unreachable literal type!");
-      }
-
-      S_ERROR(tok->cursor, "Literal not implemented yet!");
-      isError = true;
-      continue;
-    }
-    case TT_SYMBOL:
-    {
-      if (i != 0)
-      {
-        S_ERROR(tok->cursor, "Variable name definition must be at the start!");
-        isError = true;
-        continue;
-      }
-
-      // Checks that after the current initializer there are still at least 2 more tokens because a variable definition needs
-      // an variable definition literal and at least a single argument.
-      if (!lex_in_range(lexer, i + 2))
-      {
-        S_ERROR(tok->cursor, "A variable name definition can't be the last token because it needs a variable assignment literal and at least a single argument!");
-        isError = true;
-        continue;
-      }
-
-      token_t *nextTok = lex_at(lexer, i + 1);
-
-      if (tok_not_specific_literal(nextTok, CLT_EQUALS))
-      {
-        S_ERROR(nextTok->cursor, "Expected a variable assignment literal after variable name definition!");
-        isError = true;
-        continue;
-      }
-
-      ++i;
-
-      nextTok = lex_at(lexer, i + 1);
-
-      // Valid variable name definition.
-      if (tok_is(nextTok, TT_NUMBER) ||
-          // TODO: Rethink! Maybe change to TT_SYMBOL and check if it is a math constant in the parser.
-          // tok_is(nextTok, TT_MATH_CONSTANT) ||
-          // TODO: Rethink! Maybe change to TT_SYMBOL and check if it is a function in the parser.
-          // tok_is(nextTok, TT_FUNCTION) ||
-          tok_is_paren(nextTok, PT_OPAREN) ||
-          tok_is(nextTok, TT_SYMBOL) ||
-          (lex_in_range(lexer, i + 2) && tok_is_paren(lex_at(lexer, i + 2), PT_OPAREN)))
-        continue;
-
-      S_ERROR(nextTok->cursor, "Expected a valid argument after variable assignment literal!");
-      isError = true;
-      continue;
-    }
-    case TT_COUNT:
-    default:
-      UNREACHABLE("Invalid token-type!");
-    }
-  }
-
-  if (parenCount != 0 && !isError)
-  {
-    S_ERROR(lex_at(lexer, lexer->count - 1)->cursor, "Invalid paren usage!");
-    isError = true;
-  }
-
-  return isError;
-}
+void print_node(node_t *node, bool indented);
 
 typedef struct
 {
@@ -630,6 +334,11 @@ typedef enum
 
 static_assert(NV_COUNT == 2, "Amount of variable-node-types have changed");
 
+const char *nodeVariableTypeNames[NV_COUNT] = {
+    [NV_CONST_VARIABLE_DEFINITION] = "Constant-Definition",
+    [NV_FUNCTION_DEFINITION] = "Function-Definition",
+};
+
 typedef struct
 {
   // The type of the variable definition.
@@ -639,8 +348,8 @@ typedef struct
   node_t *expression;
 } node_variable_t;
 
-#define node_constant_variable(varName, value) ((node_variable_t){.type = NV_CONST_VARIABLE_DEFINITION, .as.varDef = (varName), .expression = (value)})
-#define node_function_variable(varName, funcArgs, value) ((node_variable_t){.type = NV_FUNCTION_DEFINITION, .as.funcDef.name = (varName), .as.funcDef.args = (funcArgs), .expression = (value)})
+#define node_variable_constant(varName, value) ((node_variable_t){.type = NV_CONST_VARIABLE_DEFINITION, .as.varDef = (varName), .expression = (value)})
+#define node_variable_function(varName, funcArgs, value) ((node_variable_t){.type = NV_FUNCTION_DEFINITION, .as.funcDef.name = (varName), .as.funcDef.args = (funcArgs), .expression = (value)})
 
 // A list of all variables.
 typedef struct
@@ -658,14 +367,19 @@ static bool try_parse_func_variable(node_variable_stack_t *varStack, arena_t *ar
 bool parse_node_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer);
 void node_variable_stack_print(const node_variable_stack_t *varStack, bool showValue);
 
-static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer, size_t *index);
-static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *index);
-static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *index);
-static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *index);
 static node_t *parser_execute_ex(node_variable_stack_t *varStack, arena_t *arena, lexer_t *lexer, size_t index);
 node_t *parser_execute(node_variable_stack_t *varStack, arena_t *arena, lexer_t *lexer);
-static void print_node_ex(node_t *node, bool indented, size_t depth);
-void print_node(node_t *node, bool indented);
+
+node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *varStack, node_t *expr);
+
+typedef struct
+{
+  // TODO: Change to big number!
+  double value;
+  bool isError;
+} ast_eval_res_t;
+
+ast_eval_res_t ast_eval(arena_t *arena, node_variable_stack_t *varStack, node_t *expr);
 
 static bool try_parse_const_variable(node_variable_stack_t *varStack, arena_t *arena, lexer_t *lexer)
 {
@@ -705,7 +419,7 @@ static bool try_parse_const_variable(node_variable_stack_t *varStack, arena_t *a
   }
 
   // Create and add a new variable.
-  node_variable_t constantVar = node_constant_variable(varNameTok->as.symbol, value);
+  node_variable_t constantVar = node_variable_constant(varNameTok->as.symbol, value);
   node_variable_stack_append(arena, varStack, constantVar);
   return true;
 }
@@ -796,7 +510,7 @@ static bool try_parse_func_variable(node_variable_stack_t *varStack, arena_t *ar
   }
 
   // Create and add a new variable.
-  node_variable_t funcVar = node_function_variable(varNameTok->as.symbol, funcArgs, value);
+  node_variable_t funcVar = node_variable_function(varNameTok->as.symbol, funcArgs, value);
   node_variable_stack_append(arena, varStack, funcVar);
   return true;
 }
@@ -859,6 +573,355 @@ void node_variable_stack_print(const node_variable_stack_t *varStack, bool showV
   }
 }
 
+// TODO: Rethink if needed! Can be checked while generating the AST with recursive descent parsing.
+// static bool check_semantics(lexer_t *lexer)
+// {
+//   ASSERT_NULL(lexer);
+
+//   if (lexer->count <= 0)
+//     return false;
+
+//   bool isError = false;
+//   size_t parenCount = 0;
+
+//   for (size_t i = 0; i < lexer->count; ++i)
+//   {
+//     token_t *tok = lex_at(lexer, i);
+
+//     switch (tok->type)
+//     {
+//     // case TT_MATH_CONSTANT:
+//     case TT_NUMBER:
+//     {
+//       if (i > 0)
+//       {
+//         token_t *lastTok = lex_at(lexer, i - 1);
+
+//         if (tok_is(lastTok, TT_OPERATOR) ||
+//             tok_is_specific_literal(lastTok, CLT_EQUALS) ||
+//             tok_is_paren(lastTok, PT_OPAREN))
+//           continue;
+
+//         S_ERROR(tok->cursor, "Unexpected token before the number!");
+//         isError = true;
+//         continue;
+//       }
+
+//       // Valid number placement.
+//       continue;
+//     }
+//     case TT_OPERATOR:
+//     {
+//       // Checks if this is the last token (the last must not be an opeartor).
+//       if (!lex_next_in_range(lexer, i))
+//       {
+//         S_ERROR(tok->cursor, "An operator can't be the last token!");
+//         isError = true;
+//         continue;
+//       }
+
+//       token_t *nextTok = lex_at(lexer, i + 1);
+
+//       if (i > 0)
+//       {
+//         token_t *lastTok = lex_at(lexer, i - 1);
+
+//         // Checks if the last token was a number or a closing paren.
+//         if (tok_is(lastTok, TT_NUMBER) ||
+//             // TOOD: Rethink! Maybe change to TT_SYMBOL and check if it is a math constant in the parser.
+//             // tok_is(lastTok, TT_MATH_CONSTANT) ||
+//             tok_is(lastTok, TT_SYMBOL) ||
+//             tok_is_paren(lastTok, PT_CPAREN))
+//           continue;
+
+//         // Checks for ".. ')' OPERATOR NUMBER ..".
+//         if (tok_is_paren(lastTok, PT_CPAREN) &&
+//             tok_is(nextTok, TT_NUMBER))
+//           continue;
+
+//         // Checks for ".. '(' '+'/'-' NUMBER ..".
+//         if (tok_is_paren(lastTok, PT_OPAREN) &&
+//             tok_is_number_operator(tok) &&
+//             tok_is(nextTok, TT_NUMBER))
+//           continue;
+
+//         // Checks if last token was an operator, the current is a number operator and the next is a number ".. OPERATOR '+'/'-' NUMBER ..".
+//         if (tok_is(lastTok, TT_OPERATOR) &&
+//             tok_is_number_operator(tok) &&
+//             tok_is(nextTok, TT_NUMBER))
+//           continue;
+//       }
+
+//       if (tok_is_number_operator(tok) && tok_is(nextTok, TT_NUMBER))
+//         continue;
+
+//       S_ERROR(tok->cursor, "Invalid usage of an operator!");
+//       isError = true;
+//       continue;
+//     }
+//     case TT_PAREN:
+//     {
+//       e_paren_type ptype = tok->as.paren;
+
+//       if (ptype == PT_OPAREN)
+//       {
+//         parenCount++;
+
+//         if (i > 0)
+//         {
+//           token_t *lastTok = lex_at(lexer, i - 1);
+
+//           if (tok_is_paren(lastTok, PT_CPAREN))
+//           {
+//             S_ERROR(tok->cursor, "Expected operator! Before an open paren must NOT be a closing paren.");
+//             isError = true;
+//             continue;
+//           }
+
+//           if (tok_not(lastTok, TT_OPERATOR) && !tok_is_paren(lastTok, PT_OPAREN))
+//           {
+//             S_ERROR(tok->cursor, "Expected operator or open paren!");
+//             isError = true;
+//             continue;
+//           }
+//         }
+//       }
+//       else if (ptype == PT_CPAREN)
+//       {
+//         if (parenCount <= 0)
+//         {
+//           S_ERROR(tok->cursor, "Too many closing parens!");
+//           isError = true;
+//           continue;
+//         }
+
+//         parenCount--;
+
+//         if (i > 0)
+//         {
+//           token_t *lastTok = lex_at(lexer, i - 1);
+
+//           if (tok_is(lastTok, TT_OPERATOR))
+//           {
+//             S_ERROR(tok->cursor, "Expected an expression after an operator but got a closing paren!");
+//             isError = true;
+//             continue;
+//           }
+
+//           if (tok_is_paren(lastTok, PT_OPAREN))
+//           {
+//             S_ERROR(tok->cursor, "Expected an argument expression inside the parens!");
+//             isError = true;
+//             continue;
+//           }
+//         }
+//       }
+
+//       if (!lex_next_in_range(lexer, i) && parenCount > 0)
+//       {
+//         S_ERROR(tok->cursor, "Expected closing paren!");
+//         isError = true;
+//         continue;
+//       }
+
+//       continue;
+//     }
+//     // TODO: Rethink! Maybe change to TT_SYMBOL and check if it is a function in the parser.
+//     // case TT_FUNCTION:
+//     // {
+//     //   // Checks that after the current initializer there are still at least 3 more tokens because a function needs
+//     //   // an open paren, at least a single argument and a closing paren.
+//     //   if (!lex_in_range(lexer, i + 2))
+//     //   {
+//     //     S_ERROR(tok->cursor, "A function initializer can't be the last token because it needs an open and a closing paren and an argument expression inside them!");
+//     //     isError = true;
+//     //     continue;
+//     //   }
+
+//     //   token_t *nextTok = lex_at(lexer, i + 1);
+
+//     //   // Checks if last token was a function initializer and also if the current is an open paren ("FUNC(<-...)").
+//     //   if (tok_not_specific_paren(nextTok, PT_OPAREN))
+//     //   {
+//     //     S_ERROR(nextTok->cursor, "Expected an open paren after a function initializer!");
+//     //     isError = true;
+//     //     continue;
+//     //   }
+
+//     //   if (i > 0)
+//     //   {
+//     //     token_t *lastTok = lex_at(lexer, i - 1);
+
+//     //     // Checks if the last token was an operator or an open paren.
+//     //     if (tok_not(lastTok, TT_OPERATOR) &&
+//     //         tok_not_specific_paren(lastTok, PT_OPAREN))
+//     //     {
+//     //       S_ERROR(lastTok->cursor, "Before a function initializer must be an operator or an open paren!");
+//     //       isError = true;
+//     //       continue;
+//     //     }
+//     //   }
+
+//     //   // This ignores the cheking for the next token because the checks here make sure that the next is an open paren.
+//     //   parenCount++;
+//     //   i++;
+
+//     //   continue;
+//     // }
+//     case TT_LITERAL:
+//     {
+//       // TODO: Implement!
+//       // Current literals:
+//       // > ',': for multi argument functions like '... funcTest(arg1, arg2, arg3) ...'.
+//       // > '=': for equations like '10 + 5 = 20 - 5'. This could return f.e. 'true' or 'false'.
+//       //        Also it could be used for assigning an expression to a variable or creating a new function.
+//       //        Like:
+//       //            'test = 10 + 5'
+//       //            'test(x, y) = 20 * 5 - sqrt(x) ^ y'
+
+//       switch (tok->as.literal)
+//       {
+//       case CLT_COMMA:
+//       {
+//         if (i <= 0)
+//         {
+//           S_ERROR(tok->cursor, "This literal can't be at the start!");
+//           isError = true;
+//           continue;
+//         }
+
+//         token_t *lastTok = lex_at(lexer, i - 1);
+
+//         if (tok_is(lastTok, TT_LITERAL) ||
+//             // TODO: Rethink! Maybe change to TT_SYMBOL and check if it is a function in the parser.
+//             // tok_is(lastTok, TT_FUNCTION) ||
+//             tok_is_paren(lastTok, PT_OPAREN) ||
+//             tok_is(lastTok, TT_OPERATOR) ||
+//             tok_is(lastTok, TT_SYMBOL))
+//         {
+//           S_ERROR(tok->cursor, "Before this literal there must be a valid argument!");
+//           isError = true;
+//           continue;
+//         }
+
+//         if (!lex_next_in_range(lexer, i))
+//         {
+//           S_ERROR(tok->cursor, "This literal must have a valid argument after it!");
+//           isError = true;
+//           continue;
+//         }
+
+//         token_t *nextTok = lex_at(lexer, i + 1);
+
+//         if (tok_is(nextTok, TT_LITERAL) ||
+//             tok_is(nextTok, TT_SYMBOL) ||
+//             tok_is_paren(nextTok, PT_CPAREN) ||
+//             tok_is(nextTok, TT_OPERATOR))
+//         {
+//           S_ERROR(tok->cursor, "After this literal must be a valid argument!");
+//           isError = true;
+//           continue;
+//         }
+
+//         // TODO: Implement the checks to make sure this is only used inside a function definition!
+
+//         break;
+//       }
+//       case CLT_EQUALS:
+//       {
+//         if (i <= 0)
+//         {
+//           S_ERROR(tok->cursor, "A variable assignment literal can't be at the start!");
+//           isError = true;
+//           continue;
+//         }
+
+//         token_t *lastTok = lex_at(lexer, i - 1);
+
+//         // Checks if the last token was an operator or an open paren.
+//         if (tok_not(lastTok, TT_SYMBOL))
+//         {
+//           S_ERROR(lastTok->cursor, "Before a variable assignment literal must be a variable name symbol!");
+//           isError = true;
+//           continue;
+//         }
+
+//         continue;
+//       }
+//       case CLT_COUNT:
+//       case CLT_INVALID:
+//       default:
+//         UNREACHABLE("Unreachable literal type!");
+//       }
+
+//       S_ERROR(tok->cursor, "Literal not implemented yet!");
+//       isError = true;
+//       continue;
+//     }
+//     case TT_SYMBOL:
+//     {
+//       if (i != 0)
+//       {
+//         S_ERROR(tok->cursor, "Variable name definition must be at the start!");
+//         isError = true;
+//         continue;
+//       }
+
+//       // Checks that after the current initializer there are still at least 2 more tokens because a variable definition needs
+//       // an variable definition literal and at least a single argument.
+//       if (!lex_in_range(lexer, i + 2))
+//       {
+//         S_ERROR(tok->cursor, "A variable name definition can't be the last token because it needs a variable assignment literal and at least a single argument!");
+//         isError = true;
+//         continue;
+//       }
+
+//       token_t *nextTok = lex_at(lexer, i + 1);
+
+//       if (tok_not_specific_literal(nextTok, CLT_EQUALS))
+//       {
+//         S_ERROR(nextTok->cursor, "Expected a variable assignment literal after variable name definition!");
+//         isError = true;
+//         continue;
+//       }
+
+//       ++i;
+
+//       nextTok = lex_at(lexer, i + 1);
+
+//       // Valid variable name definition.
+//       if (tok_is(nextTok, TT_NUMBER) ||
+//           // TODO: Rethink! Maybe change to TT_SYMBOL and check if it is a math constant in the parser.
+//           // tok_is(nextTok, TT_MATH_CONSTANT) ||
+//           // TODO: Rethink! Maybe change to TT_SYMBOL and check if it is a function in the parser.
+//           // tok_is(nextTok, TT_FUNCTION) ||
+//           tok_is_paren(nextTok, PT_OPAREN) ||
+//           tok_is(nextTok, TT_SYMBOL) ||
+//           (lex_in_range(lexer, i + 2) && tok_is_paren(lex_at(lexer, i + 2), PT_OPAREN)))
+//         continue;
+
+//       S_ERROR(nextTok->cursor, "Expected a valid argument after variable assignment literal!");
+//       isError = true;
+//       continue;
+//     }
+//     // TODO: Rethink!
+//     case TT_EOL:
+//     case TT_EOF:
+//     case TT_COUNT:
+//     default:
+//       UNREACHABLE("Invalid token-type!");
+//     }
+//   }
+
+//   if (parenCount != 0 && !isError)
+//   {
+//     S_ERROR(lex_at(lexer, lexer->count - 1)->cursor, "Invalid paren usage!");
+//     isError = true;
+//   }
+
+//   return isError;
+// }
+
 static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer, size_t *index)
 {
   ASSERT_NULL(arena);
@@ -867,20 +930,30 @@ static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer, size_t *index)
   token_t *token = lex_at(lexer, *index);
 
   if (tok_is(token, TT_NUMBER))
-    return node_constant(arena, token->cursor, token->as.number);
+  {
+    node_const_t constant = node_constant_value(token->as.number);
+    return node_constant(arena, token->cursor, constant);
+  }
   else if (tok_is(token, TT_SYMBOL) && cstr_is_math_constant_ex(token->as.symbol.src, token->as.symbol.len))
   {
     // Checks if the symbol is a valid inbuild math constant name.
     e_math_constant_type mc = cstr_to_math_constant_type_ex(token->as.symbol.src, token->as.symbol.len);
     if (mc == MC_INVALID)
       UNREACHABLE("Math-Constant-Type not implemented!");
-    return node_constant(arena, token->cursor, mathConstantTypeValues[mc]);
-  }
 
-  // TODO: Maybe try to parse variables here too!
-  // 1. Maybe try to eval the complete variable down to a constant.
-  // 2. Maybe try to store the complete node tree inside the constant as a reference and mark it so that it is possible to differantiate.
-  // 3. Store the variable name / variable arg reference to cross check later.
+    node_const_t constant = node_constant_inbuild_const(mc);
+    return node_constant(arena, token->cursor, constant);
+  }
+  else if (tok_is(token, TT_SYMBOL))
+  {
+    // TODO: Maybe try to parse variables here too!
+    // 1. Maybe try to eval the complete variable down to a constant.
+    // 2. Maybe try to store the complete node tree inside the constant as a reference and mark it so that it is possible to differantiate.
+    // 3. Store the variable name / variable arg reference to cross check later.
+
+    node_const_t constant = node_constant_variable(token->as.symbol);
+    return node_constant(arena, token->cursor, constant);
+  }
 
   return NULL;
 }
@@ -1001,6 +1074,13 @@ static node_t *parser_execute_ex(node_variable_stack_t *varStack, arena_t *arena
   if (index > lexer->count - 1)
     UNREACHABLE("Lexer out of range!");
 
+  // TODO: Rethink!
+  if (tok_is(lex_at(lexer, index), TT_EOL))
+    return NULL;
+
+  if (tok_is(lex_at(lexer, index), TT_EOF))
+    return NULL;
+
   node_t *nodeBinOp = try_parse_binop(arena, lexer, &index);
   if (nodeBinOp)
     return nodeBinOp;
@@ -1030,44 +1110,133 @@ node_t *parser_execute(node_variable_stack_t *varStack, arena_t *arena, lexer_t 
   return parser_execute_ex(varStack, arena, lexer, 0);
 }
 
-// TODO: Implement node_variable_stack_t because when evaluating an expression there could be variables or custom functions be used.
-node_t *ast_eval_ex(arena_t *arena, node_t *expr)
+double node_constant_to_value(arena_t *arena, node_variable_stack_t *varStack, node_t *node)
 {
   ASSERT_NULL(arena);
+  ASSERT_NULL(varStack);
+  ASSERT_NULL(node);
+
+  if (node->type != NT_CONSTANT)
+    UNREACHABLE("Invalid node type!");
+
+  node_const_t *constant = &node->as.constant;
+
+  switch (constant->type)
+  {
+  case CN_VALUE:
+    return constant->as.value;
+  case CN_INBUILD_CONST:
+  {
+    e_math_constant_type mc = constant->as.inbuildConstant;
+    if (mc == MC_INVALID)
+      UNREACHABLE("Invalid math constant type!");
+    return mathConstantTypeValues[mc];
+  }
+  break;
+  case CN_VARIABLE:
+  {
+    string_slice_t *varName = &constant->as.variableName;
+    for (size_t i = 0; i < varStack->count; ++i)
+    {
+      node_variable_t *currVar = &varStack->items[i];
+      // TODO: Rethink! Only constant variable parsing.
+      if (currVar->type != NV_CONST_VARIABLE_DEFINITION)
+        continue;
+      string_slice_t *currVarName = &currVar->as.varDef;
+      if (currVarName->len != varName->len)
+        continue;
+      if (strncmp((char *)currVarName->current_ptr, (char *)varName->current_ptr, (size_t)(currVarName->current_ptr - currVarName->start_ptr)))
+      {
+        // TODO: Rethink and test!
+        ast_eval_res_t res = ast_eval(arena, varStack, currVar->expression);
+        if (res.isError)
+          return 0;
+
+        return res.value;
+      }
+    }
+
+    // TODO: Rethink!
+    E_ERROR(node->cursor, "Variable not defined!");
+    return 0;
+  }
+  break;
+  case CN_COUNT:
+  default:
+    UNREACHABLE("Invalid constant node type!");
+  }
+}
+
+// TODO: Rethink and test!
+node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *varStack, node_t *expr)
+{
+  ASSERT_NULL(arena);
+  ASSERT_NULL(varStack);
   ASSERT_NULL(expr);
 
   switch (expr->type)
   {
   case NT_CONSTANT:
-    return expr;
+  {
+    // Will evaluate down to a constant value type.
+    if (expr->as.constant.type == CN_VALUE)
+      return expr;
+    node_const_t constant = node_constant_value(node_constant_to_value(arena, varStack, expr));
+    return node_constant(arena, expr->cursor, constant);
+  }
   case NT_BINOP:
   {
-    node_t *lhs = ast_eval_ex(arena, expr->as.binop.lhs);
+    node_t *lhs = ast_eval_ex(arena, varStack, expr->as.binop.lhs);
     if (!lhs)
       return NULL;
-    node_t *rhs = ast_eval_ex(arena, expr->as.binop.rhs);
+
+    node_t *rhs = ast_eval_ex(arena, varStack, expr->as.binop.rhs);
     if (!rhs)
       return NULL;
 
     switch (expr->as.binop.type)
     {
     case NO_ADD:
-      return node_constant(arena, expr->cursor, lhs->as.constant + rhs->as.constant);
+    {
+      // return node_constant(arena, expr->cursor, lhs->as.constant + rhs->as.constant);
+      node_const_t constant = node_constant_value(
+          node_constant_to_value(arena, varStack, lhs) + node_constant_to_value(arena, varStack, rhs));
+      return node_constant(arena, expr->cursor, constant);
+    }
     case NO_SUB:
-      return node_constant(arena, expr->cursor, lhs->as.constant - rhs->as.constant);
+    {
+      // return node_constant(arena, expr->cursor, lhs->as.constant - rhs->as.constant);
+      node_const_t constant = node_constant_value(
+          node_constant_to_value(arena, varStack, lhs) - node_constant_to_value(arena, varStack, rhs));
+      return node_constant(arena, expr->cursor, constant);
+    }
     case NO_MUL:
-      return node_constant(arena, expr->cursor, lhs->as.constant * rhs->as.constant);
+    {
+      // return node_constant(arena, expr->cursor, lhs->as.constant * rhs->as.constant);
+      node_const_t constant = node_constant_value(
+          node_constant_to_value(arena, varStack, lhs) * node_constant_to_value(arena, varStack, rhs));
+      return node_constant(arena, expr->cursor, constant);
+    }
     case NO_DIV:
     {
-      if (rhs->as.constant == 0)
+      // if (rhs->as.constant == 0)
+      if (node_constant_to_value(arena, varStack, rhs) == 0)
       {
         E_ERROR(rhs->cursor, "Tried to divide by zero!");
         return NULL;
       }
-      return node_constant(arena, expr->cursor, lhs->as.constant / rhs->as.constant);
+      // return node_constant(arena, expr->cursor, lhs->as.constant / rhs->as.constant);
+      node_const_t constant = node_constant_value(
+          node_constant_to_value(arena, varStack, lhs) / node_constant_to_value(arena, varStack, rhs));
+      return node_constant(arena, expr->cursor, constant);
     }
     case NO_POW:
-      return node_constant(arena, expr->cursor, pow(lhs->as.constant, rhs->as.constant));
+    {
+      // return node_constant(arena, expr->cursor, pow(lhs->as.constant, rhs->as.constant));
+      node_const_t constant = node_constant_value(
+          pow(node_constant_to_value(arena, varStack, lhs), node_constant_to_value(arena, varStack, rhs)));
+      return node_constant(arena, expr->cursor, constant);
+    }
     case NO_COUNT:
     default:
       UNREACHABLE("Invalid binop-node-type!");
@@ -1076,6 +1245,7 @@ node_t *ast_eval_ex(arena_t *arena, node_t *expr)
   }
   case NT_FUNCTION:
   {
+    // TODO: Check the argument count with the "functionTypeParameterCount" list!
     switch (expr->as.func.type)
     {
     case NF_SQRT:
@@ -1085,10 +1255,12 @@ node_t *ast_eval_ex(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "sqrt() takes one argument!");
         return NULL;
       }
-      node_t *func = ast_eval_ex(arena, expr->as.func.args.items[0]);
-      if (!func)
+      node_t *arg = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      if (!arg)
         return NULL;
-      return node_constant(arena, func->cursor, sqrt(func->as.constant));
+      // return node_constant(arena, arg->cursor, sqrt(arg->as.constant));
+      node_const_t constant = node_constant_value(sqrt(node_constant_to_value(arena, varStack, arg)));
+      return node_constant(arena, expr->cursor, constant);
     }
     case NF_EXP:
     {
@@ -1097,10 +1269,12 @@ node_t *ast_eval_ex(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "exp() takes one argument!");
         return NULL;
       }
-      node_t *func = ast_eval_ex(arena, expr->as.func.args.items[0]);
-      if (!func)
+      node_t *arg = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      if (!arg)
         return NULL;
-      return node_constant(arena, func->cursor, exp(func->as.constant));
+      // return node_constant(arena, arg->cursor, exp(arg->as.constant));
+      node_const_t constant = node_constant_value(exp(node_constant_to_value(arena, varStack, arg)));
+      return node_constant(arena, expr->cursor, constant);
     }
     case NF_SIN:
     {
@@ -1109,10 +1283,12 @@ node_t *ast_eval_ex(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "sin() takes one argument!");
         return NULL;
       }
-      node_t *func = ast_eval_ex(arena, expr->as.func.args.items[0]);
-      if (!func)
+      node_t *arg = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      if (!arg)
         return NULL;
-      return node_constant(arena, func->cursor, sin(func->as.constant));
+      // return node_constant(arena, arg->cursor, sin(arg->as.constant));
+      node_const_t constant = node_constant_value(sin(node_constant_to_value(arena, varStack, arg)));
+      return node_constant(arena, expr->cursor, constant);
     }
     case NF_ASIN:
     {
@@ -1121,10 +1297,12 @@ node_t *ast_eval_ex(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "asin() takes one argument!");
         return NULL;
       }
-      node_t *func = ast_eval_ex(arena, expr->as.func.args.items[0]);
-      if (!func)
+      node_t *arg = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      if (!arg)
         return NULL;
-      return node_constant(arena, func->cursor, asin(func->as.constant));
+      // return node_constant(arena, arg->cursor, asin(arg->as.constant));
+      node_const_t constant = node_constant_value(asin(node_constant_to_value(arena, varStack, arg)));
+      return node_constant(arena, expr->cursor, constant);
     }
     case NF_SINH:
     {
@@ -1133,10 +1311,12 @@ node_t *ast_eval_ex(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "sinh() takes one argument!");
         return NULL;
       }
-      node_t *func = ast_eval_ex(arena, expr->as.func.args.items[0]);
-      if (!func)
+      node_t *arg = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      if (!arg)
         return NULL;
-      return node_constant(arena, func->cursor, sinh(func->as.constant));
+      // return node_constant(arena, arg->cursor, sinh(arg->as.constant));
+      node_const_t constant = node_constant_value(sinh(node_constant_to_value(arena, varStack, arg)));
+      return node_constant(arena, expr->cursor, constant);
     }
     case NF_COS:
     {
@@ -1145,10 +1325,12 @@ node_t *ast_eval_ex(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "cos() takes one argument!");
         return NULL;
       }
-      node_t *func = ast_eval_ex(arena, expr->as.func.args.items[0]);
-      if (!func)
+      node_t *arg = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      if (!arg)
         return NULL;
-      return node_constant(arena, func->cursor, cos(func->as.constant));
+      // return node_constant(arena, func->cursor, cos(func->as.constant));
+      node_const_t constant = node_constant_value(cos(node_constant_to_value(arena, varStack, arg)));
+      return node_constant(arena, expr->cursor, constant);
     }
     case NF_ACOS:
     {
@@ -1157,10 +1339,12 @@ node_t *ast_eval_ex(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "acos() takes one argument!");
         return NULL;
       }
-      node_t *func = ast_eval_ex(arena, expr->as.func.args.items[0]);
-      if (!func)
+      node_t *arg = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      if (!arg)
         return NULL;
-      return node_constant(arena, func->cursor, acos(func->as.constant));
+      // return node_constant(arena, arg->cursor, acos(arg->as.constant));
+      node_const_t constant = node_constant_value(acos(node_constant_to_value(arena, varStack, arg)));
+      return node_constant(arena, expr->cursor, constant);
     }
     case NF_COSH:
     {
@@ -1169,10 +1353,12 @@ node_t *ast_eval_ex(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "cosh() takes one argument!");
         return NULL;
       }
-      node_t *func = ast_eval_ex(arena, expr->as.func.args.items[0]);
-      if (!func)
+      node_t *arg = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      if (!arg)
         return NULL;
-      return node_constant(arena, func->cursor, cosh(func->as.constant));
+      // return node_constant(arena, arg->cursor, cosh(arg->as.constant));
+      node_const_t constant = node_constant_value(cosh(node_constant_to_value(arena, varStack, arg)));
+      return node_constant(arena, expr->cursor, constant);
     }
     case NF_TAN:
     {
@@ -1181,10 +1367,12 @@ node_t *ast_eval_ex(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "tanh() takes one argument!");
         return NULL;
       }
-      node_t *func = ast_eval_ex(arena, expr->as.func.args.items[0]);
-      if (!func)
+      node_t *arg = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      if (!arg)
         return NULL;
-      return node_constant(arena, func->cursor, tan(func->as.constant));
+      // return node_constant(arena, arg->cursor, tan(arg->as.constant));
+      node_const_t constant = node_constant_value(tan(node_constant_to_value(arena, varStack, arg)));
+      return node_constant(arena, expr->cursor, constant);
     }
     case NF_ATAN:
     {
@@ -1193,10 +1381,12 @@ node_t *ast_eval_ex(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "atan() takes one argument!");
         return NULL;
       }
-      node_t *func = ast_eval_ex(arena, expr->as.func.args.items[0]);
-      if (!func)
+      node_t *arg = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      if (!arg)
         return NULL;
-      return node_constant(arena, func->cursor, atan(func->as.constant));
+      // return node_constant(arena, arg->cursor, atan(arg->as.constant));
+      node_const_t constant = node_constant_value(atan(node_constant_to_value(arena, varStack, arg)));
+      return node_constant(arena, expr->cursor, constant);
     }
     case NF_TANH:
     {
@@ -1205,10 +1395,12 @@ node_t *ast_eval_ex(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "tanh() takes one argument!");
         return NULL;
       }
-      node_t *func = ast_eval_ex(arena, expr->as.func.args.items[0]);
-      if (!func)
+      node_t *arg = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      if (!arg)
         return NULL;
-      return node_constant(arena, func->cursor, tanh(func->as.constant));
+      // return node_constant(arena, arg->cursor, tanh(arg->as.constant));
+      node_const_t constant = node_constant_value(tanh(node_constant_to_value(arena, varStack, arg)));
+      return node_constant(arena, expr->cursor, constant);
     }
     case NF_ATAN2:
     {
@@ -1217,13 +1409,15 @@ node_t *ast_eval_ex(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "atan2() takes two arguments!");
         return NULL;
       }
-      node_t *arg1 = ast_eval_ex(arena, expr->as.func.args.items[0]);
+      node_t *arg1 = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
       if (!arg1)
         return NULL;
-      node_t *arg2 = ast_eval_ex(arena, expr->as.func.args.items[1]);
+      node_t *arg2 = ast_eval_ex(arena, varStack, expr->as.func.args.items[1]);
       if (!arg2)
         return NULL;
-      return node_constant(arena, expr->cursor, atan2(arg1->as.constant, arg2->as.constant));
+      // return node_constant(arena, expr->cursor, atan2(arg1->as.constant, arg2->as.constant));
+      node_const_t constant = node_constant_value(atan2(node_constant_to_value(arena, varStack, arg1), node_constant_to_value(arena, varStack, arg2)));
+      return node_constant(arena, expr->cursor, constant);
     }
     case NF_LN:
     {
@@ -1232,10 +1426,12 @@ node_t *ast_eval_ex(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "ln() takes one argument!");
         return NULL;
       }
-      node_t *func = ast_eval_ex(arena, expr->as.func.args.items[0]);
-      if (!func)
+      node_t *arg = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      if (!arg)
         return NULL;
-      return node_constant(arena, func->cursor, log(func->as.constant));
+      // return node_constant(arena, arg->cursor, log(arg->as.constant));
+      node_const_t constant = node_constant_value(log(node_constant_to_value(arena, varStack, arg)));
+      return node_constant(arena, expr->cursor, constant);
     }
     case NF_LOG10:
     {
@@ -1244,10 +1440,12 @@ node_t *ast_eval_ex(arena_t *arena, node_t *expr)
         E_ERROR(expr->cursor, "log10() takes one argument!");
         return NULL;
       }
-      node_t *func = ast_eval_ex(arena, expr->as.func.args.items[0]);
-      if (!func)
+      node_t *arg = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      if (!arg)
         return NULL;
-      return node_constant(arena, func->cursor, log10(func->as.constant));
+      // return node_constant(arena, arg->cursor, log10(arg->as.constant));
+      node_const_t constant = node_constant_value(log10(node_constant_to_value(arena, varStack, arg)));
+      return node_constant(arena, expr->cursor, constant);
     }
     case NF_COUNT:
     default:
@@ -1257,10 +1455,10 @@ node_t *ast_eval_ex(arena_t *arena, node_t *expr)
   }
   case NT_PAREN:
   {
-    node_t *argEval = ast_eval_ex(arena, expr->as.paren.arg);
-    if (!argEval)
+    node_t *arg = ast_eval_ex(arena, varStack, expr->as.paren.arg);
+    if (!arg)
       return NULL;
-    return node_constant(arena, expr->cursor, argEval->as.constant);
+    return node_constant(arena, expr->cursor, arg->as.constant);
   }
   case NT_COUNT:
   default:
@@ -1268,28 +1466,29 @@ node_t *ast_eval_ex(arena_t *arena, node_t *expr)
   }
 }
 
-typedef struct
-{
-  // TODO: Change to big number!
-  double value;
-  bool isError;
-} ast_eval_res_t;
-
-ast_eval_res_t ast_eval(arena_t *arena, node_t *expr)
+ast_eval_res_t ast_eval(arena_t *arena, node_variable_stack_t *varStack, node_t *expr)
 {
   ASSERT_NULL(arena);
+  ASSERT_NULL(varStack);
   ASSERT_NULL(expr);
+
   ast_eval_res_t result = {0};
-  node_t *evaluatedNode = ast_eval_ex(arena, expr);
+
+  node_t *evaluatedNode = ast_eval_ex(arena, varStack, expr);
   if (!evaluatedNode)
   {
-    fprintf(stderr, "ERROR: Evaluation failed!");
+    fprintf(stderr, "ERROR: Evaluation failed!\n");
     result.isError = true;
     return result;
   }
+
   if (evaluatedNode->type != NT_CONSTANT)
     UNREACHABLE("Evaluation failed! Return-Type not of type 'CONSTANT'.");
-  result.value = evaluatedNode->as.constant;
+
+  if (evaluatedNode->as.constant.type != CN_VALUE)
+    UNREACHABLE("Evaluation failed! Return-Type of constant not of type 'VALUE'.");
+
+  result.value = evaluatedNode->as.constant.as.value;
   return result;
 }
 
@@ -1310,7 +1509,32 @@ static void print_node_ex(node_t *node, bool indented, size_t depth)
   case NT_CONSTANT:
   {
     _PRINT_DEPTH_SPACES(indented, depth);
-    printf(DOUBLE_PRINT_FORMAT, node->as.constant);
+    switch (node->as.constant.type)
+    {
+    case CN_VALUE:
+    {
+      printf(DOUBLE_PRINT_FORMAT, node->as.constant.as.value);
+    }
+    break;
+    case CN_INBUILD_CONST:
+    {
+      e_math_constant_type mc = node->as.constant.as.inbuildConstant;
+      if (mc == MC_INVALID)
+        UNREACHABLE("Invalid math constant type!");
+
+      printf("%s (%s = " DOUBLE_PRINT_FORMAT ")", mathConstantTypeIdentifiers[mc], mathConstantTypeNames[mc], mathConstantTypeValues[mc]);
+    }
+    break;
+    case CN_VARIABLE:
+    {
+      // TODO: Rethink! Maybe link directly to the variable expression or just show the variable name here.
+      printf(SS_FMT, SS_ARG(&node->as.constant.as.variableName));
+    }
+    break;
+    case CN_COUNT:
+    default:
+      UNREACHABLE("Invalid constant-node-type!");
+    }
     break;
   }
   case NT_BINOP:
@@ -1409,7 +1633,7 @@ typedef struct
   node_t *expressionTree;
 } node_test_t;
 
-bool execute_test(arena_t *arena, node_test_t *test, bool freeArena, bool verbose, bool indented)
+bool execute_test(arena_t *arena, node_variable_stack_t *varStack, node_test_t *test, bool freeArena, bool verbose, bool indented)
 {
   if (verbose)
   {
@@ -1422,7 +1646,7 @@ bool execute_test(arena_t *arena, node_test_t *test, bool freeArena, bool verbos
   if (!test->shouldFail)
     printf("Expected    = " DOUBLE_PRINT_FORMAT "\n", test->expectedResult);
 
-  ast_eval_res_t evalResult = ast_eval(arena, test->expressionTree);
+  ast_eval_res_t evalResult = ast_eval(arena, varStack, test->expressionTree);
 
   if (test->shouldFail)
   {

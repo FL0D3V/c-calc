@@ -47,6 +47,20 @@
 #define c_is_decimal_seperator(c) ((c) == _DECIMAL_SEPERATOR_CHARACTER)
 #define c_is_number(c) (isdigit((c)) || c_is_decimal_seperator((c)))
 
+bool cstr_is_new_line_ex(const char *cstr, size_t len)
+{
+  if (!cstr || len != 1)
+    return false;
+  return cstr[0] == '\n';
+}
+bool cstr_is_new_line(const char *cstr)
+{
+  if (!cstr || strlen(cstr) != 1)
+    return false;
+  return cstr[0] == '\n';
+}
+#define c_is_new_line(c) ((c) == '\n')
+
 // String functions
 
 void cstr_chop_till_last_delim(char **cstr, char delimiter)

@@ -18,7 +18,7 @@ typedef struct
   size_t len;
 } string_slice_t;
 
-#define ss_current_pos(slice) ((slice)->current_ptr - (slice)->start_ptr)
+#define ss_current_pos(slice) ((size_t)((slice)->current_ptr - (slice)->start_ptr))
 
 #define _SS_ASSERT_SLICE_NOT_NULL(slice) \
   assert((slice) && "Given string-slice reference was NULL!")
@@ -122,6 +122,21 @@ char ss_seek(string_slice_t *slice)
 {
   _SS_ASSERT_IF_NOT_VALID(slice);
   return *((char *)(++slice->current_ptr));
+}
+
+// Returns the amount of spaces that were seeked over.
+size_t ss_seek_spaces_ex(string_slice_t *slice, bool seekNewLines)
+{
+  _SS_ASSERT_IF_NOT_VALID(slice);
+  size_t count = 0;
+  while (_SS_IS_IN_RANGE(slice) && isspace(ss_get_current(slice)))
+  {
+    if (!seekNewLines && ss_get_current(slice) == '\n')
+      break;
+    ss_seek(slice);
+    count++;
+  }
+  return count;
 }
 
 // Returns the amount of spaces that were seeked over.
