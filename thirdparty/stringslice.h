@@ -152,4 +152,13 @@ size_t ss_seek_spaces(string_slice_t *slice)
   return count;
 }
 
+bool ss_compare(string_slice_t *val1, string_slice_t *val2)
+{
+  if (val1->len != val2->len)
+    return false;
+  if (strncmp(val1->src, val2->src, val1->len) == 0)
+    return true;
+  return false;
+}
+
 #endif // _STRING_SLICE_H_

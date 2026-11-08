@@ -39,6 +39,7 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
 static bool help_run(command_t *self, const char *programName, int argc, char **argv);
 static bool version_run(command_t *self, const char *programName, int argc, char **argv);
 static bool test_run(command_t *self, const char *programName, int argc, char **argv);
+static bool system_test_run(command_t *self, const char *programName, int argc, char **argv);
 
 command_t commands[] = {
     {
@@ -65,6 +66,13 @@ command_t commands[] = {
         .short_description =
             "Tests the AST generation and evaluation of pre defined expressions.",
         .run = test_run,
+    },
+    {
+        .name = "system-test",
+        .signature = "[OPTIONS]",
+        .short_description =
+            "Tests all systems.",
+        .run = system_test_run,
     },
 };
 
@@ -794,62 +802,180 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
   return failedTests == 0;
 }
 
-static int test_system()
+static bool system_test_run(command_t *self, const char *programName, int argc, char **argv)
 {
-  const char *inputVar = "test = 20*10";
+  bool verbose = false;
+  bool help = false;
+
+  void *c = flag_c_new(programName);
+  flag_c_bool_var(c, &help, "h", false, "Print this help message");
+  flag_c_bool_var(c, &verbose, "v", NULL, "Execute all tests with verbose logging");
+
+  if (!flag_c_parse(c, argc, argv))
+  {
+    print_command_usage(stderr, self, programName, c);
+    flag_c_print_error(c, stderr);
+    return false;
+  }
+
+  argc = flag_c_rest_argc(c);
+  argv = flag_c_rest_argv(c);
+
+  if (help)
+  {
+    print_command_usage(stdout, self, programName, c);
+    return true;
+  }
+
+  if (argc != 0)
+  {
+    print_command_usage(stderr, self, programName, c);
+    fprintf(stderr, "ERROR: Too many parameters given\n");
+    return false;
+  }
+
+  flag_c_free(c);
+
+  const char *inputVar1 = "test = 20*10+a";
+  const char *inputVar2 = "a = 2^5";
+  // Tests if the variable names are checked with builtin function or constant names.
+  // const char *inputVar2 = "cos = 2^5";
+  // const char *inputVar3 = "atan2(x,y,z) = test * 20 * x + 10 * y - 5 * z";
+  const char *inputVar3 = "func(x,y,z) = test * 20 * x + 10 * y - 5 * z";
   const char *input = "10 * 2 + test";
 
   arena_t arena = {0};
 
-  printf("INPUT=%s\n\n", input);
+  printf("INPUT = '%s'\n\n", input);
 
-  tokenizer_t tokenizerVar = tokenizer_execute(&arena, inputVar);
-  if (tokenizerVar.isError)
+  tokenizer_t tokenizerVar1 = tokenizer_execute(&arena, inputVar1);
+  if (tokenizerVar1.isError)
   {
     arena_free(&arena);
-    return 1;
+    return false;
   }
-  lexer_t lexerVar = lexer_execute(&arena, &tokenizerVar);
-  if (lexerVar.isError)
+  if (verbose)
+  {
+    tokenizer_print(&tokenizerVar1);
+    printf("\n");
+  }
+  lexer_t lexerVar1 = lexer_execute(&arena, &tokenizerVar1);
+  if (lexerVar1.isError)
   {
     arena_free(&arena);
-    return 1;
+    return false;
+  }
+  if (verbose)
+  {
+    lexer_print(&lexerVar1);
+    printf("\n");
+  }
+
+  tokenizer_t tokenizerVar2 = tokenizer_execute(&arena, inputVar2);
+  if (tokenizerVar2.isError)
+  {
+    arena_free(&arena);
+    return false;
+  }
+  if (verbose)
+  {
+    tokenizer_print(&tokenizerVar2);
+    printf("\n");
+  }
+  lexer_t lexerVar2 = lexer_execute(&arena, &tokenizerVar2);
+  if (lexerVar2.isError)
+  {
+    arena_free(&arena);
+    return false;
+  }
+  if (verbose)
+  {
+    lexer_print(&lexerVar2);
+    printf("\n");
+  }
+
+  tokenizer_t tokenizerVar3 = tokenizer_execute(&arena, inputVar3);
+  if (tokenizerVar3.isError)
+  {
+    arena_free(&arena);
+    return false;
+  }
+  if (verbose)
+  {
+    tokenizer_print(&tokenizerVar3);
+    printf("\n");
+  }
+  lexer_t lexerVar3 = lexer_execute(&arena, &tokenizerVar3);
+  if (lexerVar3.isError)
+  {
+    arena_free(&arena);
+    return false;
+  }
+  if (verbose)
+  {
+    lexer_print(&lexerVar3);
+    printf("\n");
   }
 
   tokenizer_t tokenizer = tokenizer_execute(&arena, input);
   if (tokenizer.isError)
   {
     arena_free(&arena);
-    return 1;
+    return false;
   }
+
+  if (verbose)
+  {
+    tokenizer_print(&tokenizer);
+    printf("\n");
+  }
+
   lexer_t lexer = lexer_execute(&arena, &tokenizer);
   if (lexer.isError)
   {
     arena_free(&arena);
-    return 1;
+    return false;
+  }
+
+  if (verbose)
+  {
+    lexer_print(&lexer);
+    printf("\n");
   }
 
   node_variable_stack_t vs = {0};
-  parse_node_variable(&vs, &arena, &lexerVar);
+  if (!parse_node_variable(&vs, &arena, &lexerVar1) ||
+      !parse_node_variable(&vs, &arena, &lexerVar2) ||
+      !parse_node_variable(&vs, &arena, &lexerVar3))
+  {
+    arena_free(&arena);
+    return false;
+  }
 
-  node_variable_stack_print(&vs, true);
-  printf("\n");
+  if (verbose)
+  {
+    node_variable_stack_print(&vs, true);
+    printf("\n");
+  }
 
   node_t *rootNode = parser_execute(&vs, &arena, &lexer);
   if (!rootNode)
   {
     arena_free(&arena);
-    return 1;
+    return false;
   }
 
-  print_node(rootNode, true);
-  printf("\n");
+  if (verbose)
+  {
+    print_node(rootNode, true);
+    printf("\n");
+  }
 
   ast_eval_res_t result = ast_eval(&arena, &vs, rootNode);
   if (result.isError)
   {
     arena_free(&arena);
-    return 1;
+    return false;
   }
 
   // Print result
@@ -858,7 +984,7 @@ static int test_system()
   // Cleanup
   arena_free(&arena);
 
-  return 0;
+  return true;
 }
 
 int main(int argc, char **argv)

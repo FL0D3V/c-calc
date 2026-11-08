@@ -146,13 +146,22 @@ const char *mathConstantTypeNames[MC_COUNT] = {
     [MC_GAUSS_CONSTANT] = "Gauss's constant",
 };
 
+bool ss_in_math_constants(string_slice_t *name)
+{
+  for (size_t i = 0; i < MC_COUNT; ++i)
+    if (strncmp(mathConstantTypeIdentifiers[i], name->src, strlen(mathConstantTypeIdentifiers[i])) == 0)
+      return true;
+  return false;
+}
+
 e_math_constant_type cstr_to_math_constant_type_ex(const char *cstr, size_t len)
 {
   if (!cstr || len == 0)
     return MC_INVALID;
 
   for (size_t i = 0; i < MC_COUNT; ++i)
-    if (strlen(mathConstantTypeIdentifiers[i]) == len && strncmp(cstr, mathConstantTypeIdentifiers[i], len) == 0)
+    if (strlen(mathConstantTypeIdentifiers[i]) == len &&
+        strncmp(cstr, mathConstantTypeIdentifiers[i], len) == 0)
       return (e_math_constant_type)i;
 
   return MC_INVALID;
@@ -296,10 +305,19 @@ e_function_type cstr_to_function_type_ex(const char *cstr, size_t len)
     return FT_INVALID;
 
   for (size_t i = 0; i < FT_COUNT; ++i)
-    if (strlen(functionTypeIdentifiers[i]) == len && strncmp(cstr, functionTypeIdentifiers[i], len) == 0)
+    if (strlen(functionTypeIdentifiers[i]) == len &&
+        strncmp(cstr, functionTypeIdentifiers[i], len) == 0)
       return (e_function_type)i;
 
   return FT_INVALID;
+}
+
+bool ss_in_function_types(string_slice_t *name)
+{
+  for (size_t i = 0; i < FT_COUNT; ++i)
+    if (strncmp(functionTypeIdentifiers[i], name->src, strlen(functionTypeIdentifiers[i])) == 0)
+      return true;
+  return false;
 }
 
 e_function_type cstr_to_function_type(const char *cstr)
@@ -609,10 +627,8 @@ typedef enum
   TT_LITERAL,
   // All for example variable names.
   TT_SYMBOL,
-  // TODO: Rethink!
   // End of current line
   TT_EOL,
-  // TODO: Rethink!
   // End of file
   TT_EOF,
   // Count of all token types.
