@@ -1136,28 +1136,27 @@ double node_constant_to_value(arena_t *arena, node_variable_stack_t *varStack, n
   case CN_VARIABLE:
   {
     string_slice_t *varName = &constant->as.variableName;
+
     for (size_t i = 0; i < varStack->count; ++i)
     {
       node_variable_t *currVar = &varStack->items[i];
-      // TODO: Rethink! Only constant variable parsing.
       if (currVar->type != NV_CONST_VARIABLE_DEFINITION)
         continue;
       string_slice_t *currVarName = &currVar->as.varDef;
       if (currVarName->len != varName->len)
         continue;
-      if (strncmp((char *)currVarName->current_ptr, (char *)varName->current_ptr, (size_t)(currVarName->current_ptr - currVarName->start_ptr)))
+      if (strcmp(currVarName->src, varName->src))
       {
-        // TODO: Rethink and test!
         ast_eval_res_t res = ast_eval(arena, varStack, currVar->expression);
         if (res.isError)
-          return 0;
+          UNREACHABLE("Evaluation failed!");
 
         return res.value;
       }
     }
 
     // TODO: Rethink!
-    E_ERROR(node->cursor, "Variable not defined!");
+    fprintf(stderr, _E_ERROR_NAME ":%zu: Variable '" SS_FMT "' not defined!\n", node->cursor, SS_ARG(varName));
     return 0;
   }
   break;

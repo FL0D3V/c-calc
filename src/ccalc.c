@@ -794,6 +794,73 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
   return failedTests == 0;
 }
 
+static int test_system()
+{
+  const char *inputVar = "test = 20*10";
+  const char *input = "10 * 2 + test";
+
+  arena_t arena = {0};
+
+  printf("INPUT=%s\n\n", input);
+
+  tokenizer_t tokenizerVar = tokenizer_execute(&arena, inputVar);
+  if (tokenizerVar.isError)
+  {
+    arena_free(&arena);
+    return 1;
+  }
+  lexer_t lexerVar = lexer_execute(&arena, &tokenizerVar);
+  if (lexerVar.isError)
+  {
+    arena_free(&arena);
+    return 1;
+  }
+
+  tokenizer_t tokenizer = tokenizer_execute(&arena, input);
+  if (tokenizer.isError)
+  {
+    arena_free(&arena);
+    return 1;
+  }
+  lexer_t lexer = lexer_execute(&arena, &tokenizer);
+  if (lexer.isError)
+  {
+    arena_free(&arena);
+    return 1;
+  }
+
+  node_variable_stack_t vs = {0};
+  parse_node_variable(&vs, &arena, &lexerVar);
+
+  node_variable_stack_print(&vs, true);
+  printf("\n");
+
+  node_t *rootNode = parser_execute(&vs, &arena, &lexer);
+  if (!rootNode)
+  {
+    arena_free(&arena);
+    return 1;
+  }
+
+  print_node(rootNode, true);
+  printf("\n");
+
+  ast_eval_res_t result = ast_eval(&arena, &vs, rootNode);
+  if (result.isError)
+  {
+    arena_free(&arena);
+    return 1;
+  }
+
+  // Print result
+  printf(">>> " DOUBLE_PRINT_FORMAT "\n", result.value);
+
+  // Cleanup
+  arena_free(&arena);
+
+  return 0;
+}
+
 int main(int argc, char **argv)
 {
   char *programName = flag_shift_args(&argc, &argv);
