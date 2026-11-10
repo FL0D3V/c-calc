@@ -868,7 +868,7 @@ static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *index)
 
   ++*index;
 
-  node_t *rhs = parser_execute(arena, lexer, index);
+  node_t *rhs = try_parse_binop(arena, lexer, index);
   if (!rhs)
     return NULL;
 
