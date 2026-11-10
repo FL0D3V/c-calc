@@ -13,7 +13,9 @@
 
 #define L_ERROR_NAME "LEXING-ERROR"
 #define L_ERROR_INVALID_AMOUNT_OF_COMMAS_IN_NUMBER(cursor, tok) \
-  fprintf(stderr, L_ERROR_NAME ":%zu: A number can only contain 1 comma ('" IN_TOK_FMT "')!\n", (cursor), IN_TOK_ARG(tok))
+  fprintf(stderr, L_ERROR_NAME ":%zu: A number can only contain 1 decimal point ('" IN_TOK_FMT "')!\n", (cursor), IN_TOK_ARG(tok))
+#define L_ERROR_COMMA_AT_END(cursor, tok) \
+  fprintf(stderr, L_ERROR_NAME ":%zu: The comma in the number was at the end! ('" IN_TOK_FMT "')!\n", (cursor), IN_TOK_ARG(tok))
 #define L_ERROR_INVALID_NUMBER(cursor, tok) \
   fprintf(stderr, L_ERROR_NAME ":%zu: Not a number ('" IN_TOK_FMT "')!\n", (cursor), IN_TOK_ARG(tok))
 #define L_ERROR_INVALID_TOKEN(cursor, tok) \
@@ -232,27 +234,28 @@ const char *functionTypeIdentifiers[FT_COUNT] = {
     [FT_LOG10] = "log10",
 };
 
-const size_t functionTypeParameterCount[FT_COUNT] = {
-    // Other
-    [FT_SQRT] = 1,
-    [FT_EXP] = 1,
-    // Sin
-    [FT_SIN] = 1,
-    [FT_ASIN] = 1,
-    [FT_SINH] = 1,
-    // Cos
-    [FT_COS] = 1,
-    [FT_ACOS] = 1,
-    [FT_COSH] = 1,
-    // Tan
-    [FT_TAN] = 1,
-    [FT_ATAN] = 1,
-    [FT_TANH] = 1,
-    [FT_ATAN2] = 2,
-    // Log
-    [FT_LN] = 1,
-    [FT_LOG10] = 1,
-};
+// TODO: Probably not needed!
+// const size_t functionTypeParameterCount[FT_COUNT] = {
+//     // Other
+//     [FT_SQRT] = 1,
+//     [FT_EXP] = 1,
+//     // Sin
+//     [FT_SIN] = 1,
+//     [FT_ASIN] = 1,
+//     [FT_SINH] = 1,
+//     // Cos
+//     [FT_COS] = 1,
+//     [FT_ACOS] = 1,
+//     [FT_COSH] = 1,
+//     // Tan
+//     [FT_TAN] = 1,
+//     [FT_ATAN] = 1,
+//     [FT_TANH] = 1,
+//     [FT_ATAN2] = 2,
+//     // Log
+//     [FT_LN] = 1,
+//     [FT_LOG10] = 1,
+// };
 
 const char *functionTypeNames[FT_COUNT] = {
     // Other
@@ -610,7 +613,7 @@ void tokenizer_print(const tokenizer_t *tokenizer)
     input_token_t *currTok = &tokenizer->items[i];
     printf("%s", inputTokenTypeNames[currTok->type]);
     if (!cstr_is_new_line_ex(currTok->value, currTok->length))
-      printf("('" IN_TOK_FMT "', len=%zu)", IN_TOK_ARG(currTok), currTok->length);
+      printf("('" IN_TOK_FMT "'), len=%zu", IN_TOK_ARG(currTok), currTok->length);
     printf("\n");
   }
 }
@@ -737,7 +740,6 @@ inline token_t *lex_seek(lexer_t *lexer)
   return &lexer->items[++lexer->cursor];
 }
 
-// TODO: Implement internal cursor handling, this will get rid of externally managed indexes
 #define lex_at(lexer, idx) (&(lexer)->items[(idx)])
 #define lex_in_range(lexer, idx) ((idx) < (lexer)->count - 1)
 #define lex_next_in_range(lexer, idx) ((idx) + 1 < (lexer)->count - 1)
@@ -745,6 +747,8 @@ inline token_t *lex_seek(lexer_t *lexer)
 #define tok_is(tok, t) ((tok)->type == (t))
 #define tok_not(tok, t) ((tok)->type != (t))
 
+#define tok_is_operator(tok, ot) \
+  (tok_is(tok, TT_OPERATOR) && (tok)->as.operator==(ot))
 #define tok_is_paren(tok, pt) \
   (tok_is(tok, TT_PAREN) && (tok)->as.paren == (pt))
 #define tok_not_specific_paren(tok, pt) \
@@ -767,7 +771,7 @@ lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
   {
     const input_token_t *currentToken = &tokenizer->items[i];
 
-    // TODO: Rethink!
+    // Check for new line
     if (cstr_is_new_line_ex(currentToken->value, currentToken->length))
     {
       add_eol_token(arena, &lexer, currentToken->cursor);
@@ -778,49 +782,13 @@ lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
     if (cstr_is_operator_ex(currentToken->value, currentToken->length))
     {
       e_operator_type op = cstr_to_operator_type_ex(currentToken->value, currentToken->length);
-
       if (op == OP_INVALID)
         UNREACHABLE("Invalid operator-type!");
-
       add_operator_token(arena, &lexer, op, currentToken->cursor);
       continue;
     }
 
-    // Number checking
-    num_check_t numCheck = cstr_is_number_ex(currentToken->value, currentToken->length);
-    switch (numCheck.ret)
-    {
-    case NCR_NULL_OR_EMPTY:
-      UNREACHABLE("Number-Token was NULL!");
-      break;
-    case NCR_VALID:
-    {
-      char *endptr;
-      double number = strtof(currentToken->value, &endptr);
-
-      if (!endptr || endptr == currentToken->value || (size_t)(endptr - currentToken->value) != currentToken->length)
-        UNREACHABLE("Error while converting a number!");
-
-      add_number_token(arena, &lexer, number, currentToken->cursor);
-      continue;
-    }
-    break;
-    case NCR_TOO_MANY_COMMAS:
-    {
-      L_ERROR_INVALID_AMOUNT_OF_COMMAS_IN_NUMBER(currentToken->cursor + numCheck.cursor, currentToken);
-      lexer.isError = true;
-      continue;
-    }
-    break;
-    case NCR_NOT_A_NUMBER:
-      // Literal, symbol, paren, ...
-      break;
-    case NCR_COUNT:
-    default:
-      UNREACHABLE("Invalid number check return value!");
-      break;
-    }
-
+    // Check if the token is a paren like '(', ')', ...
     if (cstr_is_paren_ex(currentToken->value, currentToken->length))
     {
       e_paren_type pt = cstr_to_paren_type_ex(currentToken->value, currentToken->length);
@@ -832,6 +800,7 @@ lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
       continue;
     }
 
+    // Check if token is a common literal
     if (cstr_is_common_literal_ex(currentToken->value, currentToken->length))
     {
       e_common_literal_type clt = cstr_to_common_literal_type_ex(currentToken->value, currentToken->length);
@@ -843,7 +812,41 @@ lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
       continue;
     }
 
-    // variable names, math constants, function names, ...
+    // Number checking
+    num_check_t numCheck = cstr_check_number_ex(currentToken->value, currentToken->length, false);
+    size_t errCursor = currentToken->cursor + numCheck.cursor;
+    switch (numCheck.ret)
+    {
+    case NCR_NULL_OR_EMPTY:
+      UNREACHABLE("Number-Token was NULL!");
+      break;
+    case NCR_VALID:
+    {
+      add_number_token(arena, &lexer, numCheck.result, currentToken->cursor);
+      continue;
+    }
+    case NCR_TOO_MANY_COMMAS:
+    {
+      L_ERROR_INVALID_AMOUNT_OF_COMMAS_IN_NUMBER(errCursor, currentToken);
+      lexer.isError = true;
+      continue;
+    }
+    case NCR_COMMA_AT_END:
+    {
+      L_ERROR_COMMA_AT_END(errCursor, currentToken);
+      lexer.isError = true;
+      continue;
+    }
+    case NCR_NOT_A_NUMBER:
+      // Continue checking because its not a number but a symbol, ...
+      break;
+    case NCR_COUNT:
+    default:
+      UNREACHABLE("Invalid number check return value!");
+      break;
+    }
+
+    // Just a symbol like variable names, math constants, function names, ...
     string_slice_t symbol = {0};
     ss_init_ex(&symbol, currentToken->value, currentToken->length);
     add_symbol_token(arena, &lexer, symbol, currentToken->cursor);

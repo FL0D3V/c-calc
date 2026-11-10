@@ -42,7 +42,6 @@
 #define DOUBLE_PRINT_FORMAT "%.05lf"
 
 #define _DECIMAL_SEPERATOR_CHARACTER '.'
-#define _MINUS_CHARACTER '-'
 
 #define c_is_decimal_seperator(c) ((c) == _DECIMAL_SEPERATOR_CHARACTER)
 #define c_is_number(c) (isdigit((c)) || c_is_decimal_seperator((c)))
@@ -53,12 +52,14 @@ bool cstr_is_new_line_ex(const char *cstr, size_t len)
     return false;
   return cstr[0] == '\n';
 }
+
 bool cstr_is_new_line(const char *cstr)
 {
   if (!cstr || strlen(cstr) != 1)
     return false;
   return cstr[0] == '\n';
 }
+
 #define c_is_new_line(c) ((c) == '\n')
 
 // String functions
@@ -120,13 +121,12 @@ typedef enum
 {
   // Input was NULL or empty. Cursor will be set to 0.
   NCR_NULL_OR_EMPTY,
-
   // Input IS a valid number and the cursor will be set to the length of the input.
   NCR_VALID,
-
   // Input has too many commas. Cursor will be set to the error position in the string.
   NCR_TOO_MANY_COMMAS,
-
+  // The comma was the last character. Cursor will be set to the error position in the string.
+  NCR_COMMA_AT_END,
   // Input was NOT a number. Cursor will be set to the error position in the string.
   NCR_NOT_A_NUMBER,
 
@@ -134,22 +134,31 @@ typedef enum
   NCR_COUNT
 } num_check_ret_t;
 
-static_assert(NCR_COUNT == 4, "Amount of number-check-return-values have changed");
+static_assert(NCR_COUNT == 5, "Amount of number-check-return-values have changed");
 
-#define ASSERT_NUM_CHECK_RETURN_VALUE(mode) assert((mode) < NCR_COUNT && "Invalid number-check-return-value!")
+bool cstr_to_number(const char *cstr, size_t length, double *result)
+{
+  char *endptr;
+  *result = strtod(cstr, &endptr);
+  if (!endptr || endptr == cstr || (size_t)(endptr - cstr) != length)
+    return false;
+  return true;
+}
 
 typedef struct
 {
   num_check_ret_t ret;
   int cursor;
+  double result;
 } num_check_t;
 
-#define _NUM_CHECK_NULL() ((num_check_t){.ret = NCR_NULL_OR_EMPTY, .cursor = 0})
-#define _NUM_CHECK_SUCCESS(cur) ((num_check_t){.ret = NCR_VALID, .cursor = (cur)})
-#define _NUM_CHECK_COMMA_ERR(cur) ((num_check_t){.ret = NCR_TOO_MANY_COMMAS, .cursor = (cur)})
+#define _NUM_CHECK_NULL() ((num_check_t){.ret = NCR_NULL_OR_EMPTY})
+#define _NUM_CHECK_SUCCESS(cur, num) ((num_check_t){.ret = NCR_VALID, .cursor = (cur), .result = (num)})
+#define _NUM_CHECK_TOO_MANY_COMMA(cur) ((num_check_t){.ret = NCR_TOO_MANY_COMMAS, .cursor = (cur)})
+#define _NUM_CHECK_COMMA_AT_END(cur) ((num_check_t){.ret = NCR_COMMA_AT_END, .cursor = (cur)})
 #define _NUM_CHECK_INVALID(cur) ((num_check_t){.ret = NCR_NOT_A_NUMBER, .cursor = (cur)})
 
-num_check_t cstr_is_number_ex(const char *cstr, size_t len)
+num_check_t cstr_check_number_ex(const char *cstr, size_t len, bool includeNumberProOps)
 {
   if (!cstr || len == 0)
     return _NUM_CHECK_NULL();
@@ -160,7 +169,7 @@ num_check_t cstr_is_number_ex(const char *cstr, size_t len)
 
   for (size_t i = 0; i < len; ++i)
   {
-    if (i == 0 && *current == _MINUS_CHARACTER)
+    if (includeNumberProOps && i == 0 && (*current == '-' || *current == '+'))
       continue;
 
     if (!c_is_number(*current))
@@ -169,23 +178,31 @@ num_check_t cstr_is_number_ex(const char *cstr, size_t len)
     if (c_is_decimal_seperator(*current))
     {
       if (decimalSeperatorFound)
-        return _NUM_CHECK_COMMA_ERR(i);
-      else
-        decimalSeperatorFound = true;
+        return _NUM_CHECK_TOO_MANY_COMMA(i);
+
+      if (i == len - 1)
+        return _NUM_CHECK_COMMA_AT_END(i);
+
+      decimalSeperatorFound = true;
     }
 
     current++;
   }
 
-  return _NUM_CHECK_SUCCESS(len);
+  double number = 0.0;
+
+  if (!cstr_to_number(cstr, len, &number))
+    UNREACHABLE("Error while converting a string to a number!");
+
+  return _NUM_CHECK_SUCCESS(len, number);
 }
 
-num_check_t cstr_is_number(const char *cstr)
+num_check_t cstr_check_number(const char *cstr, bool includeNumberProOps)
 {
   if (!cstr)
     return _NUM_CHECK_NULL();
 
-  return cstr_is_number_ex(cstr, strlen(cstr));
+  return cstr_check_number_ex(cstr, strlen(cstr), includeNumberProOps);
 }
 
 #endif // !_C_HELPERS_H_

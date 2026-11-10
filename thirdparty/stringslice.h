@@ -154,6 +154,8 @@ size_t ss_seek_spaces(string_slice_t *slice)
 
 bool ss_compare(string_slice_t *val1, string_slice_t *val2)
 {
+  if (!val1 || !val2)
+    return false;
   if (val1->len != val2->len)
     return false;
   if (strncmp(val1->src, val2->src, val1->len) == 0)

@@ -177,7 +177,7 @@ static void print_detail_info(const char *arg)
   }
 
   if (!found)
-    fprintf(stderr, "ERROR: Unknown value '%s'! Only inbuild functions and constants are supported.\n", arg);
+    fprintf(stderr, "ERROR: Unknown value '%s'! Only buildin functions or constants are supported.\n", arg);
 }
 
 static bool execute_math_expression(const char *input, bool verbose)
@@ -214,6 +214,7 @@ static bool execute_math_expression(const char *input, bool verbose)
 
   // Parse the variables
   node_variable_stack_t vs = {0};
+
   bool varParsingRes = parse_node_variable(&vs, &arena, &lexer);
   if (verbose)
   {
@@ -228,7 +229,8 @@ static bool execute_math_expression(const char *input, bool verbose)
   }
 
   // Execute parser and generate AST
-  node_t *rootNode = parser_execute(&vs, &arena, &lexer);
+  size_t index = 0;
+  node_t *rootNode = parser_execute(&vs, &arena, &lexer, &index);
   if (!rootNode)
   {
     // Cleanup
@@ -237,7 +239,7 @@ static bool execute_math_expression(const char *input, bool verbose)
   }
   if (verbose)
   {
-    print_node(rootNode, true);
+    print_node(&vs, rootNode, true);
     printf("\n");
   }
 
@@ -582,7 +584,7 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
   node_func_args_t test3ArgsList1 = {0};
   node_t *test3ArgsList1Item1 = node_binop(&arena, 0, NO_SUB,
                                            node_constant(&arena, 0, node_constant_value(3.5)),
-                                           node_constant(&arena, 0, node_constant_inbuild_const(MC_EULERS_NUMBER)));
+                                           node_constant(&arena, 0, node_constant_buildin_const(MC_EULERS_NUMBER)));
   node_func_args_append(&arena, &test3ArgsList1, test3ArgsList1Item1);
 
   node_func_args_t test3ArgsList2 = {0};
@@ -600,7 +602,7 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
   node_func_args_t test3ArgsList4 = {0};
   node_t *test3ArgsList4Item1 = node_binop(&arena, 0, NO_POW,
                                            node_constant(&arena, 0, node_constant_value(5)),
-                                           node_constant(&arena, 0, node_constant_inbuild_const(MC_EULERS_CONSTANT)));
+                                           node_constant(&arena, 0, node_constant_buildin_const(MC_EULERS_CONSTANT)));
   node_func_args_append(&arena, &test3ArgsList4, test3ArgsList4Item1);
 
   node_func_args_t test4ArgsList1 = {0};
@@ -611,7 +613,7 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
   node_t *test11ArgsList1Item1 = node_constant(&arena, 17, node_constant_value(2));
   node_t *test11ArgsList1Item2 = node_binop(&arena, 0, NO_POW,
                                             node_constant(&arena, 0, node_constant_value(5)),
-                                            node_constant(&arena, 0, node_constant_inbuild_const(MC_EULERS_CONSTANT)));
+                                            node_constant(&arena, 0, node_constant_buildin_const(MC_EULERS_CONSTANT)));
   node_func_args_append(&arena, &test11ArgsList1, test11ArgsList1Item1);
   node_func_args_append(&arena, &test11ArgsList1, test11ArgsList1Item2);
 
@@ -630,7 +632,7 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
                                                   node_binop(&arena, 0, NO_DIV,
                                                              node_paren(&arena, 0,
                                                                         node_binop(&arena, 0, NO_POW,
-                                                                                   node_constant(&arena, 0, node_constant_inbuild_const(MC_PI)),
+                                                                                   node_constant(&arena, 0, node_constant_buildin_const(MC_PI)),
                                                                                    node_constant(&arena, 0, node_constant_value(2)))),
                                                              node_constant(&arena, 0, node_constant_value(3))))),
       },
@@ -663,7 +665,7 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
                                                              node_binop(&arena, 0, NO_SUB,
                                                                         node_func(&arena, 0, NF_LN, test3ArgsList3),
                                                                         node_binop(&arena, 0, NO_ADD,
-                                                                                   node_constant(&arena, 0, node_constant_inbuild_const(MC_PI)),
+                                                                                   node_constant(&arena, 0, node_constant_buildin_const(MC_PI)),
                                                                                    node_func(&arena, 0, NF_LN, test3ArgsList4)))))),
       },
       // Test 4
@@ -836,13 +838,14 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
 
   flag_c_free(c);
 
+  const char *input = "10 * 2 + test * PI";
+
   const char *inputVar1 = "test = 20*10+a";
-  const char *inputVar2 = "a = 2^5";
+  const char *inputVar2 = "a = 2^5-EC";
   // Tests if the variable names are checked with builtin function or constant names.
   // const char *inputVar2 = "cos = 2^5";
   // const char *inputVar3 = "atan2(x,y,z) = test * 20 * x + 10 * y - 5 * z";
   const char *inputVar3 = "func(x,y,z) = test * 20 * x + 10 * y - 5 * z";
-  const char *input = "10 * 2 + test";
 
   arena_t arena = {0};
 
@@ -958,7 +961,8 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
     printf("\n");
   }
 
-  node_t *rootNode = parser_execute(&vs, &arena, &lexer);
+  size_t index = 0;
+  node_t *rootNode = parser_execute(&vs, &arena, &lexer, &index);
   if (!rootNode)
   {
     arena_free(&arena);
@@ -967,7 +971,7 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
 
   if (verbose)
   {
-    print_node(rootNode, true);
+    print_node(&vs, rootNode, true);
     printf("\n");
   }
 
