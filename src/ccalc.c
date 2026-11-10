@@ -218,7 +218,7 @@ static bool execute_math_expression(const char *input, bool verbose)
   bool varParsingRes = parse_node_variable(&vs, &arena, &lexer);
   if (verbose)
   {
-    node_variable_stack_print(&vs, true);
+    variable_stack_print(&vs, true);
     printf("\n");
   }
   if (varParsingRes && vs.count > 0)
@@ -957,7 +957,7 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
 
   if (verbose)
   {
-    node_variable_stack_print(&vs, true);
+    variable_stack_print(&vs, true);
     printf("\n");
   }
 

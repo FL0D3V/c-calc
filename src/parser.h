@@ -194,6 +194,14 @@ typedef struct
   node_t *arg;
 } node_paren_t;
 
+typedef union
+{
+  // TODO: Change to big number type!
+  double value;
+  e_math_constant_type buildinConstant;
+  string_slice_t variableName;
+} u_const_node_as;
+
 typedef enum
 {
   CN_VALUE,
@@ -211,18 +219,12 @@ const char *constNodeTypeNames[CN_COUNT] = {
     [CN_VARIABLE] = "Variable",
 };
 
-typedef union
-{
-  // TODO: Change to big number type!
-  double value;
-  e_math_constant_type buildinConstant;
-  string_slice_t variableName;
-} u_const_node_as;
-
 typedef struct
 {
   e_const_node_type type;
   u_const_node_as as;
+
+  // Indicates that the value should be negated like "5" -> "-5".
   bool hasPreMinus;
 } node_const_t;
 
@@ -260,9 +262,6 @@ static node_t *base_node(arena_t *arena, size_t cursor, e_node_type type)
       .type = type,
       .cursor = cursor,
   };
-  // TODO:
-  // newNode->type = type;
-  // newNode->cursor = cursor;
   return newNode;
 }
 
@@ -297,7 +296,6 @@ node_t *node_paren(arena_t *arena, size_t cursor, node_t *arg)
   return node;
 }
 
-// static bool check_semantics(lexer_t *lexer);
 static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer, size_t *index);
 static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *index);
 static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *index);
@@ -318,8 +316,7 @@ typedef struct
 
 typedef struct
 {
-  // The name of the function.
-  // With this name the function can be called in an expression.
+  // The name of the function. With this name the function can be called in an expression.
   string_slice_t name;
   // A list of function argument names, which can be used, when using these symbols in the expression.
   node_func_definition_args_t args;
@@ -338,6 +335,7 @@ typedef enum
   // A function definition. This means it will have at least one argument, which can be used in the assined expression.
   NV_FUNCTION_DEFINITION,
 
+  // Count of variable names.
   NV_COUNT
 } e_node_variable_type;
 
@@ -356,8 +354,10 @@ typedef struct
   node_t *expression;
 } node_variable_t;
 
-#define node_variable_constant(varName, value) ((node_variable_t){.type = NV_CONST_VARIABLE_DEFINITION, .as.varDef = (varName), .expression = (value)})
-#define node_variable_function(varName, funcArgs, value) ((node_variable_t){.type = NV_FUNCTION_DEFINITION, .as.funcDef.name = (varName), .as.funcDef.args = (funcArgs), .expression = (value)})
+#define node_variable_constant(varName, value) \
+  ((node_variable_t){.type = NV_CONST_VARIABLE_DEFINITION, .as.varDef = (varName), .expression = (value)})
+#define node_variable_function(varName, funcArgs, value) \
+  ((node_variable_t){.type = NV_FUNCTION_DEFINITION, .as.funcDef.name = (varName), .as.funcDef.args = (funcArgs), .expression = (value)})
 
 typedef struct
 {
@@ -365,6 +365,11 @@ typedef struct
   size_t capacity;
   size_t count;
 } node_variable_stack_t;
+
+#define vs_variable_append(a, vs, var) \
+  arena_da_append(a, vs, var)
+
+#define vs_at(vs, idx) &(vs)->items[idx]
 
 typedef enum
 {
@@ -377,7 +382,7 @@ typedef enum
 
 static_assert(FVM_COUNT == 3, "Amount of find node var modes have changed!");
 
-bool vs_name_exists_ex(node_variable_stack_t *vs, string_slice_t *name, e_find_var_mode mode)
+bool vs_variable_name_exists_ex(node_variable_stack_t *vs, string_slice_t *name, e_find_var_mode mode)
 {
   ASSERT_NULL(vs);
   ASSERT_NULL(name);
@@ -435,9 +440,10 @@ bool vs_name_exists_ex(node_variable_stack_t *vs, string_slice_t *name, e_find_v
   return false;
 }
 
-#define vs_name_exists(vs, name) vs_name_exists_ex((vs), (name), FVM_ALL)
+#define vs_variable_name_exists(vs, name) \
+  vs_variable_name_exists_ex((vs), (name), FVM_ALL)
 
-node_variable_t *find_node_variable_ex(node_variable_stack_t *vs, string_slice_t *name, e_find_var_mode mode)
+node_variable_t *vs_find_variable_ex(node_variable_stack_t *vs, string_slice_t *name, e_find_var_mode mode)
 {
   ASSERT_NULL(vs);
   ASSERT_NULL(name);
@@ -497,34 +503,12 @@ node_variable_t *find_node_variable_ex(node_variable_stack_t *vs, string_slice_t
   return NULL;
 }
 
-#define find_node_variable(vs, name) find_node_variable_ex((vs), (name), FVM_ALL)
+#define vs_find_variable(vs, name) \
+  vs_find_variable_ex((vs), (name), FVM_ALL)
 
-#define node_variable_stack_append(a, stack, var) \
-  arena_da_append(a, stack, var)
-
-static bool try_parse_const_variable(node_variable_stack_t *varStack, arena_t *arena, lexer_t *lexer);
-static bool try_parse_func_variable(node_variable_stack_t *varStack, arena_t *arena, lexer_t *lexer);
-bool parse_node_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer);
-void node_variable_stack_print(node_variable_stack_t *varStack, bool showValue);
-
-node_t *parser_execute(node_variable_stack_t *varStack, arena_t *arena, lexer_t *lexer, size_t *index);
-static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented, size_t depth);
-void print_node(node_variable_stack_t *vs, node_t *node, bool indented);
-
-node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *varStack, node_t *expr);
-
-typedef struct
+static bool vs_check_variable_name_errors(node_variable_stack_t *vs, string_slice_t *name, size_t cursor)
 {
-  // TODO: Change to big number!
-  double value;
-  bool isError;
-} ast_eval_res_t;
-
-ast_eval_res_t ast_eval(arena_t *arena, node_variable_stack_t *varStack, node_t *expr);
-
-static bool check_variable_name_errors(node_variable_stack_t *vs, string_slice_t *name, size_t cursor)
-{
-  if (vs_name_exists(vs, name))
+  if (vs_variable_name_exists(vs, name))
   {
     S_ERROR_SS(cursor, "Variable '" SS_FMT "' already exists!", name);
     return false;
@@ -542,9 +526,29 @@ static bool check_variable_name_errors(node_variable_stack_t *vs, string_slice_t
   return true;
 }
 
-static bool try_parse_const_variable(node_variable_stack_t *varStack, arena_t *arena, lexer_t *lexer)
+static bool try_parse_const_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer);
+static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer);
+bool parse_node_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer);
+void variable_stack_print(node_variable_stack_t *vs, bool showValue);
+
+node_t *parser_execute(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer, size_t *index);
+static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented, size_t depth);
+void print_node(node_variable_stack_t *vs, node_t *node, bool indented);
+
+node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr);
+
+typedef struct
 {
-  ASSERT_NULL(varStack);
+  // TODO: Change to big number!
+  double value;
+  bool isError;
+} ast_eval_res_t;
+
+ast_eval_res_t ast_eval(arena_t *arena, node_variable_stack_t *vs, node_t *expr);
+
+static bool try_parse_const_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer)
+{
+  ASSERT_NULL(vs);
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
 
@@ -573,25 +577,26 @@ static bool try_parse_const_variable(node_variable_stack_t *varStack, arena_t *a
   }
 
   ++index;
-  node_t *value = parser_execute(varStack, arena, lexer, &index);
+  node_t *value = parser_execute(vs, arena, lexer, &index);
   if (!value)
   {
     S_ERROR(assignTok->cursor, "After a variable assignment must be a valid expression!");
     return false;
   }
 
-  if (!check_variable_name_errors(varStack, &varNameTok->as.symbol, varNameTok->cursor))
+  // Checks if the variable name is already used
+  if (!vs_check_variable_name_errors(vs, &varNameTok->as.symbol, varNameTok->cursor))
     return false;
 
   // Create and add a new variable.
   node_variable_t constantVar = node_variable_constant(varNameTok->as.symbol, value);
-  node_variable_stack_append(arena, varStack, constantVar);
+  vs_variable_append(arena, vs, constantVar);
   return true;
 }
 
-static bool try_parse_func_variable(node_variable_stack_t *varStack, arena_t *arena, lexer_t *lexer)
+static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer)
 {
-  ASSERT_NULL(varStack);
+  ASSERT_NULL(vs);
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
 
@@ -676,19 +681,20 @@ static bool try_parse_func_variable(node_variable_stack_t *varStack, arena_t *ar
   }
 
   ++index;
-  node_t *value = parser_execute(varStack, arena, lexer, &index);
+  node_t *value = parser_execute(vs, arena, lexer, &index);
   if (!value)
   {
     S_ERROR(assignTok->cursor, "After a variable assignment must be a valid expression");
     return false;
   }
 
-  if (!check_variable_name_errors(varStack, &varNameTok->as.symbol, varNameTok->cursor))
+  // Checks if the variable name is already used
+  if (!vs_check_variable_name_errors(vs, &varNameTok->as.symbol, varNameTok->cursor))
     return false;
 
   // Create and add a new variable.
   node_variable_t funcVar = node_variable_function(varNameTok->as.symbol, funcArgs, value);
-  node_variable_stack_append(arena, varStack, funcVar);
+  vs_variable_append(arena, vs, funcVar);
   return true;
 }
 
@@ -705,21 +711,21 @@ bool parse_node_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lex
          try_parse_func_variable(vs, arena, lexer);
 }
 
-void node_variable_stack_print(node_variable_stack_t *varStack, bool showValue)
+void variable_stack_print(node_variable_stack_t *vs, bool showValue)
 {
-  ASSERT_NULL(varStack);
+  ASSERT_NULL(vs);
 
-  if (varStack->count <= 0)
+  if (vs->count <= 0)
   {
     printf("Variable-Stack is empty.\n");
     return;
   }
 
-  printf("Printing variables (%zu):\n", varStack->count);
+  printf("Printing variables (%zu):\n", vs->count);
 
-  for (size_t i = 0; i < varStack->count; ++i)
+  for (size_t i = 0; i < vs->count; ++i)
   {
-    node_variable_t *variable = &varStack->items[i];
+    node_variable_t *variable = &vs->items[i];
 
     switch (variable->type)
     {
@@ -753,7 +759,7 @@ void node_variable_stack_print(node_variable_stack_t *varStack, bool showValue)
       return;
 
     printf(" = ");
-    print_node(varStack, variable->expression, false);
+    print_node(vs, variable->expression, false);
   }
 }
 
@@ -795,6 +801,7 @@ static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer, size_t *index)
   }
   else if (tok_is(token, TT_SYMBOL))
   {
+    // TODO: Maybe link variable directly! This means that all variables must be parsed first!
     node_const_t constant = node_constant_variable_ex(token->as.symbol, hasPreMinus);
     return node_constant(arena, token->cursor, constant);
   }
@@ -902,9 +909,9 @@ static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *index)
 // IN: "EN + 5 / (5 * 0)"
 // AST: "add(EN, divide(5, paren(mult(5, 0))))"
 // TODO: Remove index, use internal lexer cursor
-node_t *parser_execute(node_variable_stack_t *varStack, arena_t *arena, lexer_t *lexer, size_t *index)
+node_t *parser_execute(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer, size_t *index)
 {
-  ASSERT_NULL(varStack);
+  ASSERT_NULL(vs);
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
 
@@ -932,10 +939,10 @@ node_t *parser_execute(node_variable_stack_t *varStack, arena_t *arena, lexer_t 
   return NULL;
 }
 
-double node_constant_to_value(arena_t *arena, node_variable_stack_t *varStack, node_t *node)
+double node_constant_to_value(arena_t *arena, node_variable_stack_t *vs, node_t *node)
 {
   ASSERT_NULL(arena);
-  ASSERT_NULL(varStack);
+  ASSERT_NULL(vs);
   ASSERT_NULL(node);
 
   if (node->type != NT_CONSTANT)
@@ -964,7 +971,7 @@ double node_constant_to_value(arena_t *arena, node_variable_stack_t *varStack, n
   {
     string_slice_t *varName = &constant->as.variableName;
 
-    node_variable_t *variable = find_node_variable_ex(varStack, varName, FVM_CONST);
+    node_variable_t *variable = vs_find_variable_ex(vs, varName, FVM_CONST);
 
     if (!variable)
     {
@@ -973,7 +980,7 @@ double node_constant_to_value(arena_t *arena, node_variable_stack_t *varStack, n
       return 0;
     }
 
-    ast_eval_res_t res = ast_eval(arena, varStack, variable->expression);
+    ast_eval_res_t res = ast_eval(arena, vs, variable->expression);
 
     // TODO: Rethink error handling!
     if (res.isError)
@@ -994,10 +1001,10 @@ double node_constant_to_value(arena_t *arena, node_variable_stack_t *varStack, n
   return result;
 }
 
-node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *varStack, node_t *expr)
+node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
 {
   ASSERT_NULL(arena);
-  ASSERT_NULL(varStack);
+  ASSERT_NULL(vs);
   ASSERT_NULL(expr);
 
   switch (expr->type)
@@ -1007,16 +1014,16 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *varStack, node_t *exp
     // Will evaluate down to a constant value type.
     if (expr->as.constant.type == CN_VALUE)
       return expr;
-    node_const_t constant = node_constant_value(node_constant_to_value(arena, varStack, expr));
+    node_const_t constant = node_constant_value(node_constant_to_value(arena, vs, expr));
     return node_constant(arena, expr->cursor, constant);
   }
   case NT_BINOP:
   {
-    node_t *lhs = ast_eval_ex(arena, varStack, expr->as.binop.lhs);
+    node_t *lhs = ast_eval_ex(arena, vs, expr->as.binop.lhs);
     if (!lhs)
       return NULL;
 
-    node_t *rhs = ast_eval_ex(arena, varStack, expr->as.binop.rhs);
+    node_t *rhs = ast_eval_ex(arena, vs, expr->as.binop.rhs);
     if (!rhs)
       return NULL;
 
@@ -1025,36 +1032,36 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *varStack, node_t *exp
     case NO_ADD:
     {
       node_const_t constant = node_constant_value(
-          node_constant_to_value(arena, varStack, lhs) + node_constant_to_value(arena, varStack, rhs));
+          node_constant_to_value(arena, vs, lhs) + node_constant_to_value(arena, vs, rhs));
       return node_constant(arena, expr->cursor, constant);
     }
     case NO_SUB:
     {
       node_const_t constant = node_constant_value(
-          node_constant_to_value(arena, varStack, lhs) - node_constant_to_value(arena, varStack, rhs));
+          node_constant_to_value(arena, vs, lhs) - node_constant_to_value(arena, vs, rhs));
       return node_constant(arena, expr->cursor, constant);
     }
     case NO_MUL:
     {
       node_const_t constant = node_constant_value(
-          node_constant_to_value(arena, varStack, lhs) * node_constant_to_value(arena, varStack, rhs));
+          node_constant_to_value(arena, vs, lhs) * node_constant_to_value(arena, vs, rhs));
       return node_constant(arena, expr->cursor, constant);
     }
     case NO_DIV:
     {
-      if (node_constant_to_value(arena, varStack, rhs) == 0)
+      if (node_constant_to_value(arena, vs, rhs) == 0)
       {
         E_ERROR(rhs->cursor, "Tried to divide by zero!");
         return NULL;
       }
       node_const_t constant = node_constant_value(
-          node_constant_to_value(arena, varStack, lhs) / node_constant_to_value(arena, varStack, rhs));
+          node_constant_to_value(arena, vs, lhs) / node_constant_to_value(arena, vs, rhs));
       return node_constant(arena, expr->cursor, constant);
     }
     case NO_POW:
     {
       node_const_t constant = node_constant_value(
-          pow(node_constant_to_value(arena, varStack, lhs), node_constant_to_value(arena, varStack, rhs)));
+          pow(node_constant_to_value(arena, vs, lhs), node_constant_to_value(arena, vs, rhs)));
       return node_constant(arena, expr->cursor, constant);
     }
     case NO_COUNT:
@@ -1075,10 +1082,10 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *varStack, node_t *exp
         E_ERROR(expr->cursor, "sqrt() takes one argument!");
         return NULL;
       }
-      node_t *arg = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg)
         return NULL;
-      node_const_t constant = node_constant_value(sqrt(node_constant_to_value(arena, varStack, arg)));
+      node_const_t constant = node_constant_value(sqrt(node_constant_to_value(arena, vs, arg)));
       return node_constant(arena, expr->cursor, constant);
     }
     case NF_EXP:
@@ -1088,10 +1095,10 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *varStack, node_t *exp
         E_ERROR(expr->cursor, "exp() takes one argument!");
         return NULL;
       }
-      node_t *arg = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg)
         return NULL;
-      node_const_t constant = node_constant_value(exp(node_constant_to_value(arena, varStack, arg)));
+      node_const_t constant = node_constant_value(exp(node_constant_to_value(arena, vs, arg)));
       return node_constant(arena, expr->cursor, constant);
     }
     case NF_SIN:
@@ -1101,10 +1108,10 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *varStack, node_t *exp
         E_ERROR(expr->cursor, "sin() takes one argument!");
         return NULL;
       }
-      node_t *arg = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg)
         return NULL;
-      node_const_t constant = node_constant_value(sin(node_constant_to_value(arena, varStack, arg)));
+      node_const_t constant = node_constant_value(sin(node_constant_to_value(arena, vs, arg)));
       return node_constant(arena, expr->cursor, constant);
     }
     case NF_ASIN:
@@ -1114,10 +1121,10 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *varStack, node_t *exp
         E_ERROR(expr->cursor, "asin() takes one argument!");
         return NULL;
       }
-      node_t *arg = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg)
         return NULL;
-      node_const_t constant = node_constant_value(asin(node_constant_to_value(arena, varStack, arg)));
+      node_const_t constant = node_constant_value(asin(node_constant_to_value(arena, vs, arg)));
       return node_constant(arena, expr->cursor, constant);
     }
     case NF_SINH:
@@ -1127,10 +1134,10 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *varStack, node_t *exp
         E_ERROR(expr->cursor, "sinh() takes one argument!");
         return NULL;
       }
-      node_t *arg = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg)
         return NULL;
-      node_const_t constant = node_constant_value(sinh(node_constant_to_value(arena, varStack, arg)));
+      node_const_t constant = node_constant_value(sinh(node_constant_to_value(arena, vs, arg)));
       return node_constant(arena, expr->cursor, constant);
     }
     case NF_COS:
@@ -1140,10 +1147,10 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *varStack, node_t *exp
         E_ERROR(expr->cursor, "cos() takes one argument!");
         return NULL;
       }
-      node_t *arg = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg)
         return NULL;
-      node_const_t constant = node_constant_value(cos(node_constant_to_value(arena, varStack, arg)));
+      node_const_t constant = node_constant_value(cos(node_constant_to_value(arena, vs, arg)));
       return node_constant(arena, expr->cursor, constant);
     }
     case NF_ACOS:
@@ -1153,10 +1160,10 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *varStack, node_t *exp
         E_ERROR(expr->cursor, "acos() takes one argument!");
         return NULL;
       }
-      node_t *arg = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg)
         return NULL;
-      node_const_t constant = node_constant_value(acos(node_constant_to_value(arena, varStack, arg)));
+      node_const_t constant = node_constant_value(acos(node_constant_to_value(arena, vs, arg)));
       return node_constant(arena, expr->cursor, constant);
     }
     case NF_COSH:
@@ -1166,10 +1173,10 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *varStack, node_t *exp
         E_ERROR(expr->cursor, "cosh() takes one argument!");
         return NULL;
       }
-      node_t *arg = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg)
         return NULL;
-      node_const_t constant = node_constant_value(cosh(node_constant_to_value(arena, varStack, arg)));
+      node_const_t constant = node_constant_value(cosh(node_constant_to_value(arena, vs, arg)));
       return node_constant(arena, expr->cursor, constant);
     }
     case NF_TAN:
@@ -1179,10 +1186,10 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *varStack, node_t *exp
         E_ERROR(expr->cursor, "tanh() takes one argument!");
         return NULL;
       }
-      node_t *arg = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg)
         return NULL;
-      node_const_t constant = node_constant_value(tan(node_constant_to_value(arena, varStack, arg)));
+      node_const_t constant = node_constant_value(tan(node_constant_to_value(arena, vs, arg)));
       return node_constant(arena, expr->cursor, constant);
     }
     case NF_ATAN:
@@ -1192,10 +1199,10 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *varStack, node_t *exp
         E_ERROR(expr->cursor, "atan() takes one argument!");
         return NULL;
       }
-      node_t *arg = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg)
         return NULL;
-      node_const_t constant = node_constant_value(atan(node_constant_to_value(arena, varStack, arg)));
+      node_const_t constant = node_constant_value(atan(node_constant_to_value(arena, vs, arg)));
       return node_constant(arena, expr->cursor, constant);
     }
     case NF_TANH:
@@ -1205,10 +1212,10 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *varStack, node_t *exp
         E_ERROR(expr->cursor, "tanh() takes one argument!");
         return NULL;
       }
-      node_t *arg = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg)
         return NULL;
-      node_const_t constant = node_constant_value(tanh(node_constant_to_value(arena, varStack, arg)));
+      node_const_t constant = node_constant_value(tanh(node_constant_to_value(arena, vs, arg)));
       return node_constant(arena, expr->cursor, constant);
     }
     case NF_ATAN2:
@@ -1218,13 +1225,13 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *varStack, node_t *exp
         E_ERROR(expr->cursor, "atan2() takes two arguments!");
         return NULL;
       }
-      node_t *arg1 = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      node_t *arg1 = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg1)
         return NULL;
-      node_t *arg2 = ast_eval_ex(arena, varStack, expr->as.func.args.items[1]);
+      node_t *arg2 = ast_eval_ex(arena, vs, expr->as.func.args.items[1]);
       if (!arg2)
         return NULL;
-      node_const_t constant = node_constant_value(atan2(node_constant_to_value(arena, varStack, arg1), node_constant_to_value(arena, varStack, arg2)));
+      node_const_t constant = node_constant_value(atan2(node_constant_to_value(arena, vs, arg1), node_constant_to_value(arena, vs, arg2)));
       return node_constant(arena, expr->cursor, constant);
     }
     case NF_LN:
@@ -1234,10 +1241,10 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *varStack, node_t *exp
         E_ERROR(expr->cursor, "ln() takes one argument!");
         return NULL;
       }
-      node_t *arg = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg)
         return NULL;
-      node_const_t constant = node_constant_value(log(node_constant_to_value(arena, varStack, arg)));
+      node_const_t constant = node_constant_value(log(node_constant_to_value(arena, vs, arg)));
       return node_constant(arena, expr->cursor, constant);
     }
     case NF_LOG10:
@@ -1247,10 +1254,10 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *varStack, node_t *exp
         E_ERROR(expr->cursor, "log10() takes one argument!");
         return NULL;
       }
-      node_t *arg = ast_eval_ex(arena, varStack, expr->as.func.args.items[0]);
+      node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg)
         return NULL;
-      node_const_t constant = node_constant_value(log10(node_constant_to_value(arena, varStack, arg)));
+      node_const_t constant = node_constant_value(log10(node_constant_to_value(arena, vs, arg)));
       return node_constant(arena, expr->cursor, constant);
     }
     case NF_COUNT:
@@ -1261,7 +1268,7 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *varStack, node_t *exp
   }
   case NT_PAREN:
   {
-    node_t *arg = ast_eval_ex(arena, varStack, expr->as.paren.arg);
+    node_t *arg = ast_eval_ex(arena, vs, expr->as.paren.arg);
     if (!arg)
       return NULL;
     return node_constant(arena, expr->cursor, arg->as.constant);
@@ -1272,13 +1279,13 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *varStack, node_t *exp
   }
 }
 
-ast_eval_res_t ast_eval(arena_t *arena, node_variable_stack_t *varStack, node_t *expr)
+ast_eval_res_t ast_eval(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
 {
   ASSERT_NULL(arena);
-  ASSERT_NULL(varStack);
+  ASSERT_NULL(vs);
   ASSERT_NULL(expr);
 
-  node_t *evaluatedNode = ast_eval_ex(arena, varStack, expr);
+  node_t *evaluatedNode = ast_eval_ex(arena, vs, expr);
   if (!evaluatedNode)
   {
     G_ERROR("Evaluation failed!");
@@ -1346,7 +1353,7 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
       bool indentedInternal = indented; // false;
       printf(SS_FMT " =%s", SS_ARG(&node->as.constant.as.variableName), indentedInternal ? "\n" : " ");
 
-      node_variable_t *variable = find_node_variable_ex(vs, &node->as.constant.as.variableName, FVM_CONST);
+      node_variable_t *variable = vs_find_variable_ex(vs, &node->as.constant.as.variableName, FVM_CONST);
       if (!variable)
       {
         _PRINT_DEPTH_SPACES(indentedInternal, depth + 1);
@@ -1471,12 +1478,12 @@ typedef struct
   node_t *expressionTree;
 } node_test_t;
 
-bool execute_test(arena_t *arena, node_variable_stack_t *varStack, node_test_t *test, bool freeArena, bool verbose, bool indented)
+bool execute_test(arena_t *arena, node_variable_stack_t *vs, node_test_t *test, bool freeArena, bool verbose, bool indented)
 {
   if (verbose)
   {
     printf("\n");
-    print_node(varStack, test->expressionTree, indented);
+    print_node(vs, test->expressionTree, indented);
     printf("\n");
   }
 
@@ -1484,7 +1491,7 @@ bool execute_test(arena_t *arena, node_variable_stack_t *varStack, node_test_t *
   if (!test->shouldFail)
     printf("Expected    = " DOUBLE_PRINT_FORMAT "\n", test->expectedResult);
 
-  ast_eval_res_t evalResult = ast_eval(arena, varStack, test->expressionTree);
+  ast_eval_res_t evalResult = ast_eval(arena, vs, test->expressionTree);
 
   if (test->shouldFail)
   {

@@ -50,8 +50,11 @@ check3: $(EXE)
 check4: $(EXE)
 	valgrind -s --leak-check=full --track-origins=yes --show-leak-kinds=all $^ test -v
 
-test: $(EXE)
+test1: $(EXE)
 	$^ test -v
+	
+test2: $(EXE)
+	$^ system-test -v
 
 clean:
 	@$(RM) -rv $(BIN_DIR) $(OBJ_DIR)
@@ -59,6 +62,6 @@ clean:
 run: $(EXE)
 	./$(EXE) input -v $(TEST_INPUT)
 
-.PHONY: all check1 check2 check3 test clean remake remakeDebug remakeRelease debug release run
+.PHONY: all check1 check2 check3 test1 test2 clean remake remakeDebug remakeRelease debug release run
 
 -include $(OBJ:.o=.d)
