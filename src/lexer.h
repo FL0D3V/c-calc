@@ -694,38 +694,38 @@ typedef struct
 #define add_eof_token(a, lexer, curr) \
   arena_da_append((a), (lexer), ((token_t){.type = TT_EOF, .cursor = (curr)}))
 
-inline token_t *lex_current(lexer_t *lexer)
+token_t *lex_current(lexer_t *lexer)
 {
   assert(lexer);
   return &lexer->items[lexer->cursor];
 }
 
-inline bool lex_can_peek_ex(lexer_t *lexer, size_t count)
+bool lex_can_peek_ex(lexer_t *lexer, size_t count)
 {
   assert(lexer);
   return (lexer->cursor + count) < lexer->count;
 }
 
-inline bool lex_can_peek(lexer_t *lexer)
+bool lex_can_peek(lexer_t *lexer)
 {
   assert(lexer);
   return lexer->cursor + 1 < lexer->count;
 }
 
-inline token_t *lex_peek_ex(lexer_t *lexer, size_t count)
+token_t *lex_peek_ex(lexer_t *lexer, size_t count)
 {
   assert(lexer);
   assert((lexer->cursor + count) < lexer->count);
   return &lexer->items[lexer->cursor + count];
 }
 
-inline token_t *lex_peek(lexer_t *lexer)
+token_t *lex_peek(lexer_t *lexer)
 {
   assert(lexer);
   return &lexer->items[lexer->cursor + 1];
 }
 
-inline token_t *lex_seek_ex(lexer_t *lexer, size_t count)
+token_t *lex_seek_ex(lexer_t *lexer, size_t count)
 {
   assert(lexer);
   assert((lexer->cursor + count) < lexer->count);
@@ -733,7 +733,7 @@ inline token_t *lex_seek_ex(lexer_t *lexer, size_t count)
   return &lexer->items[lexer->cursor];
 }
 
-inline token_t *lex_seek(lexer_t *lexer)
+token_t *lex_seek(lexer_t *lexer)
 {
   assert(lexer);
   assert((lexer->cursor + 1) < lexer->count);

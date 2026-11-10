@@ -305,9 +305,9 @@ node_t *node_paren(arena_t *arena, size_t cursor, node_t *arg)
 }
 
 static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer, size_t *index);
-static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *index);
+static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *index, size_t *depth);
+static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *index, size_t *depth);
 static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *index);
-static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *index);
 
 typedef struct
 {
@@ -542,6 +542,7 @@ void print_variable_stack(node_variable_stack_t *vs, bool showValue, bool indent
 node_t *parser_execute(arena_t *arena, lexer_t *lexer, size_t *index);
 static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented, size_t depth);
 void print_node(node_variable_stack_t *vs, node_t *node, bool indented);
+void print_node_simple(node_t *node, bool indented);
 
 node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr);
 
@@ -560,7 +561,7 @@ static bool try_parse_const_variable(node_variable_stack_t *vs, arena_t *arena, 
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
 
-  if (lexer->count <= 0)
+  if (!lex_valid(lexer))
     return true;
 
   size_t index = 0;
@@ -585,6 +586,7 @@ static bool try_parse_const_variable(node_variable_stack_t *vs, arena_t *arena, 
   }
 
   ++index;
+
   node_t *value = parser_execute(arena, lexer, &index);
   if (!value)
   {
@@ -608,7 +610,7 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
 
-  if (lexer->count <= 0)
+  if (!lex_valid(lexer))
     return true;
 
   size_t index = 0;
@@ -712,7 +714,7 @@ bool parse_node_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lex
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
 
-  if (lexer->isError || lexer->count <= 0)
+  if (!lex_valid(lexer))
     return true;
 
   return try_parse_const_variable(vs, arena, lexer) ||
@@ -779,8 +781,7 @@ static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer, size_t *index)
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
 
-  if (!lex_valid(lexer) ||
-      !lex_in_range(lexer, *index))
+  if (!lex_valid(lexer) || !lex_in_range(lexer, *index))
   {
     fprintf(stderr, "ERROR: Lexer invalid! (index=%zu, count=%zu)\n", *index, lexer->count);
     return NULL;
@@ -790,6 +791,11 @@ static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer, size_t *index)
 
   bool hasPrePlus = false;
   bool hasPreMinus = false;
+
+  // TODO: Rethink!
+  // if (*index == 0 || tok_is(lex_at(lexer, *index - 1), TT_OPERATOR))
+  // {
+  // }
 
   if (tok_is_operator(token, OP_SUB))
     hasPreMinus = true;
@@ -827,13 +833,12 @@ static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer, size_t *index)
   return NULL;
 }
 
-static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *index)
+static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *index, size_t *depth)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
 
-  if (!lex_valid(lexer) ||
-      !lex_in_range(lexer, *index))
+  if (!lex_valid(lexer) || !lex_in_range(lexer, *index))
   {
     fprintf(stderr, "ERROR: Lexer invalid! (index=%zu, count=%zu)\n", *index, lexer->count);
     return NULL;
@@ -842,40 +847,38 @@ static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *index)
   node_t *lhs = try_parse_constant(arena, lexer, index);
   if (!lhs)
   {
-    token_t *token = lex_at(lexer, *index);
-    S_ERROR(token->cursor, "Expected a constant value!");
+    S_ERROR(lex_at(lexer, *index)->cursor, "Expected a constant value!");
     return NULL;
   }
 
-  // If nothing is left, return the constant
   if (!lex_next_in_range(lexer, *index))
     return lhs;
 
-  ++*index;
+  ++(*index);
 
-  token_t *token = lex_at(lexer, *index);
+  token_t *opToken = lex_at(lexer, *index);
 
-  if (tok_is_end(token))
+  if (tok_is_end(opToken))
     return lhs;
 
-  if (!tok_is(token, TT_OPERATOR))
+  if (!tok_is(opToken, TT_OPERATOR))
   {
-    S_ERROR(token->cursor, "Expected an operator!");
+    S_ERROR(opToken->cursor, "Expected an operator!");
     return NULL;
   }
 
-  e_node_binop_type operatorType = to_local_binop_type(token->as.operator);
+  e_node_binop_type operatorType = to_local_binop_type(opToken->as.operator);
 
-  ++*index;
+  ++(*index);
 
-  node_t *rhs = try_parse_binop(arena, lexer, index);
+  node_t *rhs = try_parse_binop(arena, lexer, index, depth);
   if (!rhs)
     return NULL;
 
-  return node_binop(arena, token->cursor, operatorType, lhs, rhs);
+  return node_binop(arena, opToken->cursor, operatorType, lhs, rhs);
 }
 
-static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *index)
+static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *index, size_t *depth)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
@@ -887,16 +890,54 @@ static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *index)
     return NULL;
   }
 
-  token_t *token = lex_at(lexer, *index);
+  token_t *tokOParen = lex_at(lexer, *index);
 
-  if (!tok_is_paren(token, PT_OPAREN))
+  if (!tok_is_paren(tokOParen, PT_OPAREN))
     return NULL;
 
-  // TODO: Implement!
-  // node_t *arg = NULL;
-  // node_paren(arena, token->cursor, arg);
+  printf("3: DEPTH = %zu, TOKEN(%zu) = %s\n", *depth, tokOParen->cursor, tokenTypeNames[tokOParen->type]);
 
-  return NULL;
+  if (!lex_next_in_range(lexer, *index))
+  {
+    S_ERROR(tokOParen->cursor, "Expected an expression after an open paren!");
+    return NULL;
+  }
+
+  token_t *token = lex_at(lexer, ++*index);
+
+  if (tok_is_end(token))
+  {
+    S_ERROR(token->cursor, "Expected an expression! End was reached.");
+    return NULL;
+  }
+
+  ++*depth;
+
+  node_t *subParen = try_parse_paren(arena, lexer, index, depth);
+  if (subParen)
+    return node_paren(arena, tokOParen->cursor, subParen);
+
+  printf("4: DEPTH = %zu, TOKEN(%zu) = %s\n", *depth, token->cursor, tokenTypeNames[token->type]);
+
+  if (!lex_next_in_range(lexer, *index))
+  {
+    S_ERROR(token->cursor, "Expected an expression after an open paren!");
+    return NULL;
+  }
+
+  node_t *arg = try_parse_binop(arena, lexer, index, depth);
+  if (!arg)
+    return NULL;
+
+  token = lex_at(lexer, *index);
+
+  if (tok_is_end(token) || tok_not_specific_paren(token, PT_CPAREN))
+  {
+    S_ERROR(tokOParen->cursor, "Expected a closing paren!");
+    return NULL;
+  }
+
+  return node_paren(arena, tokOParen->cursor, arg);
 }
 
 static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *index)
@@ -976,8 +1017,15 @@ node_t *parser_execute(arena_t *arena, lexer_t *lexer, size_t *index)
   if (tok_is_end(lex_at(lexer, *index)))
     return NULL;
 
-  // Start with trying to parse a binop.
-  return try_parse_binop(arena, lexer, index);
+  // TODO: Rethink! Should handle nesting.
+  size_t depth = 0;
+
+  node_t *root = try_parse_binop(arena, lexer, index, &depth);
+
+  if (depth != 0)
+    UNREACHABLE("Paren parsing failed!");
+
+  return root;
 }
 
 double node_constant_to_value(arena_t *arena, node_variable_stack_t *vs, node_t *node)
@@ -1053,8 +1101,6 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
   case NT_CONSTANT:
   {
     // Will evaluate down to a constant value type.
-    if (expr->as.constant.type == CN_VALUE)
-      return expr;
     node_const_t constant = node_constant_value(node_constant_to_value(arena, vs, expr));
     return node_constant(arena, expr->cursor, constant);
   }
@@ -1501,6 +1547,12 @@ void print_node(node_variable_stack_t *vs, node_t *node, bool indented)
   printf("Printing node tree:\n");
   print_node_ex(vs, node, indented, 0);
   printf("\n");
+}
+
+void print_node_simple(node_t *node, bool indented)
+{
+  node_variable_stack_t vs = {0};
+  print_node(&vs, node, indented);
 }
 
 typedef struct
