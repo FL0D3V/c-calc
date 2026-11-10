@@ -17,6 +17,14 @@
 #define E_ERROR(cursor, message) _PARSER_ERROR(_E_ERROR_NAME, cursor, message)
 #define E_ERROR_SS(cursor, message, ss) _PARSER_ERROR_SS(_E_ERROR_NAME, cursor, message, ss)
 
+#define _PRINT_DEPTH_SPACES(indented, depth) \
+  do                                         \
+  {                                          \
+    if (indented)                            \
+      for (size_t i = 0; i < (depth); ++i)   \
+        printf(" ");                         \
+  } while (0)
+
 typedef enum
 {
   NT_CONSTANT,
@@ -471,7 +479,7 @@ node_variable_t *vs_find_variable_ex(node_variable_stack_t *vs, string_slice_t *
       break;
       case NV_COUNT:
       default:
-        UNREACHABLE("Invalid node variable type!");
+        UNREACHABLE("Invalid node-variable-type!");
       }
     }
     break;
@@ -489,7 +497,7 @@ node_variable_t *vs_find_variable_ex(node_variable_stack_t *vs, string_slice_t *
     break;
     case FVM_COUNT:
     default:
-      UNREACHABLE("Invalid find var mode!");
+      UNREACHABLE("Invalid find-var-mode!");
     }
 
     if (!currName)
@@ -529,9 +537,9 @@ static bool vs_check_variable_name_errors(node_variable_stack_t *vs, string_slic
 static bool try_parse_const_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer);
 static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer);
 bool parse_node_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer);
-void variable_stack_print(node_variable_stack_t *vs, bool showValue);
+void print_variable_stack(node_variable_stack_t *vs, bool showValue, bool indented);
 
-node_t *parser_execute(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer, size_t *index);
+node_t *parser_execute(arena_t *arena, lexer_t *lexer, size_t *index);
 static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented, size_t depth);
 void print_node(node_variable_stack_t *vs, node_t *node, bool indented);
 
@@ -577,7 +585,7 @@ static bool try_parse_const_variable(node_variable_stack_t *vs, arena_t *arena, 
   }
 
   ++index;
-  node_t *value = parser_execute(vs, arena, lexer, &index);
+  node_t *value = parser_execute(arena, lexer, &index);
   if (!value)
   {
     S_ERROR(assignTok->cursor, "After a variable assignment must be a valid expression!");
@@ -681,7 +689,7 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
   }
 
   ++index;
-  node_t *value = parser_execute(vs, arena, lexer, &index);
+  node_t *value = parser_execute(arena, lexer, &index);
   if (!value)
   {
     S_ERROR(assignTok->cursor, "After a variable assignment must be a valid expression");
@@ -711,7 +719,7 @@ bool parse_node_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lex
          try_parse_func_variable(vs, arena, lexer);
 }
 
-void variable_stack_print(node_variable_stack_t *vs, bool showValue)
+void print_variable_stack(node_variable_stack_t *vs, bool showValue, bool indented)
 {
   ASSERT_NULL(vs);
 
@@ -758,8 +766,11 @@ void variable_stack_print(node_variable_stack_t *vs, bool showValue)
     if (!showValue)
       return;
 
-    printf(" = ");
-    print_node(vs, variable->expression, false);
+    printf(" =%s", indented ? "\n" : " ");
+    print_node_ex(vs, variable->expression, indented, 1);
+    printf("\n");
+    if (indented && i < vs->count - 1)
+      printf("\n");
   }
 }
 
@@ -768,17 +779,24 @@ static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer, size_t *index)
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
 
+  if (!lex_valid(lexer) ||
+      !lex_in_range(lexer, *index))
+  {
+    fprintf(stderr, "ERROR: Lexer invalid! (index=%zu, count=%zu)\n", *index, lexer->count);
+    return NULL;
+  }
+
   token_t *token = lex_at(lexer, *index);
 
   bool hasPrePlus = false;
   bool hasPreMinus = false;
 
-  if (tok_is_operator(token, OP_ADD))
-    hasPrePlus = true;
-  else if (tok_is_operator(token, OP_SUB))
+  if (tok_is_operator(token, OP_SUB))
     hasPreMinus = true;
+  else if (tok_is_operator(token, OP_ADD))
+    hasPrePlus = true;
 
-  if (hasPrePlus || hasPreMinus)
+  if (hasPreMinus || hasPrePlus)
   {
     ++*index;
     token = lex_at(lexer, *index);
@@ -814,6 +832,13 @@ static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *index)
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
 
+  if (!lex_valid(lexer) ||
+      !lex_in_range(lexer, *index))
+  {
+    fprintf(stderr, "ERROR: Lexer invalid! (index=%zu, count=%zu)\n", *index, lexer->count);
+    return NULL;
+  }
+
   node_t *lhs = try_parse_constant(arena, lexer, index);
   if (!lhs)
   {
@@ -826,28 +851,65 @@ static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *index)
   if (!lex_next_in_range(lexer, *index))
     return lhs;
 
-  token_t *opTok = lex_at(lexer, ++(*index));
+  ++*index;
 
-  if (!tok_is(opTok, TT_OPERATOR))
+  token_t *token = lex_at(lexer, *index);
+
+  if (tok_is_end(token))
+    return lhs;
+
+  if (!tok_is(token, TT_OPERATOR))
   {
-    S_ERROR(opTok->cursor, "Expected an operator!");
+    S_ERROR(token->cursor, "Expected an operator!");
     return NULL;
   }
 
-  ++(*index);
+  e_node_binop_type operatorType = to_local_binop_type(token->as.operator);
 
-  node_t *rhs = try_parse_binop(arena, lexer, index);
+  ++*index;
+
+  node_t *rhs = parser_execute(arena, lexer, index);
   if (!rhs)
     return NULL;
 
-  e_node_binop_type type = to_local_binop_type(opTok->as.operator);
-  return node_binop(arena, opTok->cursor, type, lhs, rhs);
+  return node_binop(arena, token->cursor, operatorType, lhs, rhs);
+}
+
+static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *index)
+{
+  ASSERT_NULL(arena);
+  ASSERT_NULL(lexer);
+
+  if (!lex_valid(lexer) ||
+      !lex_in_range(lexer, *index))
+  {
+    fprintf(stderr, "ERROR: Lexer invalid! (index=%zu, count=%zu)\n", *index, lexer->count);
+    return NULL;
+  }
+
+  token_t *token = lex_at(lexer, *index);
+
+  if (!tok_is_paren(token, PT_OPAREN))
+    return NULL;
+
+  // TODO: Implement!
+  // node_t *arg = NULL;
+  // node_paren(arena, token->cursor, arg);
+
+  return NULL;
 }
 
 static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *index)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
+
+  if (!lex_valid(lexer) ||
+      !lex_in_range(lexer, *index))
+  {
+    fprintf(stderr, "ERROR: Lexer invalid! (index=%zu, count=%zu)\n", *index, lexer->count);
+    return NULL;
+  }
 
   token_t *token = lex_at(lexer, *index);
 
@@ -862,11 +924,14 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *index)
     if (!lex_next_in_range(lexer, *index))
       return NULL;
 
-    token_t *nextTok = lex_at(lexer, *index + 1);
+    ++*index;
+
+    token_t *nextTok = lex_at(lexer, *index);
 
     if (!tok_is_paren(nextTok, PT_OPAREN))
       return NULL;
 
+    // TODO: Implement!
     // Next token must be an argument of the function. This can be a number, math constant, function, or an open paren.
     // Can also be multiple arguments separated by a COMMA.
     // Make sure that all function arguments get loaded. NOT JUST ONE!
@@ -879,21 +944,7 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *index)
     // Next token must be a closing paren.
 
     // return node_func(arena, token->cursor, to_local_func_type(token->as.function), argsList);
-    return NULL;
-  }
 
-  return NULL;
-}
-
-static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *index)
-{
-  ASSERT_NULL(arena);
-  ASSERT_NULL(lexer);
-
-  token_t *token = lex_at(lexer, *index);
-
-  if (tok_is(token, TT_PAREN))
-  {
     return NULL;
   }
 
@@ -909,34 +960,24 @@ static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *index)
 // IN: "EN + 5 / (5 * 0)"
 // AST: "add(EN, divide(5, paren(mult(5, 0))))"
 // TODO: Remove index, use internal lexer cursor
-node_t *parser_execute(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer, size_t *index)
+node_t *parser_execute(arena_t *arena, lexer_t *lexer, size_t *index)
 {
-  ASSERT_NULL(vs);
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
 
-  if (lexer->isError || lexer->count <= 0)
+  if (!lex_valid(lexer) ||
+      !lex_in_range(lexer, *index))
+  {
+    fprintf(stderr, "ERROR: Lexer invalid! (index=%zu, count=%zu)\n", *index, lexer->count);
+    return NULL;
+  }
+
+  // These are end tokens signaling that a specific end is reached at the current index.
+  if (tok_is_end(lex_at(lexer, *index)))
     return NULL;
 
-  if (*index > lexer->count - 1)
-    UNREACHABLE("Lexer out of range!");
-
-  // TODO: Rethink!
-  if (tok_is(lex_at(lexer, *index), TT_EOL))
-    return NULL;
-
-  if (tok_is(lex_at(lexer, *index), TT_EOF))
-    return NULL;
-
-  node_t *nodeBinOp = try_parse_binop(arena, lexer, index);
-  if (nodeBinOp)
-    return nodeBinOp;
-
-  node_t *nodeConst = try_parse_constant(arena, lexer, index);
-  if (nodeConst)
-    return nodeConst;
-
-  return NULL;
+  // Start with trying to parse a binop.
+  return try_parse_binop(arena, lexer, index);
 }
 
 double node_constant_to_value(arena_t *arena, node_variable_stack_t *vs, node_t *node)
@@ -1305,14 +1346,6 @@ ast_eval_res_t ast_eval(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
   };
 }
 
-#define _PRINT_DEPTH_SPACES(indented, depth) \
-  do                                         \
-  {                                          \
-    if (indented)                            \
-      for (size_t i = 0; i < (depth); ++i)   \
-        printf(" ");                         \
-  } while (0)
-
 static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented, size_t depth)
 {
   ASSERT_NULL(vs);
@@ -1349,8 +1382,7 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
     break;
     case CN_VARIABLE:
     {
-      // TODO: Rethink!
-      bool indentedInternal = indented; // false;
+      bool indentedInternal = indented;
       printf(SS_FMT " =%s", SS_ARG(&node->as.constant.as.variableName), indentedInternal ? "\n" : " ");
 
       node_variable_t *variable = vs_find_variable_ex(vs, &node->as.constant.as.variableName, FVM_CONST);
@@ -1466,6 +1498,7 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
 
 void print_node(node_variable_stack_t *vs, node_t *node, bool indented)
 {
+  printf("Printing node tree:\n");
   print_node_ex(vs, node, indented, 0);
   printf("\n");
 }

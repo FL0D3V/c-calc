@@ -740,9 +740,11 @@ inline token_t *lex_seek(lexer_t *lexer)
   return &lexer->items[++lexer->cursor];
 }
 
+#define lex_valid(lexer) (!(lexer)->isError && (lexer)->count > 0)
+
 #define lex_at(lexer, idx) (&(lexer)->items[(idx)])
-#define lex_in_range(lexer, idx) ((idx) < (lexer)->count - 1)
-#define lex_next_in_range(lexer, idx) ((idx) + 1 < (lexer)->count - 1)
+#define lex_in_range(lexer, idx) ((idx) < (lexer)->count)
+#define lex_next_in_range(lexer, idx) ((idx) + 1 < (lexer)->count)
 
 #define tok_is(tok, t) ((tok)->type == (t))
 #define tok_not(tok, t) ((tok)->type != (t))
@@ -759,6 +761,8 @@ inline token_t *lex_seek(lexer_t *lexer)
   (tok_is(tok, TT_LITERAL) && (tok)->as.literal == (lt))
 #define tok_not_specific_literal(tok, lt) \
   (tok_not(tok, TT_LITERAL) || (tok)->as.literal != (lt))
+#define tok_is_end(tok) \
+  (tok_is(tok, TT_EOL) || tok_is(tok, TT_EOF))
 
 lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
 {
