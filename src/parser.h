@@ -17,6 +17,8 @@
 #define E_ERROR(cursor, message) _PARSER_ERROR(_E_ERROR_NAME, cursor, message)
 #define E_ERROR_SS(cursor, message, ss) _PARSER_ERROR_SS(_E_ERROR_NAME, cursor, message, ss)
 
+#define DEBUG_PRINT_TOK(tok) printf("TOKEN = %s\n", tokenTypeNames[(tok)->type])
+
 #define _PRINT_DEPTH_SPACES(indented, depth) \
   do                                         \
   {                                          \
@@ -44,139 +46,12 @@ const char *nodeTypeNames[NT_COUNT] = {
     [NT_PAREN] = "parenthesis",
 };
 
-typedef enum
-{
-  NO_ADD,
-  NO_SUB,
-  NO_MUL,
-  NO_DIV,
-  NO_POW,
-
-  NO_COUNT
-} e_node_binop_type;
-
-static_assert(NO_COUNT == 5, "Amount of binop-node-types have changed");
-
-const char *nodeBinopTypeNames[NO_COUNT] = {
-    [NO_ADD] = "add",
-    [NO_SUB] = "substract",
-    [NO_MUL] = "multiply",
-    [NO_DIV] = "divide",
-    [NO_POW] = "pow",
-};
-
-static inline e_node_binop_type to_local_binop_type(e_operator_type type)
-{
-  switch (type)
-  {
-  case OP_ADD:
-    return NO_ADD;
-  case OP_SUB:
-    return NO_SUB;
-  case OP_MUL:
-    return NO_MUL;
-  case OP_DIV:
-    return NO_DIV;
-  case OP_POW:
-    return NO_POW;
-  case OP_COUNT:
-  case OP_INVALID:
-  default:
-    UNREACHABLE("Operator-Type not implemented!");
-  }
-}
-
-typedef enum
-{
-  NF_SQRT,
-  NF_EXP,
-
-  NF_SIN,
-  NF_ASIN,
-  NF_SINH,
-
-  NF_COS,
-  NF_ACOS,
-  NF_COSH,
-
-  NF_TAN,
-  NF_ATAN,
-  NF_TANH,
-  NF_ATAN2,
-
-  NF_LN,
-  NF_LOG10,
-
-  NF_COUNT
-} e_node_func_type;
-
-static_assert(NF_COUNT == 14, "Amount of function-node-types have changed");
-
-const char *nodeFunctionTypeNames[NF_COUNT] = {
-    [NF_SQRT] = "sqrt",
-    [NF_EXP] = "exp",
-
-    [NF_SIN] = "sin",
-    [NF_ASIN] = "asin",
-    [NF_SINH] = "sinh",
-
-    [NF_COS] = "cos",
-    [NF_ACOS] = "acos",
-    [NF_COSH] = "cosh",
-
-    [NF_TAN] = "tan",
-    [NF_ATAN] = "atan",
-    [NF_TANH] = "tanh",
-    [NF_ATAN2] = "atan2",
-
-    [NF_LN] = "ln",
-    [NF_LOG10] = "log10"};
-
-static inline e_node_func_type to_local_func_type(e_function_type type)
-{
-  switch (type)
-  {
-  case FT_SQRT:
-    return NF_SQRT;
-  case FT_EXP:
-    return NF_EXP;
-  case FT_SIN:
-    return NF_SIN;
-  case FT_ASIN:
-    return NF_ASIN;
-  case FT_SINH:
-    return NF_SINH;
-  case FT_COS:
-    return NF_COS;
-  case FT_ACOS:
-    return NF_ACOS;
-  case FT_COSH:
-    return NF_COSH;
-  case FT_TAN:
-    return NF_TAN;
-  case FT_ATAN:
-    return NF_ATAN;
-  case FT_TANH:
-    return NF_TANH;
-  case FT_ATAN2:
-    return NF_ATAN2;
-  case FT_LN:
-    return NF_LN;
-  case FT_LOG10:
-    return NF_LOG10;
-  case FT_COUNT:
-  case FT_INVALID:
-  default:
-    UNREACHABLE("Function-Type not implemented!");
-  }
-}
-
 // Node definitions
 typedef struct node node_t;
 
 typedef struct
 {
-  e_node_binop_type type;
+  e_operator_type type;
   node_t *lhs;
   node_t *rhs;
 } node_binop_t;
@@ -193,7 +68,7 @@ typedef struct
 
 typedef struct
 {
-  e_node_func_type type;
+  e_function_type type;
   node_func_args_t args;
 } node_function_t;
 
@@ -231,7 +106,6 @@ typedef struct
 {
   e_const_node_type type;
   u_const_node_as as;
-
   // Indicates that the value should be negated like "5" -> "-5".
   bool hasPreMinus;
 } node_const_t;
@@ -287,8 +161,9 @@ node_t *node_constant(arena_t *arena, size_t cursor, node_const_t constant)
   return node;
 }
 
-node_t *node_binop(arena_t *arena, size_t cursor, e_node_binop_type type, node_t *lhs, node_t *rhs)
+node_t *node_binop(arena_t *arena, size_t cursor, e_operator_type type, node_t *lhs, node_t *rhs)
 {
+  assert(type < OP_COUNT);
   node_t *node = base_node(arena, cursor, NT_BINOP);
   node->as.binop.type = type;
   node->as.binop.lhs = lhs;
@@ -296,8 +171,9 @@ node_t *node_binop(arena_t *arena, size_t cursor, e_node_binop_type type, node_t
   return node;
 }
 
-node_t *node_func(arena_t *arena, size_t cursor, e_node_func_type type, node_func_args_t args)
+node_t *node_func(arena_t *arena, size_t cursor, e_function_type type, node_func_args_t args)
 {
+  assert(type < FT_COUNT);
   node_t *node = base_node(arena, cursor, NT_FUNCTION);
   node->as.func.type = type;
   node->as.func.args = args;
@@ -311,11 +187,6 @@ node_t *node_paren(arena_t *arena, size_t cursor, node_t *arg)
   return node;
 }
 
-static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer, size_t *index);
-static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *index, size_t *depth);
-static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *index, size_t *depth);
-static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *index);
-
 typedef struct
 {
   // Each indivually defined function argument name like "x,y,z", or "a1, a2, a3", ...
@@ -325,6 +196,8 @@ typedef struct
   size_t capacity;
   size_t count;
 } node_func_definition_args_t;
+
+#define node_func_args_at(args, idx) (&(args)->items[(idx)])
 
 #define node_func_definition_args_append(a, funcArgs, arg) \
   arena_da_append(a, funcArgs, arg)
@@ -384,7 +257,7 @@ typedef struct
 #define vs_variable_append(a, vs, var) \
   arena_da_append(a, vs, var)
 
-#define vs_at(vs, idx) &(vs)->items[idx]
+#define vs_at(vs, idx) (&(vs)->items[idx])
 
 typedef enum
 {
@@ -397,67 +270,6 @@ typedef enum
 
 static_assert(FVM_COUNT == 3, "Amount of find node var modes have changed!");
 
-bool vs_variable_name_exists_ex(node_variable_stack_t *vs, string_slice_t *name, e_find_var_mode mode)
-{
-  ASSERT_NULL(vs);
-  ASSERT_NULL(name);
-
-  for (size_t i = 0; i < vs->count; ++i)
-  {
-    node_variable_t *curr = &vs->items[i];
-    string_slice_t *currName = NULL;
-
-    switch (mode)
-    {
-    case FVM_ALL:
-    {
-      switch (curr->type)
-      {
-      case NV_CONST_VARIABLE_DEFINITION:
-      {
-        currName = &curr->as.varDef;
-      }
-      break;
-      case NV_FUNCTION_DEFINITION:
-      {
-        currName = &curr->as.funcDef.name;
-      }
-      break;
-      case NV_COUNT:
-      default:
-        UNREACHABLE("Invalid node variable type!");
-      }
-    }
-    break;
-    case FVM_CONST:
-    {
-      if (curr->type == NV_CONST_VARIABLE_DEFINITION)
-        currName = &curr->as.varDef;
-    }
-    break;
-    case FVM_FUNC:
-    {
-      if (curr->type == NV_FUNCTION_DEFINITION)
-        currName = &curr->as.funcDef.name;
-    }
-    break;
-    case FVM_COUNT:
-    default:
-      UNREACHABLE("Invalid find var mode!");
-    }
-
-    if (!currName)
-      continue;
-
-    if (ss_compare(name, currName))
-      return true;
-  }
-  return false;
-}
-
-#define vs_variable_name_exists(vs, name) \
-  vs_variable_name_exists_ex((vs), (name), FVM_ALL)
-
 node_variable_t *vs_find_variable_ex(node_variable_stack_t *vs, string_slice_t *name, e_find_var_mode mode)
 {
   ASSERT_NULL(vs);
@@ -465,7 +277,7 @@ node_variable_t *vs_find_variable_ex(node_variable_stack_t *vs, string_slice_t *
 
   for (size_t i = 0; i < vs->count; ++i)
   {
-    node_variable_t *curr = &vs->items[i];
+    node_variable_t *curr = vs_at(vs, i);
     string_slice_t *currName = NULL;
 
     switch (mode)
@@ -521,6 +333,15 @@ node_variable_t *vs_find_variable_ex(node_variable_stack_t *vs, string_slice_t *
 #define vs_find_variable(vs, name) \
   vs_find_variable_ex((vs), (name), FVM_ALL)
 
+bool vs_variable_name_exists_ex(node_variable_stack_t *vs, string_slice_t *name, e_find_var_mode mode)
+{
+  node_variable_t *v = vs_find_variable_ex(vs, name, mode);
+  return v != NULL;
+}
+
+#define vs_variable_name_exists(vs, name) \
+  vs_variable_name_exists_ex((vs), (name), FVM_ALL)
+
 static bool vs_check_variable_name_errors(node_variable_stack_t *vs, string_slice_t *name, size_t cursor)
 {
   if (vs_variable_name_exists(vs, name))
@@ -546,6 +367,11 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
 bool parse_node_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer);
 void print_variable_stack(node_variable_stack_t *vs, bool showValue, bool indented);
 
+static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer, size_t *index);
+static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *index, size_t *depth);
+static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *index, size_t *depth);
+static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *index, size_t *depth);
+
 node_t *parser_execute(arena_t *arena, lexer_t *lexer, size_t *index);
 static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented, size_t depth);
 void print_node(node_variable_stack_t *vs, node_t *node, bool indented);
@@ -559,6 +385,11 @@ typedef struct
   double value;
   bool isError;
 } ast_eval_res_t;
+
+#define ast_eval_res_success(val) \
+  (ast_eval_res_t) { .value = (val) }
+#define ast_eval_res_error() \
+  (ast_eval_res_t) { .isError = true }
 
 ast_eval_res_t ast_eval(arena_t *arena, node_variable_stack_t *vs, node_t *expr);
 
@@ -724,6 +555,21 @@ bool parse_node_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lex
   if (!lex_valid(lexer))
     return true;
 
+  bool shouldExecuteVarParsing = false;
+
+  // TODO: Handle multiline handling
+  for (size_t i = 0; i < lexer->count; ++i)
+  {
+    token_t *token = lex_at(lexer, i);
+    if (tok_is_end(token))
+      break;
+    if (tok_is_specific_literal(token, CLT_EQUALS))
+      shouldExecuteVarParsing = true;
+  }
+
+  if (!shouldExecuteVarParsing)
+    return true;
+
   return try_parse_const_variable(vs, arena, lexer) ||
          try_parse_func_variable(vs, arena, lexer);
 }
@@ -742,7 +588,7 @@ void print_variable_stack(node_variable_stack_t *vs, bool showValue, bool indent
 
   for (size_t i = 0; i < vs->count; ++i)
   {
-    node_variable_t *variable = &vs->items[i];
+    node_variable_t *variable = vs_at(vs, i);
 
     switch (variable->type)
     {
@@ -754,15 +600,12 @@ void print_variable_stack(node_variable_stack_t *vs, bool showValue, bool indent
     case NV_FUNCTION_DEFINITION:
     {
       printf(SS_FMT "(", SS_ARG(&variable->as.funcDef.name));
-
       for (size_t i = 0; i < variable->as.funcDef.args.count; ++i)
       {
         printf(SS_FMT, SS_ARG(&variable->as.funcDef.args.items[i]));
-
         if (i < variable->as.funcDef.args.count - 1)
           printf(", ");
       }
-
       printf(")");
     }
     break;
@@ -776,7 +619,7 @@ void print_variable_stack(node_variable_stack_t *vs, bool showValue, bool indent
       return;
 
     printf(" =%s", indented ? "\n" : " ");
-    print_node_ex(vs, variable->expression, indented, 1);
+    print_node_ex(vs, variable->expression, indented, 2);
     printf("\n");
     if (indented && i < vs->count - 1)
       printf("\n");
@@ -787,12 +630,16 @@ static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer, size_t *index)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
+  ASSERT_NULL(index);
 
-  if (!lex_valid(lexer) || !lex_in_range(lexer, *index))
+  if (!lex_valid(lexer))
   {
     fprintf(stderr, "ERROR: Lexer invalid! (index=%zu, count=%zu)\n", *index, lexer->count);
     return NULL;
   }
+
+  if (!lex_in_range(lexer, *index))
+    return NULL;
 
   token_t *token = lex_at(lexer, *index);
 
@@ -806,7 +653,14 @@ static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer, size_t *index)
 
   if (hasPreMinus || hasPrePlus)
   {
+    if (!lex_next_in_range(lexer, *index))
+    {
+      S_ERROR(token->cursor, "Expected a value after!");
+      return NULL;
+    }
+
     ++(*index);
+
     token = lex_at(lexer, *index);
   }
 
@@ -836,18 +690,33 @@ static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer, size_t *index)
 }
 
 // TODO: Implement proper precedence handling!
+// TODO: Maybe implement nested paren handling and functions!
 static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *index, size_t *depth)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
+  ASSERT_NULL(index);
+  ASSERT_NULL(depth);
 
-  if (!lex_valid(lexer) || !lex_in_range(lexer, *index))
+  if (!lex_valid(lexer))
   {
     fprintf(stderr, "ERROR: Lexer invalid! (index=%zu, count=%zu)\n", *index, lexer->count);
     return NULL;
   }
 
-  node_t *lhs = try_parse_constant(arena, lexer, index);
+  if (!lex_in_range(lexer, *index))
+    return NULL;
+
+  // TODO: Implement!
+  node_t *lhs = try_parse_func(arena, lexer, index, depth);
+
+  // TODO: Implement!
+  // if (!lhs)
+  //   lhs = try_parse_paren(arena, lexer, index, depth);
+
+  if (!lhs)
+    lhs = try_parse_constant(arena, lexer, index);
+
   if (!lhs)
   {
     S_ERROR(lex_at(lexer, *index)->cursor, "Expected a constant value!");
@@ -864,13 +733,17 @@ static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *index, si
   if (tok_is_end(opToken))
     return lhs;
 
+  // TODO: Rethink!
+  if (depth != 0 && (tok_is_paren(opToken, PT_CPAREN) || tok_is_specific_literal(opToken, CLT_COMMA)))
+    return lhs;
+
   if (!tok_is(opToken, TT_OPERATOR))
   {
     S_ERROR(opToken->cursor, "Expected an operator!");
     return NULL;
   }
 
-  e_node_binop_type operatorType = to_local_binop_type(opToken->as.operator);
+  e_operator_type op = opToken->as.operator;
 
   ++(*index);
 
@@ -878,16 +751,18 @@ static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *index, si
   if (!rhs)
     return NULL;
 
-  return node_binop(arena, opToken->cursor, operatorType, lhs, rhs);
+  return node_binop(arena, opToken->cursor, op, lhs, rhs);
 }
 
+// TODO: Implement!
 static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *index, size_t *depth)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
+  ASSERT_NULL(index);
+  ASSERT_NULL(depth);
 
-  if (!lex_valid(lexer) ||
-      !lex_in_range(lexer, *index))
+  if (!lex_valid(lexer) || !lex_in_range(lexer, *index))
   {
     fprintf(stderr, "ERROR: Lexer invalid! (index=%zu, count=%zu)\n", *index, lexer->count);
     return NULL;
@@ -898,39 +773,29 @@ static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *index, si
   if (!tok_is_paren(tokOParen, PT_OPAREN))
     return NULL;
 
-  printf("3: DEPTH = %zu, TOKEN(%zu) = %s\n", *depth, tokOParen->cursor, tokenTypeNames[tokOParen->type]);
-
   if (!lex_next_in_range(lexer, *index))
   {
     S_ERROR(tokOParen->cursor, "Expected an expression after an open paren!");
     return NULL;
   }
 
-  token_t *token = lex_at(lexer, ++*index);
+  ++(*index);
+
+  token_t *token = lex_at(lexer, *index);
 
   if (tok_is_end(token))
   {
-    S_ERROR(token->cursor, "Expected an expression! End was reached.");
+    S_ERROR(tokOParen->cursor, "Expected an expression after an open paren!");
     return NULL;
   }
 
-  ++*depth;
-
-  node_t *subParen = try_parse_paren(arena, lexer, index, depth);
-  if (subParen)
-    return node_paren(arena, tokOParen->cursor, subParen);
-
-  printf("4: DEPTH = %zu, TOKEN(%zu) = %s\n", *depth, token->cursor, tokenTypeNames[token->type]);
-
-  if (!lex_next_in_range(lexer, *index))
-  {
-    S_ERROR(token->cursor, "Expected an expression after an open paren!");
-    return NULL;
-  }
+  ++(*depth);
 
   node_t *arg = try_parse_binop(arena, lexer, index, depth);
   if (!arg)
     return NULL;
+
+  --(*depth);
 
   token = lex_at(lexer, *index);
 
@@ -940,66 +805,110 @@ static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *index, si
     return NULL;
   }
 
+  ++(*index);
+
   return node_paren(arena, tokOParen->cursor, arg);
 }
 
-static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *index)
+// TODO: Implement!
+static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *index, size_t *depth)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
+  ASSERT_NULL(index);
+  ASSERT_NULL(depth);
 
-  if (!lex_valid(lexer) ||
-      !lex_in_range(lexer, *index))
+  if (!lex_valid(lexer) || !lex_in_range(lexer, *index))
   {
     fprintf(stderr, "ERROR: Lexer invalid! (index=%zu, count=%zu)\n", *index, lexer->count);
     return NULL;
   }
 
-  token_t *token = lex_at(lexer, *index);
+  token_t *funcNameTok = lex_at(lexer, *index);
 
-  if (tok_is(token, TT_SYMBOL))
+  if (!tok_is(funcNameTok, TT_SYMBOL))
+    return NULL;
+
+  // TODO: Handle user defined functions!
+  // Checks if the symbol is a valid function name.
+  e_function_type ft = ss_to_function_type(&funcNameTok->as.symbol);
+  if (ft == FT_INVALID)
+    return NULL;
+
+  // Next token must be an open paren.
+  if (!lex_next_in_range(lexer, *index))
+    return NULL;
+
+  ++(*index);
+
+  token_t *nextTok = lex_at(lexer, *index);
+
+  if (!tok_is_paren(nextTok, PT_OPAREN))
+    return NULL;
+
+  node_func_args_t argsList = {0};
+
+  do
   {
-    // Checks if the symbol is a valid function name.
-    e_function_type ft = cstr_to_function_type_ex(token->as.symbol.src, token->as.symbol.len);
-    if (ft == FT_INVALID)
-      return NULL;
-
-    // Next token must be an open paren.
     if (!lex_next_in_range(lexer, *index))
       return NULL;
 
-    ++*index;
+    token_t *lastTok = nextTok;
 
-    token_t *nextTok = lex_at(lexer, *index);
+    ++(*index);
 
-    if (!tok_is_paren(nextTok, PT_OPAREN))
+    nextTok = lex_at(lexer, *index);
+
+    if (tok_is_end(nextTok))
+    {
+      S_ERROR(lastTok->cursor, "Expected a valid function!");
       return NULL;
+    }
 
-    // TODO: Implement!
-    // Next token must be an argument of the function. This can be a number, math constant, function, or an open paren.
-    // Can also be multiple arguments separated by a COMMA.
-    // Make sure that all function arguments get loaded. NOT JUST ONE!
-    // node_func_args_t argsList = {0};
+    ++(*depth);
 
-    // node_t *argX = node_constant(&arena, ...);
-    // node_t ...
-    // node_func_args_append(arena, &argsList, argx);
+    node_t *arg = try_parse_binop(arena, lexer, index, depth);
+    if (!arg)
+    {
+      S_ERROR(nextTok->cursor, "Expected at least one function argument!");
+      return NULL;
+    }
 
-    // Next token must be a closing paren.
+    --(*depth);
 
-    // return node_func(arena, token->cursor, to_local_func_type(token->as.function), argsList);
+    nextTok = lex_at(lexer, *index);
 
+    // Add argument to list.
+    node_func_args_append(arena, &argsList, arg);
+  } while (!tok_is_end(nextTok) && !tok_is_paren(nextTok, PT_CPAREN) && tok_is_specific_literal(nextTok, CLT_COMMA));
+
+  // Next token must be an open paren.
+  // if (!lex_next_in_range(lexer, *index))
+  // {
+  //   S_ERROR(nextTok->cursor, "Expected a closing paren!");
+  //   return NULL;
+  // }
+
+  // ++(*index);
+
+  // nextTok = lex_at(lexer, *index);
+
+  if (tok_is_end(nextTok) || tok_not_specific_paren(nextTok, PT_CPAREN))
+  {
+    S_ERROR(nextTok->cursor, "Expected a closing paren!");
     return NULL;
   }
 
-  return NULL;
+  ++(*index);
+
+  return node_func(arena, funcNameTok->cursor, ft, argsList);
 }
 
 // TODO:
 // Order checking: Brackets -> Exponents -> Multiplication / Division -> Addition / Substraction
 // A stack for checking nested expressions in brackets. Also if the brackets are used correctly.
 // Paren checking: 2 Open '(' should have 2 Closing ')' after.
-// After a constant / number MUST come an operator, function, or closing paren
+// After a constant / number MUST come an operator or closing paren
 
 // IN: "EN + 5 / (5 * 0)"
 // AST: "add(EN, divide(5, paren(mult(5, 0))))"
@@ -1093,6 +1002,52 @@ double node_constant_to_value(arena_t *arena, node_variable_stack_t *vs, node_t 
   return result;
 }
 
+node_t *ast_eval_binop(arena_t *arena, node_variable_stack_t *vs, size_t cursor, node_t *lhs, node_t *rhs, e_operator_type op)
+{
+  bool isError;
+
+  double left = node_constant_to_value(arena, vs, lhs, &isError);
+  if (isError)
+    return NULL;
+
+  double right = node_constant_to_value(arena, vs, rhs, &isError);
+  if (isError)
+    return NULL;
+
+  switch (op)
+  {
+  case OP_ADD:
+  {
+    return node_constant(arena, cursor, node_constant_value(left + right));
+  }
+  case OP_SUB:
+  {
+    return node_constant(arena, cursor, node_constant_value(left - right));
+  }
+  case OP_MUL:
+  {
+    return node_constant(arena, cursor, node_constant_value(left * right));
+  }
+  case OP_DIV:
+  {
+    if (right == 0)
+    {
+      E_ERROR(rhs->cursor, "Tried to divide by zero!");
+      return NULL;
+    }
+    return node_constant(arena, cursor, node_constant_value(left / right));
+  }
+  case OP_POW:
+  {
+    return node_constant(arena, cursor, node_constant_value(pow(left, right)));
+  }
+  case OP_COUNT:
+  case OP_INVALID:
+  default:
+    UNREACHABLE("Invalid operator-type!");
+  }
+}
+
 node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
 {
   ASSERT_NULL(arena);
@@ -1106,10 +1061,10 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
   case NT_CONSTANT:
   {
     // Will evaluate down to a constant value type.
-    node_const_t constant = node_constant_value(node_constant_to_value(arena, vs, expr, &isError));
+    double value = node_constant_to_value(arena, vs, expr, &isError);
     if (isError)
       return NULL;
-    return node_constant(arena, expr->cursor, constant);
+    return node_constant(arena, expr->cursor, node_constant_value(value));
   }
   case NT_BINOP:
   {
@@ -1121,65 +1076,13 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
     if (!rhs)
       return NULL;
 
-    switch (expr->as.binop.type)
-    {
-    case NO_ADD:
-    {
-      node_const_t constant = node_constant_value(
-          node_constant_to_value(arena, vs, lhs, &isError) + node_constant_to_value(arena, vs, rhs, &isError));
-      if (isError)
-        return NULL;
-      return node_constant(arena, expr->cursor, constant);
-    }
-    case NO_SUB:
-    {
-      node_const_t constant = node_constant_value(
-          node_constant_to_value(arena, vs, lhs, &isError) - node_constant_to_value(arena, vs, rhs, &isError));
-      if (isError)
-        return NULL;
-      return node_constant(arena, expr->cursor, constant);
-    }
-    case NO_MUL:
-    {
-      node_const_t constant = node_constant_value(
-          node_constant_to_value(arena, vs, lhs, &isError) * node_constant_to_value(arena, vs, rhs, &isError));
-      if (isError)
-        return NULL;
-      return node_constant(arena, expr->cursor, constant);
-    }
-    case NO_DIV:
-    {
-      if (node_constant_to_value(arena, vs, rhs, &isError) == 0)
-      {
-        E_ERROR(rhs->cursor, "Tried to divide by zero!");
-        return NULL;
-      }
-      node_const_t constant = node_constant_value(
-          node_constant_to_value(arena, vs, lhs, &isError) / node_constant_to_value(arena, vs, rhs, &isError));
-      if (isError)
-        return NULL;
-      return node_constant(arena, expr->cursor, constant);
-    }
-    case NO_POW:
-    {
-      node_const_t constant = node_constant_value(
-          pow(node_constant_to_value(arena, vs, lhs, &isError), node_constant_to_value(arena, vs, rhs, &isError)));
-      if (isError)
-        return NULL;
-      return node_constant(arena, expr->cursor, constant);
-    }
-    case NO_COUNT:
-    default:
-      UNREACHABLE("Invalid binop-node-type!");
-    }
-    break;
+    return ast_eval_binop(arena, vs, expr->cursor, lhs, rhs, expr->as.binop.type);
   }
   case NT_FUNCTION:
   {
-    // TODO: Check the argument count with the "functionTypeParameterCount" list!
     switch (expr->as.func.type)
     {
-    case NF_SQRT:
+    case FT_SQRT:
     {
       if (expr->as.func.args.count != 1)
       {
@@ -1189,12 +1092,12 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
       node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg)
         return NULL;
-      node_const_t constant = node_constant_value(sqrt(node_constant_to_value(arena, vs, arg, &isError)));
+      double value = node_constant_to_value(arena, vs, arg, &isError);
       if (isError)
         return NULL;
-      return node_constant(arena, expr->cursor, constant);
+      return node_constant(arena, expr->cursor, node_constant_value(sqrt(value)));
     }
-    case NF_EXP:
+    case FT_EXP:
     {
       if (expr->as.func.args.count != 1)
       {
@@ -1204,12 +1107,12 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
       node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg)
         return NULL;
-      node_const_t constant = node_constant_value(exp(node_constant_to_value(arena, vs, arg, &isError)));
+      double value = node_constant_to_value(arena, vs, arg, &isError);
       if (isError)
         return NULL;
-      return node_constant(arena, expr->cursor, constant);
+      return node_constant(arena, expr->cursor, node_constant_value(exp(value)));
     }
-    case NF_SIN:
+    case FT_SIN:
     {
       if (expr->as.func.args.count != 1)
       {
@@ -1219,12 +1122,12 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
       node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg)
         return NULL;
-      node_const_t constant = node_constant_value(sin(node_constant_to_value(arena, vs, arg, &isError)));
+      double value = node_constant_to_value(arena, vs, arg, &isError);
       if (isError)
         return NULL;
-      return node_constant(arena, expr->cursor, constant);
+      return node_constant(arena, expr->cursor, node_constant_value(sin(value)));
     }
-    case NF_ASIN:
+    case FT_ASIN:
     {
       if (expr->as.func.args.count != 1)
       {
@@ -1234,12 +1137,12 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
       node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg)
         return NULL;
-      node_const_t constant = node_constant_value(asin(node_constant_to_value(arena, vs, arg, &isError)));
+      double value = node_constant_to_value(arena, vs, arg, &isError);
       if (isError)
         return NULL;
-      return node_constant(arena, expr->cursor, constant);
+      return node_constant(arena, expr->cursor, node_constant_value(asin(value)));
     }
-    case NF_SINH:
+    case FT_SINH:
     {
       if (expr->as.func.args.count != 1)
       {
@@ -1249,12 +1152,12 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
       node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg)
         return NULL;
-      node_const_t constant = node_constant_value(sinh(node_constant_to_value(arena, vs, arg, &isError)));
+      double value = node_constant_to_value(arena, vs, arg, &isError);
       if (isError)
         return NULL;
-      return node_constant(arena, expr->cursor, constant);
+      return node_constant(arena, expr->cursor, node_constant_value(sinh(value)));
     }
-    case NF_COS:
+    case FT_COS:
     {
       if (expr->as.func.args.count != 1)
       {
@@ -1264,12 +1167,12 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
       node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg)
         return NULL;
-      node_const_t constant = node_constant_value(cos(node_constant_to_value(arena, vs, arg, &isError)));
+      double value = node_constant_to_value(arena, vs, arg, &isError);
       if (isError)
         return NULL;
-      return node_constant(arena, expr->cursor, constant);
+      return node_constant(arena, expr->cursor, node_constant_value(cos(value)));
     }
-    case NF_ACOS:
+    case FT_ACOS:
     {
       if (expr->as.func.args.count != 1)
       {
@@ -1279,12 +1182,12 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
       node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg)
         return NULL;
-      node_const_t constant = node_constant_value(acos(node_constant_to_value(arena, vs, arg, &isError)));
+      double value = node_constant_to_value(arena, vs, arg, &isError);
       if (isError)
         return NULL;
-      return node_constant(arena, expr->cursor, constant);
+      return node_constant(arena, expr->cursor, node_constant_value(acos(value)));
     }
-    case NF_COSH:
+    case FT_COSH:
     {
       if (expr->as.func.args.count != 1)
       {
@@ -1294,12 +1197,12 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
       node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg)
         return NULL;
-      node_const_t constant = node_constant_value(cosh(node_constant_to_value(arena, vs, arg, &isError)));
+      double value = node_constant_to_value(arena, vs, arg, &isError);
       if (isError)
         return NULL;
-      return node_constant(arena, expr->cursor, constant);
+      return node_constant(arena, expr->cursor, node_constant_value(cosh(value)));
     }
-    case NF_TAN:
+    case FT_TAN:
     {
       if (expr->as.func.args.count != 1)
       {
@@ -1309,12 +1212,12 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
       node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg)
         return NULL;
-      node_const_t constant = node_constant_value(tan(node_constant_to_value(arena, vs, arg, &isError)));
+      double value = node_constant_to_value(arena, vs, arg, &isError);
       if (isError)
         return NULL;
-      return node_constant(arena, expr->cursor, constant);
+      return node_constant(arena, expr->cursor, node_constant_value(tan(value)));
     }
-    case NF_ATAN:
+    case FT_ATAN:
     {
       if (expr->as.func.args.count != 1)
       {
@@ -1324,12 +1227,12 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
       node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg)
         return NULL;
-      node_const_t constant = node_constant_value(atan(node_constant_to_value(arena, vs, arg, &isError)));
+      double value = node_constant_to_value(arena, vs, arg, &isError);
       if (isError)
         return NULL;
-      return node_constant(arena, expr->cursor, constant);
+      return node_constant(arena, expr->cursor, node_constant_value(atan(value)));
     }
-    case NF_TANH:
+    case FT_TANH:
     {
       if (expr->as.func.args.count != 1)
       {
@@ -1339,12 +1242,12 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
       node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg)
         return NULL;
-      node_const_t constant = node_constant_value(tanh(node_constant_to_value(arena, vs, arg, &isError)));
+      double value = node_constant_to_value(arena, vs, arg, &isError);
       if (isError)
         return NULL;
-      return node_constant(arena, expr->cursor, constant);
+      return node_constant(arena, expr->cursor, node_constant_value(tanh(value)));
     }
-    case NF_ATAN2:
+    case FT_ATAN2:
     {
       if (expr->as.func.args.count != 2)
       {
@@ -1357,12 +1260,15 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
       node_t *arg2 = ast_eval_ex(arena, vs, expr->as.func.args.items[1]);
       if (!arg2)
         return NULL;
-      node_const_t constant = node_constant_value(atan2(node_constant_to_value(arena, vs, arg1, &isError), node_constant_to_value(arena, vs, arg2, &isError)));
+      double value1 = node_constant_to_value(arena, vs, arg1, &isError);
       if (isError)
         return NULL;
-      return node_constant(arena, expr->cursor, constant);
+      double value2 = node_constant_to_value(arena, vs, arg2, &isError);
+      if (isError)
+        return NULL;
+      return node_constant(arena, expr->cursor, node_constant_value(atan2(value1, value2)));
     }
-    case NF_LN:
+    case FT_LN:
     {
       if (expr->as.func.args.count != 1)
       {
@@ -1372,12 +1278,12 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
       node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg)
         return NULL;
-      node_const_t constant = node_constant_value(log(node_constant_to_value(arena, vs, arg, &isError)));
+      double value = node_constant_to_value(arena, vs, arg, &isError);
       if (isError)
         return NULL;
-      return node_constant(arena, expr->cursor, constant);
+      return node_constant(arena, expr->cursor, node_constant_value(log(value)));
     }
-    case NF_LOG10:
+    case FT_LOG10:
     {
       if (expr->as.func.args.count != 1)
       {
@@ -1387,14 +1293,15 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
       node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
       if (!arg)
         return NULL;
-      node_const_t constant = node_constant_value(log10(node_constant_to_value(arena, vs, arg, &isError)));
+      double value = node_constant_to_value(arena, vs, arg, &isError);
       if (isError)
         return NULL;
-      return node_constant(arena, expr->cursor, constant);
+      return node_constant(arena, expr->cursor, node_constant_value(log10(value)));
     }
-    case NF_COUNT:
+    case FT_COUNT:
+    case FT_INVALID:
     default:
-      UNREACHABLE("Invalid function-node-type!");
+      UNREACHABLE("Invalid function-type!");
     }
     break;
   }
@@ -1419,11 +1326,7 @@ ast_eval_res_t ast_eval(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
 
   node_t *evaluatedNode = ast_eval_ex(arena, vs, expr);
   if (!evaluatedNode)
-  {
-    return (ast_eval_res_t){
-        .isError = true,
-    };
-  }
+    return ast_eval_res_error();
 
   if (evaluatedNode->type != NT_CONSTANT)
     UNREACHABLE("Evaluation failed! Return-Type not of type 'CONSTANT'.");
@@ -1431,9 +1334,7 @@ ast_eval_res_t ast_eval(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
   if (evaluatedNode->as.constant.type != CN_VALUE)
     UNREACHABLE("Evaluation failed! Return-Type of constant not of type 'VALUE'.");
 
-  return (ast_eval_res_t){
-      .value = evaluatedNode->as.constant.as.value,
-  };
+  return ast_eval_res_success(evaluatedNode->as.constant.as.value);
 }
 
 static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented, size_t depth)
@@ -1473,7 +1374,7 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
     case CN_VARIABLE:
     {
       bool indentedInternal = indented;
-      printf(SS_FMT " =%s", SS_ARG(&node->as.constant.as.variableName), indentedInternal ? "\n" : " ");
+      printf("'" SS_FMT "' =%s", SS_ARG(&node->as.constant.as.variableName), indentedInternal ? "\n" : " ");
 
       node_variable_t *variable = vs_find_variable_ex(vs, &node->as.constant.as.variableName, FVM_CONST);
       if (!variable)
@@ -1494,11 +1395,11 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
   }
   case NT_BINOP:
   {
-    if (node->as.binop.type >= NO_COUNT)
-      UNREACHABLE("Invalid binop-node-type!");
+    if (node->as.binop.type >= OP_COUNT)
+      UNREACHABLE("Invalid operator-type!");
 
     _PRINT_DEPTH_SPACES(indented, depth);
-    printf("%s(", nodeBinopTypeNames[node->as.binop.type]);
+    printf("%s(", operatorTypeNames[node->as.binop.type]);
     if (indented)
       printf("\n");
     print_node_ex(vs, node->as.binop.lhs, indented, depth + 1);
@@ -1513,17 +1414,17 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
   case NT_FUNCTION:
   {
     node_function_t *funcNode = &node->as.func;
-    if (funcNode->type >= NF_COUNT)
-      UNREACHABLE("Invalid func-node-type!");
+    if (funcNode->type >= FT_COUNT)
+      UNREACHABLE("Invalid function-type!");
 
     node_func_args_t *args = &funcNode->args;
 
     if (args->count <= 0)
-      UNREACHABLE("Function node has no arguments!");
+      UNREACHABLE("No arguments found in function node!");
 
     _PRINT_DEPTH_SPACES(indented, depth);
 
-    printf("%s(", nodeFunctionTypeNames[funcNode->type]);
+    printf("%s(", functionTypeIdentifiers[funcNode->type]);
 
     if (args->count == 1)
     {

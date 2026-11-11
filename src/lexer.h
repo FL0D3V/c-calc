@@ -45,6 +45,7 @@ const char operatorTypeIdentifiers[OP_COUNT] = {
     [OP_POW] = '^',
 };
 
+// TODO: Rethink if needed
 const int operatorPrecedence[OP_COUNT] = {
     [OP_ADD] = 0,
     [OP_SUB] = 0,
@@ -62,11 +63,11 @@ const bool operatorRightAssociative[OP_COUNT] = {
 };
 
 const char *operatorTypeNames[OP_COUNT] = {
-    [OP_ADD] = "Add",
-    [OP_SUB] = "Subtract",
-    [OP_MUL] = "Multiply",
-    [OP_DIV] = "Divide",
-    [OP_POW] = "Pow",
+    [OP_ADD] = "add",
+    [OP_SUB] = "subtract",
+    [OP_MUL] = "multiply",
+    [OP_DIV] = "divide",
+    [OP_POW] = "pow",
 };
 
 e_operator_type char_to_operator_type(const char c)
@@ -234,29 +235,6 @@ const char *functionTypeIdentifiers[FT_COUNT] = {
     [FT_LOG10] = "log10",
 };
 
-// TODO: Probably not needed!
-// const size_t functionTypeParameterCount[FT_COUNT] = {
-//     // Other
-//     [FT_SQRT] = 1,
-//     [FT_EXP] = 1,
-//     // Sin
-//     [FT_SIN] = 1,
-//     [FT_ASIN] = 1,
-//     [FT_SINH] = 1,
-//     // Cos
-//     [FT_COS] = 1,
-//     [FT_ACOS] = 1,
-//     [FT_COSH] = 1,
-//     // Tan
-//     [FT_TAN] = 1,
-//     [FT_ATAN] = 1,
-//     [FT_TANH] = 1,
-//     [FT_ATAN2] = 2,
-//     // Log
-//     [FT_LN] = 1,
-//     [FT_LOG10] = 1,
-// };
-
 const char *functionTypeNames[FT_COUNT] = {
     // Other
     [FT_SQRT] = "Square-Root",
@@ -315,14 +293,6 @@ e_function_type cstr_to_function_type_ex(const char *cstr, size_t len)
   return FT_INVALID;
 }
 
-bool ss_in_function_types(string_slice_t *name)
-{
-  for (size_t i = 0; i < FT_COUNT; ++i)
-    if (strncmp(functionTypeIdentifiers[i], name->src, strlen(functionTypeIdentifiers[i])) == 0)
-      return true;
-  return false;
-}
-
 e_function_type cstr_to_function_type(const char *cstr)
 {
   if (!cstr)
@@ -333,6 +303,26 @@ e_function_type cstr_to_function_type(const char *cstr)
       return (e_function_type)i;
 
   return FT_INVALID;
+}
+
+e_function_type ss_to_function_type(string_slice_t *name)
+{
+  if (!name)
+    return FT_INVALID;
+  for (size_t i = 0; i < FT_COUNT; ++i)
+    if (strncmp(name->src, functionTypeIdentifiers[i], name->len) == 0)
+      return (e_function_type)i;
+  return FT_INVALID;
+}
+
+bool ss_in_function_types(string_slice_t *name)
+{
+  if (!name)
+    return false;
+  for (size_t i = 0; i < FT_COUNT; ++i)
+    if (strncmp(name->src, functionTypeIdentifiers[i], name->len) == 0)
+      return true;
+  return false;
 }
 
 #define cstr_is_function(cstr) (cstr_to_function_type(cstr) != FT_INVALID)
