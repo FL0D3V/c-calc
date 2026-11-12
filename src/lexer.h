@@ -692,80 +692,10 @@ typedef struct
 #define add_eof_token(a, lexer, curr) \
   arena_da_append((a), (lexer), ((token_t){.type = TT_EOF, .cursor = (curr)}))
 
-#define lex_valid(lexer) (!(lexer)->isError && (lexer)->count > 0)
-
 #define lex_at(lexer, idx) (&(lexer)->items[(idx)])
 
 #define lex_in_range(lexer, idx) ((idx) < (lexer)->count)
 #define lex_next_in_range(lexer, idx) (((idx) + 1) < (lexer)->count)
-
-inline bool lex_at_eol(lexer_t *lexer)
-{
-  assert(lexer);
-  assert(lexer->cursor < lexer->count);
-  return lexer->items[lexer->cursor].type == TT_EOL;
-}
-
-inline bool lex_at_eof(lexer_t *lexer)
-{
-  assert(lexer);
-  assert(lexer->cursor < lexer->count);
-  return lexer->items[lexer->cursor].type == TT_EOF;
-}
-
-inline bool lex_at_end(lexer_t *lexer)
-{
-  assert(lexer);
-  return lex_at_eol(lexer) || lex_at_eof(lexer);
-}
-
-inline token_t *lex_current(lexer_t *lexer)
-{
-  assert(lexer);
-  assert(lexer->cursor < lexer->count);
-  return &lexer->items[lexer->cursor];
-}
-
-inline bool lex_can_peek_ex(lexer_t *lexer, size_t count)
-{
-  assert(lexer);
-  return (lexer->cursor + count) < lexer->count;
-}
-
-inline bool lex_can_peek(lexer_t *lexer)
-{
-  assert(lexer);
-  return lexer->cursor + 1 < lexer->count;
-}
-
-inline token_t *lex_peek_ex(lexer_t *lexer, size_t count)
-{
-  assert(lexer);
-  assert((lexer->cursor + count) < lexer->count);
-  return &lexer->items[lexer->cursor + count];
-}
-
-inline token_t *lex_peek(lexer_t *lexer)
-{
-  assert(lexer);
-  assert((lexer->cursor + 1) < lexer->count);
-  return &lexer->items[lexer->cursor + 1];
-}
-
-inline token_t *lex_seek_ex(lexer_t *lexer, size_t count)
-{
-  assert(lexer);
-  assert((lexer->cursor + count) < lexer->count);
-  lexer->cursor += count;
-  return &lexer->items[lexer->cursor];
-}
-
-inline token_t *lex_seek(lexer_t *lexer)
-{
-  assert(lexer);
-  assert((lexer->cursor + 1) < lexer->count);
-  return &lexer->items[++lexer->cursor];
-}
 
 #define tok_is(tok, t) ((tok)->type == (t))
 #define tok_not(tok, t) ((tok)->type != (t))
@@ -790,6 +720,115 @@ inline token_t *lex_seek(lexer_t *lexer)
 #define tok_is_eol(tok) (tok_is(tok, TT_EOL))
 #define tok_is_eof(tok) (tok_is(tok, TT_EOF))
 #define tok_is_end(tok) (tok_is_eol(tok) || tok_is_eof(tok))
+
+bool lex_is_valid(lexer_t *lexer)
+{
+  assert(lexer);
+  return !lexer->isError && lexer->count > 0 && lex_in_range(lexer, lexer->cursor);
+}
+
+bool lex_at_eol(lexer_t *lexer)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  return tok_is(lex_at(lexer, lexer->cursor), TT_EOL);
+}
+
+bool lex_at_eof(lexer_t *lexer)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  return tok_is(lex_at(lexer, lexer->cursor), TT_EOF);
+}
+
+bool lex_at_end(lexer_t *lexer)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  return lex_at_eol(lexer) || lex_at_eof(lexer);
+}
+
+size_t lex_current_cursor(lexer_t *lexer)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  return lexer->cursor;
+}
+
+token_t *lex_current(lexer_t *lexer)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  return lex_at(lexer, lexer->cursor);
+}
+
+bool lex_at_start(lexer_t *lexer)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  return lexer->cursor == 0;
+}
+
+bool lex_at_start_of_line(lexer_t *lexer)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  return lex_at_start(lexer) || tok_is_eol(lex_at(lexer, lexer->cursor - 1));
+}
+
+bool lex_can_peek_ex(lexer_t *lexer, size_t count)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  return lex_in_range(lexer, lexer->cursor + count);
+}
+
+bool lex_can_peek(lexer_t *lexer)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  return lex_next_in_range(lexer, lexer->cursor);
+}
+
+token_t *lex_peek_ex(lexer_t *lexer, size_t count)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  assert(lex_in_range(lexer, lexer->cursor + count));
+  return &lexer->items[lexer->cursor + count];
+}
+
+token_t *lex_peek(lexer_t *lexer)
+{
+  assert(lexer);
+  assert(lex_next_in_range(lexer, lexer->cursor));
+  return &lexer->items[lexer->cursor + 1];
+}
+
+token_t *lex_seek_ex(lexer_t *lexer, size_t count)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  assert(lex_in_range(lexer, lexer->cursor + count));
+  lexer->cursor += count;
+  return lex_at(lexer, lexer->cursor);
+}
+
+token_t *lex_seek(lexer_t *lexer)
+{
+  assert(lexer);
+  assert((lexer->cursor + 1) < lexer->count);
+  ++lexer->cursor;
+  return lex_at(lexer, lexer->cursor);
+}
+
+void lex_reset_to_start_of_line(lexer_t *lexer)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  while (!lex_at_start_of_line(lexer))
+    lexer->cursor--;
+}
 
 lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
 {
