@@ -652,7 +652,7 @@ typedef union
 {
   // TODO: Change to big number type!
   double number;
-  e_operator_type operator;
+  e_operator_type op;
   e_paren_type paren;
   e_common_literal_type literal;
   string_slice_t symbol;
@@ -679,8 +679,8 @@ typedef struct
 
 #define add_number_token(a, lexer, num, curr) \
   arena_da_append((a), (lexer), ((token_t){.type = TT_NUMBER, .as.number = (num), .cursor = (curr)}))
-#define add_operator_token(a, lexer, op, curr) \
-  arena_da_append((a), (lexer), ((token_t){.type = TT_OPERATOR, .as.operator=(op), .cursor = (curr)}))
+#define add_operator_token(a, lexer, ot, curr) \
+  arena_da_append((a), (lexer), ((token_t){.type = TT_OPERATOR, .as.op = (ot), .cursor = (curr)}))
 #define add_paren_token(a, lexer, pt, curr) \
   arena_da_append((a), (lexer), ((token_t){.type = TT_PAREN, .as.paren = (pt), .cursor = (curr)}))
 #define add_literal_token(a, lexer, clt, curr) \
@@ -692,38 +692,67 @@ typedef struct
 #define add_eof_token(a, lexer, curr) \
   arena_da_append((a), (lexer), ((token_t){.type = TT_EOF, .cursor = (curr)}))
 
-token_t *lex_current(lexer_t *lexer)
+#define lex_valid(lexer) (!(lexer)->isError && (lexer)->count > 0)
+
+#define lex_at(lexer, idx) (&(lexer)->items[(idx)])
+
+#define lex_in_range(lexer, idx) ((idx) < (lexer)->count)
+#define lex_next_in_range(lexer, idx) (((idx) + 1) < (lexer)->count)
+
+inline bool lex_at_eol(lexer_t *lexer)
 {
   assert(lexer);
+  assert(lexer->cursor < lexer->count);
+  return lexer->items[lexer->cursor].type == TT_EOL;
+}
+
+inline bool lex_at_eof(lexer_t *lexer)
+{
+  assert(lexer);
+  assert(lexer->cursor < lexer->count);
+  return lexer->items[lexer->cursor].type == TT_EOF;
+}
+
+inline bool lex_at_end(lexer_t *lexer)
+{
+  assert(lexer);
+  return lex_at_eol(lexer) || lex_at_eof(lexer);
+}
+
+inline token_t *lex_current(lexer_t *lexer)
+{
+  assert(lexer);
+  assert(lexer->cursor < lexer->count);
   return &lexer->items[lexer->cursor];
 }
 
-bool lex_can_peek_ex(lexer_t *lexer, size_t count)
+inline bool lex_can_peek_ex(lexer_t *lexer, size_t count)
 {
   assert(lexer);
   return (lexer->cursor + count) < lexer->count;
 }
 
-bool lex_can_peek(lexer_t *lexer)
+inline bool lex_can_peek(lexer_t *lexer)
 {
   assert(lexer);
   return lexer->cursor + 1 < lexer->count;
 }
 
-token_t *lex_peek_ex(lexer_t *lexer, size_t count)
+inline token_t *lex_peek_ex(lexer_t *lexer, size_t count)
 {
   assert(lexer);
   assert((lexer->cursor + count) < lexer->count);
   return &lexer->items[lexer->cursor + count];
 }
 
-token_t *lex_peek(lexer_t *lexer)
+inline token_t *lex_peek(lexer_t *lexer)
 {
   assert(lexer);
+  assert((lexer->cursor + 1) < lexer->count);
   return &lexer->items[lexer->cursor + 1];
 }
 
-token_t *lex_seek_ex(lexer_t *lexer, size_t count)
+inline token_t *lex_seek_ex(lexer_t *lexer, size_t count)
 {
   assert(lexer);
   assert((lexer->cursor + count) < lexer->count);
@@ -731,36 +760,36 @@ token_t *lex_seek_ex(lexer_t *lexer, size_t count)
   return &lexer->items[lexer->cursor];
 }
 
-token_t *lex_seek(lexer_t *lexer)
+inline token_t *lex_seek(lexer_t *lexer)
 {
   assert(lexer);
   assert((lexer->cursor + 1) < lexer->count);
   return &lexer->items[++lexer->cursor];
 }
 
-#define lex_valid(lexer) (!(lexer)->isError && (lexer)->count > 0)
-
-#define lex_at(lexer, idx) (&(lexer)->items[(idx)])
-#define lex_in_range(lexer, idx) ((idx) < (lexer)->count)
-#define lex_next_in_range(lexer, idx) ((idx) + 1 < (lexer)->count)
-
 #define tok_is(tok, t) ((tok)->type == (t))
 #define tok_not(tok, t) ((tok)->type != (t))
 
-#define tok_is_operator(tok, ot) \
-  (tok_is(tok, TT_OPERATOR) && (tok)->as.operator==(ot))
-#define tok_is_paren(tok, pt) \
+#define tok_is_specific_operator(tok, ot) \
+  (tok_is(tok, TT_OPERATOR) && (tok)->as.op == (ot))
+#define tok_not_specific_operator(tok, ot) \
+  (tok_not(tok, TT_OPERATOR) || (tok)->as.op != (ot))
+#define tok_is_number_prefix_operator(tok) \
+  (tok_is(tok, TT_OPERATOR) && ((tok)->as.op == OP_ADD || (tok)->as.op == OP_SUB))
+
+#define tok_is_specific_paren(tok, pt) \
   (tok_is(tok, TT_PAREN) && (tok)->as.paren == (pt))
 #define tok_not_specific_paren(tok, pt) \
   (tok_not((tok), TT_PAREN) || (tok)->as.paren != (pt))
-#define tok_is_number_operator(tok) \
-  (tok_is(tok, TT_OPERATOR) && ((tok)->as.operator== OP_ADD ||(tok)->as.operator== OP_SUB))
+
 #define tok_is_specific_literal(tok, lt) \
   (tok_is(tok, TT_LITERAL) && (tok)->as.literal == (lt))
 #define tok_not_specific_literal(tok, lt) \
   (tok_not(tok, TT_LITERAL) || (tok)->as.literal != (lt))
-#define tok_is_end(tok) \
-  (tok_is(tok, TT_EOL) || tok_is(tok, TT_EOF))
+
+#define tok_is_eol(tok) (tok_is(tok, TT_EOL))
+#define tok_is_eof(tok) (tok_is(tok, TT_EOF))
+#define tok_is_end(tok) (tok_is_eol(tok) || tok_is_eof(tok))
 
 lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
 {
@@ -888,8 +917,8 @@ void lexer_print(const lexer_t *lexer)
       printf("(" DOUBLE_PRINT_FORMAT ")", token->as.number);
       break;
     case TT_OPERATOR:
-        printf("(%s): precedence: %d, right-associative: %s", operatorTypeNames[token->as.operator], operatorPrecedence[token->as.operator], bool_cstr(operatorRightAssociative[token->as.operator]));
-        break;
+      printf("(%s): precedence: %d, right-associative: %s", operatorTypeNames[token->as.op], operatorPrecedence[token->as.op], bool_cstr(operatorRightAssociative[token->as.op]));
+      break;
     case TT_PAREN:
       printf("(%s)", parenTypeNames[token->as.paren]);
       break;

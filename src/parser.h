@@ -108,25 +108,25 @@ typedef struct
 {
   e_const_node_type type;
   u_const_node_as as;
-  // Indicates that the value should be negated like "5" -> "-5".
-  bool hasPreMinus;
+
+  bool hasPrefixMinus;
 } node_const_t;
 
-node_const_t node_constant_value_ex(double val, bool minus)
+static inline node_const_t node_constant_value_ex(double val, bool minus)
 {
-  return (node_const_t){.type = CN_VALUE, .as.value = val, .hasPreMinus = minus};
+  return (node_const_t){.type = CN_VALUE, .as.value = val, .hasPrefixMinus = minus};
 }
 #define node_constant_value(val) node_constant_value_ex(val, false)
 
-node_const_t node_constant_buildin_const_ex(e_math_constant_type val, bool minus)
+static inline node_const_t node_constant_buildin_const_ex(e_math_constant_type val, bool minus)
 {
-  return (node_const_t){.type = CN_BUILDIN_CONST, .as.buildinConstant = val, .hasPreMinus = minus};
+  return (node_const_t){.type = CN_BUILDIN_CONST, .as.buildinConstant = val, .hasPrefixMinus = minus};
 }
 #define node_constant_buildin_const(val) node_constant_buildin_const_ex(val, false)
 
-node_const_t node_constant_variable_ex(string_slice_t val, bool minus)
+static inline node_const_t node_constant_variable_ex(string_slice_t val, bool minus)
 {
-  return (node_const_t){.type = CN_VARIABLE, .as.variableName = val, .hasPreMinus = minus};
+  return (node_const_t){.type = CN_VARIABLE, .as.variableName = val, .hasPrefixMinus = minus};
 }
 #define node_constant_variable(val) node_constant_variable_ex(val, false)
 
@@ -476,7 +476,7 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
   if (tok_is_end(oParenTok))
     return false;
 
-  if (!tok_is_paren(oParenTok, PT_OPAREN))
+  if (!tok_is_specific_paren(oParenTok, PT_OPAREN))
     return false;
 
   if (!lex_next_in_range(lexer, index))
@@ -524,7 +524,7 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
     return false;
   }
 
-  if (!tok_is_paren(currTok, PT_CPAREN))
+  if (!tok_is_specific_paren(currTok, PT_CPAREN))
   {
     S_ERROR(currTok->cursor, "Expected a closing paren, then an assignment and then an expression!");
     return false;
@@ -668,15 +668,15 @@ static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer, size_t *index)
 
   token_t *token = lex_at(lexer, *index);
 
-  bool hasPrePlus = false;
-  bool hasPreMinus = false;
+  bool hasPrefixPlus = false;
+  bool hasPrefixMinus = false;
 
-  if (tok_is_operator(token, OP_SUB))
-    hasPreMinus = true;
-  else if (tok_is_operator(token, OP_ADD))
-    hasPrePlus = true;
+  if (tok_is_specific_operator(token, OP_SUB))
+    hasPrefixMinus = true;
+  else if (tok_is_specific_operator(token, OP_ADD))
+    hasPrefixPlus = true;
 
-  if (hasPreMinus || hasPrePlus)
+  if (hasPrefixMinus || hasPrefixPlus)
   {
     if (!lex_next_in_range(lexer, *index))
     {
@@ -689,10 +689,13 @@ static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer, size_t *index)
     token = lex_at(lexer, *index);
   }
 
+  bool found = false;
+  node_const_t constant = {0};
+
   if (tok_is(token, TT_NUMBER))
   {
-    node_const_t constant = node_constant_value_ex(token->as.number, hasPreMinus);
-    return node_constant(arena, token->cursor, constant);
+    constant = node_constant_value_ex(token->as.number, hasPrefixMinus);
+    found = true;
   }
   else if (tok_is(token, TT_SYMBOL) && cstr_is_math_constant_ex(token->as.symbol.src, token->as.symbol.len))
   {
@@ -701,17 +704,20 @@ static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer, size_t *index)
     if (mc == MC_INVALID)
       UNREACHABLE("Math-Constant-Type not implemented!");
 
-    node_const_t constant = node_constant_buildin_const_ex(mc, hasPreMinus);
-    return node_constant(arena, token->cursor, constant);
+    constant = node_constant_buildin_const_ex(mc, hasPrefixMinus);
+    found = true;
   }
   else if (tok_is(token, TT_SYMBOL))
   {
     // TODO: Maybe link variable directly! This means that all variables must be parsed first!
-    node_const_t constant = node_constant_variable_ex(token->as.symbol, hasPreMinus);
-    return node_constant(arena, token->cursor, constant);
+    constant = node_constant_variable_ex(token->as.symbol, hasPrefixMinus);
+    found = true;
   }
 
-  return NULL;
+  if (found)
+    ++(*index);
+
+  return node_constant(arena, token->cursor, constant);
 }
 
 // TODO: Implement proper precedence handling!
@@ -739,14 +745,7 @@ static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *index, si
     lhs = try_parse_paren(arena, lexer, index, depth);
 
   if (!lhs)
-  {
     lhs = try_parse_constant(arena, lexer, index);
-
-    if (!lex_next_in_range(lexer, *index))
-      return lhs;
-
-    ++(*index);
-  }
 
   if (!lhs)
   {
@@ -754,13 +753,16 @@ static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *index, si
     return NULL;
   }
 
+  if (!lex_in_range(lexer, *index))
+    return NULL;
+
   token_t *opToken = lex_at(lexer, *index);
 
   if (tok_is_end(opToken))
     return lhs;
 
   // Used for ending the paren or function parsing.
-  if (depth != 0 && (tok_is_paren(opToken, PT_CPAREN) || tok_is_specific_literal(opToken, CLT_COMMA)))
+  if (depth != 0 && (tok_is_specific_paren(opToken, PT_CPAREN) || tok_is_specific_literal(opToken, CLT_COMMA)))
     return lhs;
 
   if (!tok_is(opToken, TT_OPERATOR))
@@ -769,7 +771,7 @@ static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *index, si
     return NULL;
   }
 
-  e_operator_type op = opToken->as.operator;
+  e_operator_type op = opToken->as.op;
 
   ++(*index);
 
@@ -799,7 +801,7 @@ static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *index, si
 
   token_t *tokOParen = lex_at(lexer, *index);
 
-  if (!tok_is_paren(tokOParen, PT_OPAREN))
+  if (!tok_is_specific_paren(tokOParen, PT_OPAREN))
     return NULL;
 
   if (!lex_next_in_range(lexer, *index))
@@ -871,7 +873,7 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *index, siz
 
   token_t *nextTok = lex_at(lexer, *index);
 
-  if (!tok_is_paren(nextTok, PT_OPAREN))
+  if (!tok_is_specific_paren(nextTok, PT_OPAREN))
     return NULL;
 
   node_func_args_t argsList = {0};
@@ -908,7 +910,7 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *index, siz
 
     // Add argument to list.
     node_func_args_append(arena, &argsList, arg);
-  } while (!tok_is_end(nextTok) && !tok_is_paren(nextTok, PT_CPAREN) && tok_is_specific_literal(nextTok, CLT_COMMA));
+  } while (!tok_is_end(nextTok) && !tok_is_specific_paren(nextTok, PT_CPAREN) && tok_is_specific_literal(nextTok, CLT_COMMA));
 
   if (tok_is_end(nextTok) || tok_not_specific_paren(nextTok, PT_CPAREN))
   {
@@ -1013,8 +1015,8 @@ double node_constant_to_value(arena_t *arena, node_variable_stack_t *vs, node_t 
     UNREACHABLE("Invalid constant node type!");
   }
 
-  // Handle pre minus of constant
-  if (constant->hasPreMinus)
+  // Handle prefix minus of the constant
+  if (constant->hasPrefixMinus)
     result *= -1;
 
   return result;
@@ -1366,7 +1368,7 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
   {
     _PRINT_DEPTH_SPACES(indented, depth);
 
-    if (node->as.constant.hasPreMinus)
+    if (node->as.constant.hasPrefixMinus)
       printf("-");
 
     switch (node->as.constant.type)
@@ -1382,7 +1384,7 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
       if (mc == MC_INVALID)
         UNREACHABLE("Invalid math constant type!");
 
-      if (node->as.constant.hasPreMinus)
+      if (node->as.constant.hasPrefixMinus)
         printf("%s (-" DOUBLE_PRINT_FORMAT ", %s)", mathConstantTypeIdentifiers[mc], mathConstantTypeValues[mc], mathConstantTypeNames[mc]);
       else
         printf("%s (" DOUBLE_PRINT_FORMAT ", %s)", mathConstantTypeIdentifiers[mc], mathConstantTypeValues[mc], mathConstantTypeNames[mc]);
