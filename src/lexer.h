@@ -196,7 +196,6 @@ bool ss_in_math_constants(string_slice_t *name)
 #define cstr_is_math_constant_ex(cstr, len) (cstr_to_math_constant_type_ex(cstr, len) != MC_INVALID)
 #define cstr_is_math_constant(cstr) (cstr_to_math_constant_type(cstr) != MC_INVALID)
 
-// TODO: Implement parameter count for each function to support multiple arguments.
 typedef enum
 {
   FT_SQRT,

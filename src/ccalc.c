@@ -622,7 +622,7 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
           // IN: "1 + 2 + (PI ^ 2) / 3"
           // AST: add(1.00000, add(2.00000, divide(paren(pow(3.14159, 2.00000)), 3.00000)))
           // = 6.28986
-          .inputExpression = "1 + 2 + (PI ^ 2) / 3",
+          .input = "1 + 2 + (PI ^ 2) / 3",
           .expectedResult = 6.28986,
           .expressionTree = node_binop(&arena, 0, OP_ADD,
                                        node_constant(&arena, 0, node_constant_value(1)),
@@ -640,7 +640,7 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
           // IN: "100 + ln(10)"
           // AST: add(100.0000, ln(10))
           // = 102.30258
-          .inputExpression = "100 + ln(10)",
+          .input = "100 + ln(10)",
           .expectedResult = 102.30258,
           .expressionTree = node_binop(&arena, 3, OP_ADD,
                                        node_constant(&arena, 0, node_constant_value(100)),
@@ -651,7 +651,7 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
           // IN: "100.53 + sqrt(3.5 - EN) + cos(44.23 * 6.4^2) / 8.3 + ln(10) - PI + ln(5^EC)"
           // AST: add(100.53000, add(sqrt(substract(3.50000, 2.71828)), add(divide(acos(multiply(44.23000, pow(6.40000, 2.00000))), 8.30000), substract(ln(10.00000), add(3.14159, ln(pow(5.00000, 0.57722)))))))
           // = 99.58497
-          .inputExpression = "100.53 + sqrt(3.5 - EN) + cos(44.23 * 6.4^2) / 8.3 + ln(10) - PI + ln(5^EC)",
+          .input = "100.53 + sqrt(3.5 - EN) + cos(44.23 * 6.4^2) / 8.3 + ln(10) - PI + ln(5^EC)",
           .expectedResult = 99.58497,
           .expressionTree = node_binop(&arena, 0, OP_ADD,
                                        node_constant(&arena, 0, node_constant_value(100.53)),
@@ -672,7 +672,7 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
           // IN: "10.5 * exp(4)"
           // AST: mult(10.5, exp(4))
           // = 573.28058
-          .inputExpression = "10.5 * exp(4)",
+          .input = "10.5 * exp(4)",
           .expectedResult = 573.28058,
           .expressionTree = node_binop(&arena, 0, OP_MUL,
                                        node_constant(&arena, 0, node_constant_value(10.5)),
@@ -683,7 +683,7 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
           // IN: "10 + 5 / (5 * 0)"
           // AST: "add(10, divide(5, paren(mult(5, 0))))"
           // = ERR (Divide by Zero)
-          .inputExpression = "10 + 5 / (5 * 0)",
+          .input = "10 + 5 / (5 * 0)",
           .shouldFail = true,
           .expressionTree = node_binop(&arena, 3, OP_ADD,
                                        node_constant(&arena, 0, node_constant_value(10)),
@@ -699,7 +699,7 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
           // IN: "(5 * 0)"
           // AST: "paren(mult(5, 0))"
           // = 0
-          .inputExpression = "(5 * 0)",
+          .input = "(5 * 0)",
           .expectedResult = 0,
           .expressionTree = node_paren(&arena, 0,
                                        node_binop(&arena, 3, OP_MUL,
@@ -711,7 +711,7 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
           // IN: "10 / 0"
           // AST: "div(10, 0)"
           // = ERR (Divide by Zero)
-          .inputExpression = "10 / 0",
+          .input = "10 / 0",
           .shouldFail = true,
           .expressionTree = node_binop(&arena, 2, OP_DIV,
                                        node_constant(&arena, 0, node_constant_value(10)),
@@ -722,7 +722,7 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
           // IN: "10 / (4)"
           // AST: "div(10, paren(4))"
           // = 2.5
-          .inputExpression = "10 / (4)",
+          .input = "10 / (4)",
           .expectedResult = 2.5,
           .expressionTree = node_binop(&arena, 3, OP_DIV,
                                        node_constant(&arena, 0, node_constant_value(10)),
@@ -734,7 +734,7 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
           // IN: "(2 + 2) * 8 / 2"
           // AST "divide(mult(par(add(2,2)),8),2)"
           // = 16
-          .inputExpression = "(2 + 2) * 8 / 2",
+          .input = "(2 + 2) * 8 / 2",
           .expectedResult = 16.0,
           .expressionTree = node_binop(&arena, 8, OP_DIV,
                                        node_binop(&arena, 6, OP_MUL,
@@ -750,7 +750,7 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
           // IN: "8 / 2 * (2 + 2)"
           // AST "divide(8,mult(2,par(add(2,2))))"
           // = 16
-          .inputExpression = "8 / 2 * (2 + 2)",
+          .input = "8 / 2 * (2 + 2)",
           .expectedResult = 16.0,
           .expressionTree = node_binop(&arena, 4, OP_MUL,
                                        node_binop(&arena, 2, OP_DIV,
@@ -766,7 +766,7 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
           // IN: "100 / (2 + 3) * atan2(2, 5^EC)"
           // AST "mult(divide(100,paren(add(2,3))),atan2(2,pow(5,EC)))"
           // = 13.37107
-          .inputExpression = "100 / (2 + 3) * atan2(2, 5^EC)",
+          .input = "100 / (2 + 3) * atan2(2, 5^EC)",
           .expectedResult = 13.37107,
           .expressionTree = node_binop(&arena, 10, OP_MUL,
                                        node_binop(&arena, 4, OP_DIV,

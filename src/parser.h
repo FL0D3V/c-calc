@@ -1524,30 +1524,17 @@ void print_node_simple(node_t *node, bool indented)
 
 typedef struct
 {
-  const char *inputExpression;
+  const char *input;
   double expectedResult;
   bool shouldFail;
   node_t *expressionTree;
 } node_test_t;
 
-bool execute_test(arena_t *arena, node_variable_stack_t *vs, node_test_t *test, bool freeArena, bool verbose, bool indented)
+static bool handle_test_result(arena_t *arena, node_test_t *test, const char *name, ast_eval_res_t *evalResult, bool freeArena)
 {
-  if (verbose)
-  {
-    printf("\n");
-    print_node(vs, test->expressionTree, indented);
-    printf("\n");
-  }
-
-  printf("Input       = %s\n", test->inputExpression);
-  if (!test->shouldFail)
-    printf("Expected    = " DOUBLE_PRINT_FORMAT "\n", test->expectedResult);
-
-  ast_eval_res_t evalResult = ast_eval(arena, vs, test->expressionTree);
-
   if (test->shouldFail)
   {
-    if (!evalResult.isError)
+    if (!evalResult->isError)
     {
       G_ERROR("Evaluation should have failed but did not!");
 
@@ -1561,20 +1548,15 @@ bool execute_test(arena_t *arena, node_variable_stack_t *vs, node_test_t *test, 
   }
   else
   {
-    if (evalResult.isError)
-    {
-      if (freeArena)
-        arena_free(arena);
-
-      return false;
-    }
-
     if (freeArena)
       arena_free(arena);
 
-    printf("Result      = " DOUBLE_PRINT_FORMAT "\n", evalResult.value);
+    if (evalResult->isError)
+      return false;
 
-    if (!compare_doubles(evalResult.value, test->expectedResult, 5))
+    printf("%s = " DOUBLE_PRINT_FORMAT "\n", name, evalResult->value);
+
+    if (!compare_doubles(evalResult->value, test->expectedResult, 5))
     {
       G_ERROR("Evaluated result not equal to expected value!");
       return false;
@@ -1582,6 +1564,63 @@ bool execute_test(arena_t *arena, node_variable_stack_t *vs, node_test_t *test, 
   }
 
   return true;
+}
+
+bool execute_test(arena_t *arena, node_variable_stack_t *vs, node_test_t *test, bool freeArena, bool verbose, bool indented)
+{
+  tokenizer_t tokenizer = tokenizer_execute(arena, test->input);
+  if (tokenizer.isError)
+  {
+    if (freeArena)
+      arena_free(arena);
+
+    return false;
+  }
+
+  lexer_t lexer = lexer_execute(arena, &tokenizer);
+  if (lexer.isError)
+  {
+    if (freeArena)
+      arena_free(arena);
+
+    return false;
+  }
+
+  node_t *generatedTree = parser_execute(arena, &lexer);
+  if (!generatedTree)
+  {
+    if (freeArena)
+      arena_free(arena);
+
+    return false;
+  }
+
+  if (verbose)
+  {
+    printf("\n");
+    printf("Internal tree:");
+    printf("\n");
+    print_node(vs, test->expressionTree, indented);
+    printf("\n");
+
+    printf("Generated tree:");
+    printf("\n");
+    print_node(vs, generatedTree, indented);
+    printf("\n");
+  }
+
+  printf("Input           = %s\n", test->input);
+
+  if (!test->shouldFail)
+    printf("Expected        = " DOUBLE_PRINT_FORMAT "\n", test->expectedResult);
+
+  ast_eval_res_t evalResultGivenTree = ast_eval(arena, vs, test->expressionTree);
+  ast_eval_res_t evalResultGeneratedTree = ast_eval(arena, vs, generatedTree);
+
+  bool res1 = handle_test_result(arena, test, "Given-Tree      ", &evalResultGivenTree, freeArena);
+  bool res2 = handle_test_result(arena, test, "Generated-Tree  ", &evalResultGeneratedTree, freeArena);
+
+  return res1 && res2;
 }
 
 #endif // _PARSER_H_
