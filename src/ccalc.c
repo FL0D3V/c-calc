@@ -229,8 +229,7 @@ static bool execute_math_expression(const char *input, bool verbose)
   }
 
   // Execute parser and generate AST
-  size_t index = 0;
-  node_t *rootNode = parser_execute(&arena, &lexer, &index);
+  node_t *rootNode = parser_execute(&arena, &lexer);
   if (!rootNode)
   {
     // Cleanup
@@ -732,10 +731,10 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
       },
       // Test 9
       {
-          // IN: "(2+2)*8/2"
+          // IN: "(2 + 2) * 8 / 2"
           // AST "divide(mult(par(add(2,2)),8),2)"
           // = 16
-          .inputExpression = "(2+2)*8/2",
+          .inputExpression = "(2 + 2) * 8 / 2",
           .expectedResult = 16.0,
           .expressionTree = node_binop(&arena, 8, OP_DIV,
                                        node_binop(&arena, 6, OP_MUL,
@@ -748,10 +747,10 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
       },
       // Test 10
       {
-          // IN: "8/2*(2+2)"
+          // IN: "8 / 2 * (2 + 2)"
           // AST "divide(8,mult(2,par(add(2,2))))"
           // = 16
-          .inputExpression = "8/2*(2+2)",
+          .inputExpression = "8 / 2 * (2 + 2)",
           .expectedResult = 16.0,
           .expressionTree = node_binop(&arena, 4, OP_MUL,
                                        node_binop(&arena, 2, OP_DIV,
@@ -764,10 +763,10 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
       },
       // Test 11
       {
-          // IN: "100/(2+3)*atan2(2.5^EC)"
+          // IN: "100 / (2 + 3) * atan2(2, 5^EC)"
           // AST "mult(divide(100,paren(add(2,3))),atan2(2,pow(5,EC)))"
           // = 13.37107
-          .inputExpression = "100/(2+3)*atan2(2.5^EC)",
+          .inputExpression = "100 / (2 + 3) * atan2(2, 5^EC)",
           .expectedResult = 13.37107,
           .expressionTree = node_binop(&arena, 10, OP_MUL,
                                        node_binop(&arena, 4, OP_DIV,
@@ -838,19 +837,21 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
 
   flag_c_free(c);
 
-  const char *input = "10 * 2 + test * PI";
+  // const char *input1 = "(10 * 2) + (test * PI)";
+  const char *input2 = "1 + ((test) / (2 * sqrt((PI ^ 2) + (3 ^ 2))) - 2) * (2 + 2) + atan2(5, 10)";
 
-  const char *inputVar1 = "test = 20*10+a";
-  const char *inputVar2 = "a = 2^5-EC";
+  const char *inputVar1 = "test = 20 * 10 + a";
+  const char *inputVar2 = "a = (2 ^ 5) - EC";
   // Tests if the variable names are checked with builtin function or constant names.
   // const char *inputVar2 = "cos = 2^5";
   // const char *inputVar3 = "atan2(x,y,z) = test * 20 * x + 10 * y - 5 * z";
-  const char *inputVar3 = "func(x,y,z) = test * 20 * x + 10 * y - 5 * z";
+  const char *inputVar3 = "func(x,y,z) = (test * 20 * x) + (10 * y) - (5 * z)";
 
   arena_t arena = {0};
   node_variable_stack_t vs = {0};
 
-  printf("VAR1 = '%s'\n\n", inputVar1);
+  // Variable 1
+  printf("VAR1:\n'%s'\n\n", inputVar1);
 
   tokenizer_t tokenizerVar1 = tokenizer_execute(&arena, inputVar1);
   if (tokenizerVar1.isError)
@@ -869,20 +870,19 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
     arena_free(&arena);
     return false;
   }
-
+  if (verbose)
+  {
+    lexer_print(&lexerVar1);
+    printf("\n");
+  }
   if (!parse_node_variable(&vs, &arena, &lexerVar1))
   {
     arena_free(&arena);
     return false;
   }
 
-  if (verbose)
-  {
-    lexer_print(&lexerVar1);
-    printf("\n");
-  }
-
-  printf("VAR2 = '%s'\n\n", inputVar2);
+  // Variable 2
+  printf("VAR2:\n'%s'\n\n", inputVar2);
 
   tokenizer_t tokenizerVar2 = tokenizer_execute(&arena, inputVar2);
   if (tokenizerVar2.isError)
@@ -901,20 +901,19 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
     arena_free(&arena);
     return false;
   }
-
+  if (verbose)
+  {
+    lexer_print(&lexerVar2);
+    printf("\n");
+  }
   if (!parse_node_variable(&vs, &arena, &lexerVar2))
   {
     arena_free(&arena);
     return false;
   }
 
-  if (verbose)
-  {
-    lexer_print(&lexerVar2);
-    printf("\n");
-  }
-
-  printf("VAR3 = '%s'\n\n", inputVar3);
+  // Variable 3
+  printf("VAR3:\n'%s'\n\n", inputVar3);
 
   tokenizer_t tokenizerVar3 = tokenizer_execute(&arena, inputVar3);
   if (tokenizerVar3.isError)
@@ -938,55 +937,50 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
     lexer_print(&lexerVar3);
     printf("\n");
   }
-
   if (!parse_node_variable(&vs, &arena, &lexerVar3))
   {
     arena_free(&arena);
     return false;
   }
 
+  // Printing the variable stack.
   if (verbose)
   {
     print_variable_stack(&vs, true, true);
     printf("\n");
   }
 
-  printf("INPUT = '%s'\n\n", input);
+  // Select special input string here!
+  printf("INPUT:\n'%s'\n\n", input2);
 
-  tokenizer_t tokenizer = tokenizer_execute(&arena, input);
+  tokenizer_t tokenizer = tokenizer_execute(&arena, input2);
   if (tokenizer.isError)
   {
     arena_free(&arena);
     return false;
   }
-
   if (verbose)
   {
     tokenizer_print(&tokenizer);
     printf("\n");
   }
-
   lexer_t lexer = lexer_execute(&arena, &tokenizer);
   if (lexer.isError)
   {
     arena_free(&arena);
     return false;
   }
-
   if (verbose)
   {
     lexer_print(&lexer);
     printf("\n");
   }
-
-  size_t index = 0;
-  node_t *rootNode = parser_execute(&arena, &lexer, &index);
+  node_t *rootNode = parser_execute(&arena, &lexer);
   if (!rootNode)
   {
     arena_free(&arena);
     return false;
   }
-
   if (verbose)
   {
     print_node(&vs, rootNode, true);

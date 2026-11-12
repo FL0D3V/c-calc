@@ -17,6 +17,8 @@
 #define E_ERROR(cursor, message) _PARSER_ERROR(_E_ERROR_NAME, cursor, message)
 #define E_ERROR_SS(cursor, message, ss) _PARSER_ERROR_SS(_E_ERROR_NAME, cursor, message, ss)
 
+#define DEBUG_PRINT_TOK_EX_2(tok, idx, d) printf("DEPTH(%zu), TOKEN(%zu) = %s\n", d, idx, tokenTypeNames[(tok)->type])
+#define DEBUG_PRINT_TOK_EX_1(tok, idx) printf("TOKEN(%zu) = %s\n", idx, tokenTypeNames[(tok)->type])
 #define DEBUG_PRINT_TOK(tok) printf("TOKEN = %s\n", tokenTypeNames[(tok)->type])
 
 #define _PRINT_DEPTH_SPACES(indented, depth) \
@@ -372,7 +374,8 @@ static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *index, si
 static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *index, size_t *depth);
 static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *index, size_t *depth);
 
-node_t *parser_execute(arena_t *arena, lexer_t *lexer, size_t *index);
+node_t *parser_execute_ex(arena_t *arena, lexer_t *lexer, size_t *index);
+node_t *parser_execute(arena_t *arena, lexer_t *lexer);
 static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented, size_t depth);
 void print_node(node_variable_stack_t *vs, node_t *node, bool indented);
 void print_node_simple(node_t *node, bool indented);
@@ -412,12 +415,17 @@ static bool try_parse_const_variable(node_variable_stack_t *vs, arena_t *arena, 
   if (!lex_next_in_range(lexer, index))
     return false;
 
-  token_t *assignTok = lex_at(lexer, index + 1);
+  ++index;
+
+  token_t *assignTok = lex_at(lexer, index);
+
+  if (tok_is_end(assignTok))
+    return true;
 
   if (!tok_is_specific_literal(assignTok, CLT_EQUALS))
     return false;
 
-  if (!lex_next_in_range(lexer, ++index))
+  if (!lex_next_in_range(lexer, index))
   {
     S_ERROR(assignTok->cursor, "After a variable assignment must be an expression!");
     return false;
@@ -425,7 +433,7 @@ static bool try_parse_const_variable(node_variable_stack_t *vs, arena_t *arena, 
 
   ++index;
 
-  node_t *value = parser_execute(arena, lexer, &index);
+  node_t *value = parser_execute_ex(arena, lexer, &index);
   if (!value)
   {
     S_ERROR(assignTok->cursor, "After a variable assignment must be a valid expression!");
@@ -461,12 +469,17 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
   if (!lex_next_in_range(lexer, index))
     return false;
 
-  token_t *oParenTok = lex_at(lexer, index + 1);
+  ++index;
+
+  token_t *oParenTok = lex_at(lexer, index);
+
+  if (tok_is_end(oParenTok))
+    return false;
 
   if (!tok_is_paren(oParenTok, PT_OPAREN))
     return false;
 
-  if (!lex_next_in_range(lexer, ++index))
+  if (!lex_next_in_range(lexer, index))
   {
     S_ERROR(oParenTok->cursor, "Expected at least one function argument name and then a closing paren and an assigned expression!");
     return false;
@@ -477,29 +490,35 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
 
   do
   {
-    currTok = lex_at(lexer, ++index);
+    ++index;
+
+    currTok = lex_at(lexer, index);
+
+    if (tok_is_end(currTok))
+      return false;
 
     if (tok_is(currTok, TT_SYMBOL))
     {
+      // Check if function argument is already used in definition.
       for (size_t i = 0; i < funcArgs.count; ++i)
       {
         if (ss_compare(&currTok->as.symbol, &funcArgs.items[i]))
         {
           S_ERROR_SS(currTok->cursor, "Function argument '" SS_FMT "' already used!", &currTok->as.symbol);
-          // TODO: Maybe provide additional error informations, so the normal parser will not get executed.
           return false;
         }
       }
 
+      // Add the argument.
       node_func_definition_args_append(arena, &funcArgs, currTok->as.symbol);
     }
     else if (tok_is_specific_literal(currTok, CLT_COMMA))
       continue;
     else
       break;
-  } while (lex_next_in_range(lexer, index));
+  } while (!tok_is_end(currTok) || lex_next_in_range(lexer, index));
 
-  if (!lex_next_in_range(lexer, index))
+  if (tok_is_end(currTok) || !lex_next_in_range(lexer, index))
   {
     S_ERROR(currTok->cursor, "Invalid function definition! Expected at least a closing paren, then an assignment and then an expression.");
     return false;
@@ -517,7 +536,12 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
     return false;
   }
 
-  token_t *assignTok = lex_at(lexer, ++index);
+  ++index;
+
+  token_t *assignTok = lex_at(lexer, index);
+
+  if (tok_is_end(assignTok))
+    return false;
 
   if (!tok_is_specific_literal(assignTok, CLT_EQUALS))
     return false;
@@ -529,7 +553,8 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
   }
 
   ++index;
-  node_t *value = parser_execute(arena, lexer, &index);
+
+  node_t *value = parser_execute_ex(arena, lexer, &index);
   if (!value)
   {
     S_ERROR(assignTok->cursor, "After a variable assignment must be a valid expression");
@@ -690,7 +715,6 @@ static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer, size_t *index)
 }
 
 // TODO: Implement proper precedence handling!
-// TODO: Maybe implement nested paren handling and functions!
 static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *index, size_t *depth)
 {
   ASSERT_NULL(arena);
@@ -707,15 +731,22 @@ static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *index, si
   if (!lex_in_range(lexer, *index))
     return NULL;
 
-  // TODO: Implement!
-  node_t *lhs = try_parse_func(arena, lexer, index, depth);
+  node_t *lhs = NULL;
 
-  // TODO: Implement!
-  // if (!lhs)
-  //   lhs = try_parse_paren(arena, lexer, index, depth);
+  lhs = try_parse_func(arena, lexer, index, depth);
 
   if (!lhs)
+    lhs = try_parse_paren(arena, lexer, index, depth);
+
+  if (!lhs)
+  {
     lhs = try_parse_constant(arena, lexer, index);
+
+    if (!lex_next_in_range(lexer, *index))
+      return lhs;
+
+    ++(*index);
+  }
 
   if (!lhs)
   {
@@ -723,17 +754,12 @@ static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *index, si
     return NULL;
   }
 
-  if (!lex_next_in_range(lexer, *index))
-    return lhs;
-
-  ++(*index);
-
   token_t *opToken = lex_at(lexer, *index);
 
   if (tok_is_end(opToken))
     return lhs;
 
-  // TODO: Rethink!
+  // Used for ending the paren or function parsing.
   if (depth != 0 && (tok_is_paren(opToken, PT_CPAREN) || tok_is_specific_literal(opToken, CLT_COMMA)))
     return lhs;
 
@@ -747,14 +773,17 @@ static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *index, si
 
   ++(*index);
 
+  // Try to parse the next operator.
   node_t *rhs = try_parse_binop(arena, lexer, index, depth);
   if (!rhs)
+  {
+    S_ERROR(opToken->cursor, "Invalid symbol found after operator!");
     return NULL;
+  }
 
   return node_binop(arena, opToken->cursor, op, lhs, rhs);
 }
 
-// TODO: Implement!
 static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *index, size_t *depth)
 {
   ASSERT_NULL(arena);
@@ -810,7 +839,7 @@ static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *index, si
   return node_paren(arena, tokOParen->cursor, arg);
 }
 
-// TODO: Implement!
+// TODO: Handle user defined functions!
 static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *index, size_t *depth)
 {
   ASSERT_NULL(arena);
@@ -829,7 +858,6 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *index, siz
   if (!tok_is(funcNameTok, TT_SYMBOL))
     return NULL;
 
-  // TODO: Handle user defined functions!
   // Checks if the symbol is a valid function name.
   e_function_type ft = ss_to_function_type(&funcNameTok->as.symbol);
   if (ft == FT_INVALID)
@@ -882,17 +910,6 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *index, siz
     node_func_args_append(arena, &argsList, arg);
   } while (!tok_is_end(nextTok) && !tok_is_paren(nextTok, PT_CPAREN) && tok_is_specific_literal(nextTok, CLT_COMMA));
 
-  // Next token must be an open paren.
-  // if (!lex_next_in_range(lexer, *index))
-  // {
-  //   S_ERROR(nextTok->cursor, "Expected a closing paren!");
-  //   return NULL;
-  // }
-
-  // ++(*index);
-
-  // nextTok = lex_at(lexer, *index);
-
   if (tok_is_end(nextTok) || tok_not_specific_paren(nextTok, PT_CPAREN))
   {
     S_ERROR(nextTok->cursor, "Expected a closing paren!");
@@ -904,32 +921,27 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *index, siz
   return node_func(arena, funcNameTok->cursor, ft, argsList);
 }
 
-// TODO:
-// Order checking: Brackets -> Exponents -> Multiplication / Division -> Addition / Substraction
-// A stack for checking nested expressions in brackets. Also if the brackets are used correctly.
-// Paren checking: 2 Open '(' should have 2 Closing ')' after.
-// After a constant / number MUST come an operator or closing paren
-
+// TODO: Order checking. Brackets -> Exponents -> Multiplication / Division -> Addition / Substraction
+// TODO: Remove index, use internal lexer cursor
 // IN: "EN + 5 / (5 * 0)"
 // AST: "add(EN, divide(5, paren(mult(5, 0))))"
-// TODO: Remove index, use internal lexer cursor
-node_t *parser_execute(arena_t *arena, lexer_t *lexer, size_t *index)
+node_t *parser_execute_ex(arena_t *arena, lexer_t *lexer, size_t *index)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
 
-  if (!lex_valid(lexer) ||
-      !lex_in_range(lexer, *index))
+  if (!lex_valid(lexer) || !lex_in_range(lexer, *index))
   {
     fprintf(stderr, "ERROR: Lexer invalid! (index=%zu, count=%zu)\n", *index, lexer->count);
     return NULL;
   }
 
+  token_t *currTok = lex_at(lexer, *index);
+
   // These are end tokens signaling that a specific end is reached at the current index.
-  if (tok_is_end(lex_at(lexer, *index)))
+  if (tok_is_end(currTok))
     return NULL;
 
-  // TODO: Rethink! Should handle nesting.
   size_t depth = 0;
 
   node_t *root = try_parse_binop(arena, lexer, index, &depth);
@@ -938,6 +950,12 @@ node_t *parser_execute(arena_t *arena, lexer_t *lexer, size_t *index)
     UNREACHABLE("Paren parsing failed!");
 
   return root;
+}
+
+node_t *parser_execute(arena_t *arena, lexer_t *lexer)
+{
+  size_t index = 0;
+  return parser_execute_ex(arena, lexer, &index);
 }
 
 double node_constant_to_value(arena_t *arena, node_variable_stack_t *vs, node_t *node, bool *isError)
@@ -1004,7 +1022,7 @@ double node_constant_to_value(arena_t *arena, node_variable_stack_t *vs, node_t 
 
 node_t *ast_eval_binop(arena_t *arena, node_variable_stack_t *vs, size_t cursor, node_t *lhs, node_t *rhs, e_operator_type op)
 {
-  bool isError;
+  bool isError = false;
 
   double left = node_constant_to_value(arena, vs, lhs, &isError);
   if (isError)
@@ -1364,7 +1382,6 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
       if (mc == MC_INVALID)
         UNREACHABLE("Invalid math constant type!");
 
-      // TODO: Rethink!
       if (node->as.constant.hasPreMinus)
         printf("%s (-" DOUBLE_PRINT_FORMAT ", %s)", mathConstantTypeIdentifiers[mc], mathConstantTypeValues[mc], mathConstantTypeNames[mc]);
       else
@@ -1428,12 +1445,14 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
 
     if (args->count == 1)
     {
-      bool isArgTypeConst = args->items[0]->type == NT_CONSTANT;
+      node_t *arg = args->items[0];
+
+      bool isArgTypeConst = arg->type == NT_CONSTANT && arg->as.constant.type != CN_VARIABLE;
 
       if (indented && !isArgTypeConst)
         printf("\n");
 
-      print_node_ex(vs, args->items[0], indented, !isArgTypeConst ? depth + 1 : 0);
+      print_node_ex(vs, arg, indented, !isArgTypeConst ? depth + 1 : 0);
 
       if (indented && !isArgTypeConst)
         printf("\n");
@@ -1462,16 +1481,19 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
   }
   case NT_PAREN:
   {
+    node_paren_t *parenNode = &node->as.paren;
+    node_t *arg = parenNode->arg;
+
     _PRINT_DEPTH_SPACES(indented, depth);
 
     printf("paren(");
 
-    bool isArgTypeConst = node->as.paren.arg->type == NT_CONSTANT;
+    bool isArgTypeConst = arg->type == NT_CONSTANT && arg->as.constant.type != CN_VARIABLE;
 
     if (indented && !isArgTypeConst)
       printf("\n");
 
-    print_node_ex(vs, node->as.paren.arg, indented, !isArgTypeConst ? depth + 1 : 0);
+    print_node_ex(vs, arg, indented, !isArgTypeConst ? depth + 1 : 0);
 
     if (indented && !isArgTypeConst)
       printf("\n");

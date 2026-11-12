@@ -50,6 +50,9 @@ check3: $(EXE)
 check4: $(EXE)
 	valgrind -s --leak-check=full --track-origins=yes --show-leak-kinds=all $^ test -v
 
+check5: $(EXE)
+	valgrind -s --leak-check=full --track-origins=yes --show-leak-kinds=all $^ system-test -v
+
 test1: $(EXE)
 	$^ test -v
 	

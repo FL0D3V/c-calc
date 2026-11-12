@@ -149,14 +149,6 @@ const char *mathConstantTypeNames[MC_COUNT] = {
     [MC_GAUSS_CONSTANT] = "Gauss's constant",
 };
 
-bool ss_in_math_constants(string_slice_t *name)
-{
-  for (size_t i = 0; i < MC_COUNT; ++i)
-    if (strncmp(mathConstantTypeIdentifiers[i], name->src, strlen(mathConstantTypeIdentifiers[i])) == 0)
-      return true;
-  return false;
-}
-
 e_math_constant_type cstr_to_math_constant_type_ex(const char *cstr, size_t len)
 {
   if (!cstr || len == 0)
@@ -176,14 +168,33 @@ e_math_constant_type cstr_to_math_constant_type(const char *cstr)
     return MC_INVALID;
 
   for (size_t i = 0; i < MC_COUNT; ++i)
-    if (strcmp(cstr, mathConstantTypeIdentifiers[i]) == 0)
+    if (strlen(cstr) == strlen(mathConstantTypeIdentifiers[i]) &&
+        strcmp(cstr, mathConstantTypeIdentifiers[i]) == 0)
       return (e_math_constant_type)i;
 
   return MC_INVALID;
 }
 
-#define cstr_is_math_constant(cstr) (cstr_to_math_constant_type(cstr) != MC_INVALID)
+e_math_constant_type ss_to_math_constant(string_slice_t *name)
+{
+  if (!name || name->len == 0)
+    return MC_INVALID;
+
+  for (size_t i = 0; i < MC_COUNT; ++i)
+    if (name->len == strlen(mathConstantTypeIdentifiers[i]) &&
+        strncmp(name->src, mathConstantTypeIdentifiers[i], name->len) == 0)
+      return (e_math_constant_type)i;
+
+  return MC_INVALID;
+}
+
+bool ss_in_math_constants(string_slice_t *name)
+{
+  return ss_to_math_constant(name) != MC_INVALID;
+}
+
 #define cstr_is_math_constant_ex(cstr, len) (cstr_to_math_constant_type_ex(cstr, len) != MC_INVALID)
+#define cstr_is_math_constant(cstr) (cstr_to_math_constant_type(cstr) != MC_INVALID)
 
 // TODO: Implement parameter count for each function to support multiple arguments.
 typedef enum
@@ -299,7 +310,8 @@ e_function_type cstr_to_function_type(const char *cstr)
     return FT_INVALID;
 
   for (size_t i = 0; i < FT_COUNT; ++i)
-    if (strcmp(cstr, functionTypeIdentifiers[i]) == 0)
+    if (strlen(cstr) == strlen(functionTypeIdentifiers[i]) &&
+        strcmp(cstr, functionTypeIdentifiers[i]) == 0)
       return (e_function_type)i;
 
   return FT_INVALID;
@@ -307,26 +319,23 @@ e_function_type cstr_to_function_type(const char *cstr)
 
 e_function_type ss_to_function_type(string_slice_t *name)
 {
-  if (!name)
+  if (!name || name->len == 0)
     return FT_INVALID;
+
   for (size_t i = 0; i < FT_COUNT; ++i)
-    if (strncmp(name->src, functionTypeIdentifiers[i], name->len) == 0)
+    if (name->len == strlen(functionTypeIdentifiers[i]) &&
+        strncmp(name->src, functionTypeIdentifiers[i], name->len) == 0)
       return (e_function_type)i;
   return FT_INVALID;
 }
 
 bool ss_in_function_types(string_slice_t *name)
 {
-  if (!name)
-    return false;
-  for (size_t i = 0; i < FT_COUNT; ++i)
-    if (strncmp(name->src, functionTypeIdentifiers[i], name->len) == 0)
-      return true;
-  return false;
+  return ss_to_function_type(name) != FT_INVALID;
 }
 
-#define cstr_is_function(cstr) (cstr_to_function_type(cstr) != FT_INVALID)
 #define cstr_is_function_ex(cstr, len) (cstr_to_function_type_ex(cstr, len) != FT_INVALID)
+#define cstr_is_function(cstr) (cstr_to_function_type(cstr) != FT_INVALID)
 
 typedef enum
 {
@@ -760,10 +769,11 @@ lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
   ASSERT_NULL(tokenizer);
 
   lexer_t lexer = {0};
+  input_token_t *currentToken = NULL;
 
   for (size_t i = 0; i < tokenizer->count; ++i)
   {
-    const input_token_t *currentToken = &tokenizer->items[i];
+    currentToken = &tokenizer->items[i];
 
     // Check for new line
     if (cstr_is_new_line_ex(currentToken->value, currentToken->length))
@@ -847,7 +857,11 @@ lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
   }
 
   // Add the eof token at the end
-  add_eof_token(arena, &lexer, tokenizer->count);
+  size_t endCursor = 0;
+  if (currentToken != NULL)
+    endCursor = currentToken->cursor + 1;
+
+  add_eof_token(arena, &lexer, endCursor);
 
   return lexer;
 }
