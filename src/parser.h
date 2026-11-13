@@ -6,6 +6,8 @@
 #define _G_ERROR_NAME "ERROR"
 #define _S_ERROR_NAME "SEMANTIC-ERROR"
 #define _E_ERROR_NAME "EVALUATION-ERROR"
+#define _PARSER_ERROR_EX(type, cursor, message, arg) \
+  fprintf(stderr, type ":%zu: " message "\n", cursor, arg)
 #define _PARSER_ERROR(type, cursor, message) \
   fprintf(stderr, type ":%zu: %s\n", cursor, message)
 #define _PARSER_ERROR_SS(type, cursor, message, ss) \
@@ -14,6 +16,7 @@
   fprintf(stderr, _G_ERROR_NAME ": %s\n", message)
 #define S_ERROR(cursor, message) _PARSER_ERROR(_S_ERROR_NAME, cursor, message)
 #define S_ERROR_SS(cursor, message, ss) _PARSER_ERROR_SS(_S_ERROR_NAME, cursor, message, ss)
+#define E_ERROR_EX(cursor, message, arg) _PARSER_ERROR_EX(_E_ERROR_NAME, cursor, message, arg)
 #define E_ERROR(cursor, message) _PARSER_ERROR(_E_ERROR_NAME, cursor, message)
 #define E_ERROR_SS(cursor, message, ss) _PARSER_ERROR_SS(_E_ERROR_NAME, cursor, message, ss)
 
@@ -1158,7 +1161,7 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
     {
       if (expr->as.func.args.count != 1)
       {
-        E_ERROR(expr->cursor, "sqrt() takes one argument!");
+        E_ERROR_EX(expr->cursor, "%s() takes one argument!", functionTypeIdentifiers[expr->as.func.type]);
         return NULL;
       }
       node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
@@ -1173,7 +1176,7 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
     {
       if (expr->as.func.args.count != 1)
       {
-        E_ERROR(expr->cursor, "exp() takes one argument!");
+        E_ERROR_EX(expr->cursor, "%s() takes one argument!", functionTypeIdentifiers[expr->as.func.type]);
         return NULL;
       }
       node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
@@ -1188,7 +1191,7 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
     {
       if (expr->as.func.args.count != 1)
       {
-        E_ERROR(expr->cursor, "sin() takes one argument!");
+        E_ERROR_EX(expr->cursor, "%s() takes one argument!", functionTypeIdentifiers[expr->as.func.type]);
         return NULL;
       }
       node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
@@ -1203,7 +1206,7 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
     {
       if (expr->as.func.args.count != 1)
       {
-        E_ERROR(expr->cursor, "asin() takes one argument!");
+        E_ERROR_EX(expr->cursor, "%s() takes one argument!", functionTypeIdentifiers[expr->as.func.type]);
         return NULL;
       }
       node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
@@ -1218,7 +1221,7 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
     {
       if (expr->as.func.args.count != 1)
       {
-        E_ERROR(expr->cursor, "sinh() takes one argument!");
+        E_ERROR_EX(expr->cursor, "%s() takes one argument!", functionTypeIdentifiers[expr->as.func.type]);
         return NULL;
       }
       node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
@@ -1233,7 +1236,7 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
     {
       if (expr->as.func.args.count != 1)
       {
-        E_ERROR(expr->cursor, "cos() takes one argument!");
+        E_ERROR_EX(expr->cursor, "%s() takes one argument!", functionTypeIdentifiers[expr->as.func.type]);
         return NULL;
       }
       node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
@@ -1248,7 +1251,7 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
     {
       if (expr->as.func.args.count != 1)
       {
-        E_ERROR(expr->cursor, "acos() takes one argument!");
+        E_ERROR_EX(expr->cursor, "%s() takes one argument!", functionTypeIdentifiers[expr->as.func.type]);
         return NULL;
       }
       node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
@@ -1263,7 +1266,7 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
     {
       if (expr->as.func.args.count != 1)
       {
-        E_ERROR(expr->cursor, "cosh() takes one argument!");
+        E_ERROR_EX(expr->cursor, "%s() takes one argument!", functionTypeIdentifiers[expr->as.func.type]);
         return NULL;
       }
       node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
@@ -1278,7 +1281,7 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
     {
       if (expr->as.func.args.count != 1)
       {
-        E_ERROR(expr->cursor, "tanh() takes one argument!");
+        E_ERROR_EX(expr->cursor, "%s() takes one argument!", functionTypeIdentifiers[expr->as.func.type]);
         return NULL;
       }
       node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
@@ -1293,7 +1296,7 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
     {
       if (expr->as.func.args.count != 1)
       {
-        E_ERROR(expr->cursor, "atan() takes one argument!");
+        E_ERROR_EX(expr->cursor, "%s() takes one argument!", functionTypeIdentifiers[expr->as.func.type]);
         return NULL;
       }
       node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
@@ -1308,7 +1311,7 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
     {
       if (expr->as.func.args.count != 1)
       {
-        E_ERROR(expr->cursor, "tanh() takes one argument!");
+        E_ERROR_EX(expr->cursor, "%s() takes one argument!", functionTypeIdentifiers[expr->as.func.type]);
         return NULL;
       }
       node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
@@ -1323,7 +1326,7 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
     {
       if (expr->as.func.args.count != 2)
       {
-        E_ERROR(expr->cursor, "atan2() takes two arguments!");
+        E_ERROR_EX(expr->cursor, "%s() takes two arguments!", functionTypeIdentifiers[expr->as.func.type]);
         return NULL;
       }
       node_t *arg1 = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
@@ -1344,7 +1347,7 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
     {
       if (expr->as.func.args.count != 1)
       {
-        E_ERROR(expr->cursor, "ln() takes one argument!");
+        E_ERROR_EX(expr->cursor, "%s() takes one argument!", functionTypeIdentifiers[expr->as.func.type]);
         return NULL;
       }
       node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
@@ -1359,7 +1362,7 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
     {
       if (expr->as.func.args.count != 1)
       {
-        E_ERROR(expr->cursor, "log10() takes one argument!");
+        E_ERROR_EX(expr->cursor, "%s() takes one argument!", functionTypeIdentifiers[expr->as.func.type]);
         return NULL;
       }
       node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
