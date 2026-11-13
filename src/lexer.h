@@ -4,10 +4,13 @@
 #include <arena.h>
 #include <stringslice.h>
 #include <chelpers.h>
+#include <ctype.h>
 
 #define T_ERROR_NAME "TOKENIZATION-ERROR"
 #define T_ERROR_NO_INPUT_GIVEN() \
   fprintf(stderr, T_ERROR_NAME ": No input given!\n")
+#define T_ERROR_TOKENIZATION_FAILED() \
+  fprintf(stderr, T_ERROR_NAME ": Tokenization failed!\n")
 #define T_ERROR_GIVEN_TOKENIZER_INVALID() \
   fprintf(stderr, T_ERROR_NAME ": Can't print the tokenizer because an error happend!\n")
 
@@ -514,6 +517,8 @@ static bool next_identifier(arena_t *arena, string_slice_t *ss, tokenizer_t *tok
     if (isspace(current) || c_is_literal(current))
       break;
 
+    // TODO: Maybe check that only ascii and valid numbers (like '10' or '5.52') will get parsed here.
+
     ++length;
     ss_seek(ss);
   } while (ss_in_range(ss));
@@ -586,7 +591,7 @@ tokenizer_t tokenizer_execute(arena_t *arena, const char *input)
       continue;
 
     // Error
-    UNREACHABLE_MSG("Unhandled character!");
+    T_ERROR_TOKENIZATION_FAILED();
     tokenizer.isError = true;
     break;
   }
@@ -721,10 +726,20 @@ typedef struct
 #define tok_is_eof(tok) (tok_is(tok, TT_EOF))
 #define tok_is_end(tok) (tok_is_eol(tok) || tok_is_eof(tok))
 
+typedef bool (*lex_comparator_func)(token_t *token, size_t cursor);
+
 bool lex_is_valid(lexer_t *lexer)
 {
   assert(lexer);
   return !lexer->isError && lexer->count > 0 && lex_in_range(lexer, lexer->cursor);
+}
+
+void lex_cursor_to(lexer_t *lexer, size_t cursor)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  lexer->cursor = cursor;
+  assert(lex_is_valid(lexer));
 }
 
 bool lex_at_eol(lexer_t *lexer)
@@ -822,12 +837,56 @@ token_t *lex_seek(lexer_t *lexer)
   return lex_at(lexer, lexer->cursor);
 }
 
+// Seeks till eof or the comparator with the return value 'true'.
+void lex_seek_till_or_eof(lexer_t *lexer, lex_comparator_func comparator)
+{
+  while (!lex_at_eof(lexer) && !comparator(lex_current(lexer), lex_current_cursor(lexer)))
+    lex_seek(lexer);
+}
+
+// Seeks till eol or eof or the comparator with the return value 'true'.
+void lex_seek_till_or_end(lexer_t *lexer, lex_comparator_func comparator)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  while (!lex_at_end(lexer) && !comparator(lex_current(lexer), lex_current_cursor(lexer)))
+    lex_seek(lexer);
+}
+
+// Seeks till eol or eof.
+void lex_seek_till_end(lexer_t *lexer)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  while (!lex_at_end(lexer))
+    lex_seek(lexer);
+}
+
+void lex_reset(lexer_t *lexer)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  lex_cursor_to(lexer, 0);
+}
+
 void lex_reset_to_start_of_line(lexer_t *lexer)
 {
   assert(lexer);
   assert(lex_is_valid(lexer));
   while (!lex_at_start_of_line(lexer))
     lexer->cursor--;
+}
+
+bool lex_contains_in_current_line(lexer_t *lexer, lex_comparator_func comparator)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  size_t currCursor = lexer->cursor;
+  lex_reset_to_start_of_line(lexer);
+  lex_seek_till_or_end(lexer, comparator);
+  bool res = !lex_at_end(lexer);
+  lex_cursor_to(lexer, currCursor);
+  return res;
 }
 
 lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)

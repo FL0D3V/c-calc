@@ -366,7 +366,7 @@ static bool vs_check_variable_name_errors(node_variable_stack_t *vs, string_slic
 
 static bool try_parse_const_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer);
 static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer);
-bool parse_node_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer);
+bool parse_node_variables(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer);
 void print_variable_stack(node_variable_stack_t *vs, bool showValue, bool indented);
 
 static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer);
@@ -401,10 +401,7 @@ static bool try_parse_const_variable(node_variable_stack_t *vs, arena_t *arena, 
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
 
-  if (!lex_is_valid(lexer))
-    return false;
-
-  if (!lex_at_start_of_line(lexer))
+  if (!lex_is_valid(lexer) || !lex_at_start_of_line(lexer))
     return false;
 
   token_t *varNameTok = lex_current(lexer);
@@ -417,10 +414,7 @@ static bool try_parse_const_variable(node_variable_stack_t *vs, arena_t *arena, 
 
   token_t *assignTok = lex_seek(lexer);
 
-  if (lex_at_end(lexer))
-    return false;
-
-  if (!tok_is_specific_literal(assignTok, CLT_EQUALS))
+  if (lex_at_end(lexer) || tok_not_specific_literal(assignTok, CLT_EQUALS))
     return false;
 
   if (!lex_can_peek(lexer))
@@ -454,10 +448,7 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
 
-  if (!lex_is_valid(lexer))
-    return false;
-
-  if (!lex_at_start_of_line(lexer))
+  if (!lex_is_valid(lexer) || !lex_at_start_of_line(lexer))
     return false;
 
   token_t *varNameTok = lex_current(lexer);
@@ -470,24 +461,36 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
 
   token_t *oParenTok = lex_seek(lexer);
 
-  if (lex_at_end(lexer))
-    return false;
-
-  if (!tok_is_specific_paren(oParenTok, PT_OPAREN))
+  if (lex_at_end(lexer) || tok_not_specific_paren(oParenTok, PT_OPAREN))
     return false;
 
   if (!lex_can_peek(lexer))
   {
-    S_ERROR(oParenTok->cursor, "Expected at least one function argument name and then a closing paren and an assigned expression!");
+    S_ERROR(oParenTok->cursor, "Expected at least one function argument name!");
     return false;
   }
 
   node_func_definition_args_t funcArgs = {0};
   token_t *currTok = NULL;
+  token_t *lastTok = NULL;
 
   do
   {
+    lastTok = currTok;
+
     currTok = lex_seek(lexer);
+
+    if (!lastTok && tok_is_specific_literal(currTok, CLT_COMMA))
+    {
+      S_ERROR(currTok->cursor, "Expected a name!");
+      return false;
+    }
+
+    if (lastTok && tok_is_specific_literal(lastTok, CLT_COMMA) && tok_is_specific_literal(currTok, CLT_COMMA))
+    {
+      S_ERROR(currTok->cursor, "Expected a name!");
+      return false;
+    }
 
     if (lex_at_end(lexer))
       return false;
@@ -504,24 +507,37 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
         }
       }
 
-      // Add the argument.
+      // Add the argument if valid.
       node_func_definition_args_append(arena, &funcArgs, currTok->as.symbol);
     }
     else if (tok_is_specific_literal(currTok, CLT_COMMA))
       continue;
-    else
+    else if (tok_is_specific_paren(currTok, PT_CPAREN))
       break;
+    else
+    {
+      S_ERROR(currTok->cursor, "Unexpected token!");
+      return false;
+    }
   } while (!lex_at_end(lexer));
 
-  if (lex_at_end(lexer))
+  if (lastTok && tok_is_specific_literal(lastTok, CLT_COMMA))
   {
-    S_ERROR(currTok->cursor, "Invalid function definition! Expected at least a closing paren, then an assignment and then an expression.");
+    S_ERROR(currTok->cursor, "Expected a name!");
     return false;
   }
 
-  if (!tok_is_specific_paren(currTok, PT_CPAREN))
+  // TODO: Maybe bug! Test if the function can have 0 args currently!
+
+  if (lex_at_end(lexer) || tok_not_specific_paren(currTok, PT_CPAREN))
   {
     S_ERROR(currTok->cursor, "Expected a closing paren, then an assignment and then an expression!");
+    return false;
+  }
+
+  if (funcArgs.count <= 0)
+  {
+    S_ERROR(currTok->cursor, "Expected at least one function argument!");
     return false;
   }
 
@@ -533,10 +549,7 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
 
   token_t *assignTok = lex_seek(lexer);
 
-  if (lex_at_end(lexer))
-    return false;
-
-  if (!tok_is_specific_literal(assignTok, CLT_EQUALS))
+  if (lex_at_end(lexer) || tok_not_specific_literal(assignTok, CLT_EQUALS))
     return false;
 
   if (!lex_can_peek(lexer))
@@ -564,7 +577,13 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
   return true;
 }
 
-bool parse_node_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer)
+static inline bool contains_equals(token_t *token, size_t cursor)
+{
+  (void)cursor;
+  return tok_is_specific_literal(token, CLT_EQUALS);
+}
+
+bool parse_node_variables(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer)
 {
   ASSERT_NULL(vs);
   ASSERT_NULL(arena);
@@ -573,28 +592,44 @@ bool parse_node_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lex
   if (!lex_is_valid(lexer))
     return true;
 
-  bool shouldExecuteVarParsing = false;
+  lex_reset(lexer);
 
-  // TODO: Handle multiline handling
-  for (size_t i = 0; i < lexer->count; ++i)
+  while (!lex_at_eof(lexer))
   {
-    token_t *token = lex_at(lexer, i);
-    if (tok_is_end(token))
-      break;
-    if (tok_is_specific_literal(token, CLT_EQUALS))
-      shouldExecuteVarParsing = true;
-  }
+    // Not really needed propably.
+    if (!lex_contains_in_current_line(lexer, contains_equals))
+    {
+      lex_seek_till_end(lexer);
 
-  if (!shouldExecuteVarParsing)
-    return true;
+      // Seek to the next line if possible.
+      if (!lex_at_eof(lexer))
+        lex_seek(lexer);
 
-  lex_reset_to_start_of_line(lexer);
-  if (!try_parse_const_variable(vs, arena, lexer))
-  {
+      continue;
+    }
+
+    if (try_parse_const_variable(vs, arena, lexer))
+    {
+      // Seek to the next line if possible.
+      if (!lex_at_eof(lexer))
+        lex_seek(lexer);
+
+      continue;
+    }
+
     lex_reset_to_start_of_line(lexer);
-    return try_parse_func_variable(vs, arena, lexer);
+
+    if (!try_parse_func_variable(vs, arena, lexer))
+      lex_seek_till_end(lexer);
+
+    // Seek to the next line if possible.
+    if (!lex_at_eof(lexer))
+      lex_seek(lexer);
   }
-  return true;
+
+  lex_reset(lexer);
+
+  return vs->count > 0;
 }
 
 void print_variable_stack(node_variable_stack_t *vs, bool showValue, bool indented)
@@ -709,8 +744,10 @@ static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer)
     found = true;
   }
 
-  if (found)
-    lex_seek(lexer);
+  if (!found)
+    return NULL;
+
+  lex_seek(lexer);
 
   return node_constant(arena, token->cursor, constant);
 }
@@ -731,7 +768,9 @@ static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *depth)
   if (lex_at_end(lexer))
     return NULL;
 
-  node_t *lhs = try_parse_func(arena, lexer, depth);
+  node_t *lhs = NULL;
+  if (!lhs)
+    lhs = try_parse_func(arena, lexer, depth);
   if (!lhs)
     lhs = try_parse_paren(arena, lexer, depth);
   if (!lhs)
@@ -739,7 +778,7 @@ static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *depth)
 
   if (!lhs)
   {
-    S_ERROR(lex_current_cursor(lexer), "Expected a constant value!");
+    S_ERROR(lex_current(lexer)->cursor, "Parsing failed!");
     return NULL;
   }
 
@@ -811,7 +850,13 @@ static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *depth)
 
   node_t *arg = try_parse_binop(arena, lexer, depth);
   if (!arg)
+  {
+    S_ERROR(token->cursor, "Expected an argument!");
+
+    --(*depth);
+
     return NULL;
+  }
 
   --(*depth);
 
@@ -857,25 +902,54 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *depth)
   if (!lex_can_peek(lexer))
     return NULL;
 
-  token_t *nextTok = lex_seek(lexer);
+  token_t *oParenTok = lex_seek(lexer);
 
-  if (lex_at_end(lexer) || tok_not_specific_paren(nextTok, PT_OPAREN))
+  if (lex_at_end(lexer) || tok_not_specific_paren(oParenTok, PT_OPAREN))
     return NULL;
 
+  if (!lex_can_peek(lexer))
+  {
+    S_ERROR(oParenTok->cursor, "Expected at least one function argument!");
+    return NULL;
+  }
+
   node_func_args_t argsList = {0};
+  token_t *currTok = NULL;
+  token_t *lastTok = NULL;
 
   do
   {
-    if (!lex_can_peek(lexer))
-      return NULL;
+    lastTok = currTok;
 
-    token_t *lastTok = nextTok;
-
-    nextTok = lex_seek(lexer);
+    currTok = lex_seek(lexer);
 
     if (lex_at_end(lexer))
     {
-      S_ERROR(lastTok->cursor, "Expected a valid function!");
+      S_ERROR(funcNameTok->cursor, "Expected a valid function!");
+      return NULL;
+    }
+
+    if (!lastTok && tok_is_specific_literal(currTok, CLT_COMMA))
+    {
+      S_ERROR(currTok->cursor, "Expected a function argument!");
+      return false;
+    }
+
+    if (lastTok && tok_is_specific_literal(lastTok, CLT_COMMA) && tok_is_specific_literal(currTok, CLT_COMMA))
+    {
+      S_ERROR(currTok->cursor, "Expected a function argument!");
+      return false;
+    }
+
+    if (lastTok && tok_is_specific_paren(currTok, PT_CPAREN) && tok_is_specific_literal(lastTok, CLT_COMMA))
+    {
+      S_ERROR(currTok->cursor, "Expected a function argument!");
+      return false;
+    }
+
+    if (!lastTok && tok_is_specific_paren(currTok, PT_CPAREN))
+    {
+      S_ERROR(currTok->cursor, "Expected a function argument!");
       return NULL;
     }
 
@@ -884,21 +958,25 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *depth)
     node_t *arg = try_parse_binop(arena, lexer, depth);
     if (!arg)
     {
-      S_ERROR(nextTok->cursor, "Expected at least one function argument!");
+      S_ERROR(currTok->cursor, "Expected a function argument!");
+
+      --(*depth);
+
       return NULL;
     }
 
     --(*depth);
 
-    nextTok = lex_current(lexer);
+    currTok = lex_current(lexer);
+    lastTok = currTok;
 
     // Add argument to list.
     node_func_args_append(arena, &argsList, arg);
-  } while (!lex_at_end(lexer) && !tok_is_specific_paren(nextTok, PT_CPAREN) && tok_is_specific_literal(nextTok, CLT_COMMA));
+  } while (!lex_at_end(lexer) && tok_not_specific_paren(currTok, PT_CPAREN) && tok_is_specific_literal(currTok, CLT_COMMA));
 
-  if (lex_at_end(lexer) || tok_not_specific_paren(nextTok, PT_CPAREN))
+  if (lex_at_end(lexer) || tok_not_specific_paren(currTok, PT_CPAREN))
   {
-    S_ERROR(nextTok->cursor, "Expected a closing paren!");
+    S_ERROR(currTok->cursor, "Expected a closing paren!");
     return NULL;
   }
 
@@ -1574,12 +1652,12 @@ bool execute_test(arena_t *arena, node_variable_stack_t *vs, node_test_t *test, 
   if (verbose)
   {
     printf("\n");
-    printf("Internal tree:");
+    printf("Internal tree:\n");
     printf("\n");
     print_node(vs, test->expressionTree, indented);
     printf("\n");
 
-    printf("Generated tree:");
+    printf("Generated tree:\n");
     printf("\n");
     print_node(vs, generatedTree, indented);
     printf("\n");
