@@ -29,7 +29,7 @@
   {                                          \
     if (indented)                            \
       for (size_t i = 0; i < (depth); ++i)   \
-        printf(" ");                         \
+        printf(" - ");                       \
   } while (0)
 
 typedef enum
@@ -151,6 +151,8 @@ struct node
 // Creating new nodes
 static node_t *base_node(arena_t *arena, size_t cursor, e_node_type type)
 {
+  ASSERT_NULL(arena);
+  assert(type < NT_COUNT);
   node_t *newNode = (node_t *)arena_alloc(arena, sizeof(node_t));
   *newNode = (node_t){
       .type = type,
@@ -161,6 +163,7 @@ static node_t *base_node(arena_t *arena, size_t cursor, e_node_type type)
 
 node_t *node_constant(arena_t *arena, size_t cursor, node_const_t constant)
 {
+  ASSERT_NULL(arena);
   node_t *node = base_node(arena, cursor, NT_CONSTANT);
   node->as.constant = constant;
   return node;
@@ -168,11 +171,19 @@ node_t *node_constant(arena_t *arena, size_t cursor, node_const_t constant)
 
 node_t *node_binop(arena_t *arena, size_t cursor, e_operator_type type, node_t *lhs, node_t *rhs)
 {
+  ASSERT_NULL(arena);
   assert(type < OP_COUNT);
+  ASSERT_NULL(lhs);
+  ASSERT_NULL(rhs);
   node_t *node = base_node(arena, cursor, NT_BINOP);
-  node->as.binop.type = type;
-  node->as.binop.lhs = lhs;
-  node->as.binop.rhs = rhs;
+  // node->as.binop.type = type;
+  // node->as.binop.lhs = lhs;
+  // node->as.binop.rhs = rhs;
+  node->as.binop = (node_binop_t){
+      .type = type,
+      .lhs = lhs,
+      .rhs = rhs,
+  };
   return node;
 }
 
@@ -279,6 +290,7 @@ node_variable_t *vs_find_variable_ex(node_variable_stack_t *vs, string_slice_t *
 {
   ASSERT_NULL(vs);
   ASSERT_NULL(name);
+  assert(mode < FVM_COUNT);
 
   for (size_t i = 0; i < vs->count; ++i)
   {
@@ -373,7 +385,7 @@ bool parse_node_variables(node_variable_stack_t *vs, arena_t *arena, lexer_t *le
 void print_variable_stack(node_variable_stack_t *vs, bool showValue, bool indented);
 
 static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer);
-static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *depth);
+static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *depth, e_precedence precedence);
 static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *depth);
 static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *depth);
 
@@ -386,7 +398,6 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr);
 
 typedef struct
 {
-  // TODO: Change to big number!
   double value;
   bool isError;
 } ast_eval_res_t;
@@ -529,8 +540,6 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
     S_ERROR(currTok->cursor, "Expected a name!");
     return false;
   }
-
-  // TODO: Maybe bug! Test if the function can have 0 args currently!
 
   if (lex_at_end(lexer) || tok_not_specific_paren(currTok, PT_CPAREN))
   {
@@ -680,7 +689,7 @@ void print_variable_stack(node_variable_stack_t *vs, bool showValue, bool indent
       return;
 
     printf(" =%s", indented ? "\n" : " ");
-    print_node_ex(vs, variable->expression, indented, 2);
+    print_node_ex(vs, variable->expression, indented, 1);
     printf("\n");
     if (indented && i < vs->count - 1)
       printf("\n");
@@ -755,8 +764,8 @@ static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer)
   return node_constant(arena, token->cursor, constant);
 }
 
-// TODO: Implement proper precedence handling!
-static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *depth)
+// TODO: Fix right associative ('pow') parsing!
+static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *depth, e_precedence precedence)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
@@ -772,11 +781,17 @@ static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *depth)
     return NULL;
 
   node_t *lhs = NULL;
-  if (!lhs)
+
+  if (precedence < BP_PRIMARY)
+    lhs = try_parse_binop(arena, lexer, depth, precedence + 1);
+
+  if (!lhs && precedence == BP_PRIMARY)
     lhs = try_parse_func(arena, lexer, depth);
-  if (!lhs)
+
+  if (!lhs && precedence == BP_PRIMARY)
     lhs = try_parse_paren(arena, lexer, depth);
-  if (!lhs)
+
+  if (!lhs && precedence == BP_PRIMARY)
     lhs = try_parse_constant(arena, lexer);
 
   if (!lhs)
@@ -802,10 +817,25 @@ static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *depth)
 
   e_operator_type op = opToken->as.op;
 
+  if (precedence < operatorPrecedence[op])
+    return lhs;
+
   lex_seek(lexer);
 
-  // Try to parse the next operator.
-  node_t *rhs = try_parse_binop(arena, lexer, depth);
+  node_t *rhs = NULL;
+
+  if (precedence < BP_PRIMARY)
+    rhs = try_parse_binop(arena, lexer, depth, precedence + 1);
+
+  if (!rhs && precedence == BP_PRIMARY)
+    rhs = try_parse_func(arena, lexer, depth);
+
+  if (!rhs && precedence == BP_PRIMARY)
+    rhs = try_parse_paren(arena, lexer, depth);
+
+  if (!rhs && precedence == BP_PRIMARY)
+    rhs = try_parse_constant(arena, lexer);
+
   if (!rhs)
   {
     S_ERROR(opToken->cursor, "Parsing failed!");
@@ -851,7 +881,7 @@ static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *depth)
 
   ++(*depth);
 
-  node_t *arg = try_parse_binop(arena, lexer, depth);
+  node_t *arg = try_parse_binop(arena, lexer, depth, BP_LINE);
   if (!arg)
   {
     S_ERROR(token->cursor, "Expected an argument!");
@@ -958,7 +988,7 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *depth)
 
     ++(*depth);
 
-    node_t *arg = try_parse_binop(arena, lexer, depth);
+    node_t *arg = try_parse_binop(arena, lexer, depth, BP_LINE);
     if (!arg)
     {
       S_ERROR(currTok->cursor, "Expected a function argument!");
@@ -988,8 +1018,6 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *depth)
   return node_func(arena, funcNameTok->cursor, ft, argsList);
 }
 
-// TODO: Order checking. Brackets -> Exponents -> Multiplication / Division -> Addition / Substraction
-// IN: "EN + 5 / (5 * 0)"
 // AST: "add(EN, divide(5, paren(mult(5, 0))))"
 node_t *parser_execute(arena_t *arena, lexer_t *lexer)
 {
@@ -1007,7 +1035,7 @@ node_t *parser_execute(arena_t *arena, lexer_t *lexer)
 
   size_t depth = 0;
 
-  node_t *root = try_parse_binop(arena, lexer, &depth);
+  node_t *root = try_parse_binop(arena, lexer, &depth, BP_LINE);
 
   if (depth != 0)
     UNREACHABLE("Paren parsing failed!");

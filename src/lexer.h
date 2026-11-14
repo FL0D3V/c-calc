@@ -48,13 +48,23 @@ const char operatorTypeIdentifiers[OP_COUNT] = {
     [OP_POW] = '^',
 };
 
-// TODO: Rethink if needed
-const int operatorPrecedence[OP_COUNT] = {
-    [OP_ADD] = 0,
-    [OP_SUB] = 0,
-    [OP_MUL] = 1,
-    [OP_DIV] = 1,
-    [OP_POW] = 2,
+// Primary (Brackets / Function / Constants) -> Exponents -> Point (Mult / Divide) -> Line (Add / Sub)
+typedef enum
+{
+  BP_LINE,
+  BP_POINT,
+  BP_EXPONENT,
+  BP_PRIMARY,
+
+  BP_COUNT,
+} e_precedence;
+
+const e_precedence operatorPrecedence[OP_COUNT] = {
+    [OP_ADD] = BP_LINE,
+    [OP_SUB] = BP_LINE,
+    [OP_MUL] = BP_POINT,
+    [OP_DIV] = BP_POINT,
+    [OP_POW] = BP_EXPONENT,
 };
 
 const bool operatorRightAssociative[OP_COUNT] = {

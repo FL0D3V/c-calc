@@ -10,6 +10,7 @@ OBJ_DIR	:= obj
 BIN_DIR	:= bin
 
 TEST_INPUT := "  100.53 + sqrt(3.5 - EN) + cos(44.23 *   6.4^2) /   8.3 + ln(10) - PI + ln(5^EC)"
+# TEST_INPUT := "100.53 + sqrt(3.5 - 0.5) + cos(44.23 * 6.4 ^ 2) / 8.3 + ln(10) - 3 + ln(5 ^ 1.2)"
 
 EXE := $(BIN_DIR)/$(TARGET)
 SRC := $(wildcard $(SRC_DIR)/*.c)
@@ -63,7 +64,7 @@ clean:
 	@$(RM) -rv $(BIN_DIR) $(OBJ_DIR)
 
 run: $(EXE)
-	./$(EXE) input -v $(TEST_INPUT)
+	./$(EXE) input -v -i $(TEST_INPUT)
 
 .PHONY: all check1 check2 check3 test1 test2 clean remake remakeDebug remakeRelease debug release run
 

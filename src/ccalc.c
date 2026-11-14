@@ -591,7 +591,7 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
                                            node_constant(&arena, 0, node_constant_value(44.23)),
                                            node_binop(&arena, 0, OP_POW,
                                                       node_constant(&arena, 0, node_constant_value(6.4)),
-                                                      node_constant(&arena, 0, node_constant_value(2))));
+                                                      node_constant(&arena, 0, node_constant_value(2.0))));
   node_func_args_append(&arena, &test3ArgsList2, test3ArgsList2Item1);
 
   node_func_args_t test3ArgsList3 = {0};
@@ -619,9 +619,6 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
   node_test_t tests[] = {
       // Test 1
       {
-          // IN: "1 + 2 + (PI ^ 2) / 3"
-          // AST: add(1.00000, add(2.00000, divide(paren(pow(3.14159, 2.00000)), 3.00000)))
-          // = 6.28986
           .input = "1 + 2 + (PI ^ 2) / 3",
           .expectedResult = 6.28986,
           .expressionTree = node_binop(&arena, 0, OP_ADD,
@@ -637,9 +634,6 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
       },
       // Test 2
       {
-          // IN: "100 + ln(10)"
-          // AST: add(100.0000, ln(10))
-          // = 102.30258
           .input = "100 + ln(10)",
           .expectedResult = 102.30258,
           .expressionTree = node_binop(&arena, 3, OP_ADD,
@@ -648,24 +642,73 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
       },
       // Test 3
       {
-          // IN: "100.53 + sqrt(3.5 - EN) + cos(44.23 * 6.4^2) / 8.3 + ln(10) - PI + ln(5^EC)"
-          // AST: add(100.53000, add(sqrt(substract(3.50000, 2.71828)), add(divide(acos(multiply(44.23000, pow(6.40000, 2.00000))), 8.30000), substract(ln(10.00000), add(3.14159, ln(pow(5.00000, 0.57722)))))))
-          // = 99.58497
           .input = "100.53 + sqrt(3.5 - EN) + cos(44.23 * 6.4^2) / 8.3 + ln(10) - PI + ln(5^EC)",
-          .expectedResult = 99.58497,
+          .expectedResult = 101.44295,
+          // node_binop(&arena, 0, OP_ADD,
+          //            node_constant(&arena, 0, node_constant_value(100.53)),
+          //            node_binop(&arena, 0, OP_ADD,
+          //                       node_func(&arena, 0, FT_SQRT, test3ArgsList1),
+          //                       node_binop(&arena, 0, OP_ADD,
+          //                                  node_binop(&arena, 0, OP_DIV,
+          //                                             node_func(&arena, 0, FT_COS, test3ArgsList2),
+          //                                             node_constant(&arena, 0, node_constant_value(8.3))),
+          //                                  node_binop(&arena, 0, OP_SUB,
+          //                                             node_func(&arena, 0, FT_LN, test3ArgsList3),
+          //                                             node_binop(&arena, 0, OP_ADD,
+          //                                                        node_constant(&arena, 0, node_constant_buildin_const(MC_PI)),
+          //                                                        node_func(&arena, 0, FT_LN, test3ArgsList4)))))),
           .expressionTree = node_binop(&arena, 0, OP_ADD,
-                                       node_constant(&arena, 0, node_constant_value(100.53)),
                                        node_binop(&arena, 0, OP_ADD,
-                                                  node_func(&arena, 0, FT_SQRT, test3ArgsList1),
                                                   node_binop(&arena, 0, OP_ADD,
-                                                             node_binop(&arena, 0, OP_DIV,
-                                                                        node_func(&arena, 0, FT_COS, test3ArgsList2),
-                                                                        node_constant(&arena, 0, node_constant_value(8.3))),
-                                                             node_binop(&arena, 0, OP_SUB,
-                                                                        node_func(&arena, 0, FT_LN, test3ArgsList3),
-                                                                        node_binop(&arena, 0, OP_ADD,
-                                                                                   node_constant(&arena, 0, node_constant_buildin_const(MC_PI)),
-                                                                                   node_func(&arena, 0, FT_LN, test3ArgsList4)))))),
+                                                             node_constant(&arena, 0, node_constant_value(100.53)),
+                                                             node_func(&arena, 0, FT_SQRT, test3ArgsList1)),
+                                                  node_binop(&arena, 0, OP_DIV,
+                                                             node_func(&arena, 0, FT_COS, test3ArgsList2),
+                                                             node_constant(&arena, 0, node_constant_value(8.3)))),
+                                       node_binop(&arena, 0, OP_ADD,
+                                                  node_binop(&arena, 0, OP_SUB,
+                                                             node_func(&arena, 0, FT_LN, test3ArgsList3),
+                                                             node_constant(&arena, 0, node_constant_buildin_const(MC_PI))),
+                                                  node_func(&arena, 0, FT_LN, test3ArgsList4))),
+          /*
+          add(
+          - add(
+          -  - add(
+          -  -  - 100.53000,
+          -  -  - sqrt(
+          -  -  -  - subtract(
+          -  -  -  -  - 3.50000,
+          -  -  -  -  - EN (2.71828, Euler's number)
+          -  -  -  - )
+          -  -  - )
+          -  - ),
+          -  - divide(
+          -  -  - cos(
+          -  -  -  - multiply(
+          -  -  -  -  - 44.23000,
+          -  -  -  -  - pow(
+          -  -  -  -  -  - 6.40000,
+          -  -  -  -  -  - 2.00000
+          -  -  -  -  - )
+          -  -  -  - )
+          -  -  - ),
+          -  -  - 8.30000
+          -  - )
+          - ),
+          - add(
+          -  - subtract(
+          -  -  - ln(10.00000),
+          -  -  - PI (3.14159, Pi)
+          -  - ),
+          -  - ln(
+          -  -  - pow(
+          -  -  -  - 5.00000,
+          -  -  -  - EC (0.57722, Euler's constant)
+          -  -  - )
+          -  - )
+          - )
+          )
+          */
       },
       // Test 4
       {
@@ -776,6 +819,16 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
                                                                         node_constant(&arena, 6, node_constant_value(2)),
                                                                         node_constant(&arena, 8, node_constant_value(3))))),
                                        node_func(&arena, 11, FT_ATAN2, test11ArgsList1)),
+      },
+      // Test 12
+      {
+          .input = "10 + 5 / 2",
+          .expectedResult = 12.5,
+          .expressionTree = node_binop(&arena, 3, OP_ADD,
+                                       node_constant(&arena, 0, node_constant_value(10)),
+                                       node_binop(&arena, 7, OP_DIV,
+                                                  node_constant(&arena, 5, node_constant_value(5)),
+                                                  node_constant(&arena, 9, node_constant_value(2)))),
       },
   };
 
