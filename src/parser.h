@@ -800,6 +800,9 @@ static node_t *next_node_by_precedence(arena_t *arena, lexer_t *lexer, size_t *d
 }
 
 // TODO: Fix right associative ('pow') parsing!
+// TODO: Maybe add optimizations like '10*1' to just '10', or '10/1' to just '10'
+//       Means that whenever a 1 occours in a point or pow precedence, remove the operator and just return
+//       the constant which isn't 1.
 static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *depth, e_precedence precedence)
 {
   ASSERT_NULL(arena);
