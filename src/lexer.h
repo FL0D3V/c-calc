@@ -893,6 +893,14 @@ void lex_seek_till_end(lexer_t *lexer)
     lex_seek(lexer);
 }
 
+token_t *lex_revert_seek(lexer_t *lexer)
+{
+  assert(lexer);
+  assert(lexer->pos > 0);
+  --lexer->pos;
+  return lex_at(lexer, lexer->pos);
+}
+
 void lex_reset_pos(lexer_t *lexer)
 {
   assert(lexer);

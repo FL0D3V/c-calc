@@ -16,7 +16,11 @@
 
 // Errors
 
-#define UNREACHABLE_MSG(message) fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message)
+#define _UNREACHABLE "UNREACHABLE"
+#define UNREACHABLE_MSG(message)        \
+  fprintf(stderr, "%s:%d: "_UNREACHABLE \
+                  ": %s\n",             \
+          __FILE__, __LINE__, message)
 #define UNREACHABLE(message)  \
   do                          \
   {                           \

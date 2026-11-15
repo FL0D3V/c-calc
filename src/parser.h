@@ -213,7 +213,7 @@ typedef struct
   size_t count;
 } node_func_definition_args_t;
 
-#define node_func_args_is_empty(args) ((args)->count == 0)
+#define node_func_args_empty(args) ((args)->count == 0)
 
 #define node_func_args_at(args, idx) (&(args)->items[(idx)])
 
@@ -370,7 +370,7 @@ static bool vs_check_variable_name_errors(node_variable_stack_t *vs, string_slic
   }
   if (ss_is_math_constant(name))
   {
-    S_ERROR_SS(cursor, "Variable name '" SS_FMT "' overlaps with a buildin math constant!", name);
+    S_ERROR_SS(cursor, "Variable name '" SS_FMT "' overlaps with a buildin math-constant!", name);
     return false;
   }
   if (ss_is_function_type(name))
@@ -458,6 +458,19 @@ static bool try_parse_const_variable(node_variable_stack_t *vs, arena_t *arena, 
   return true;
 }
 
+static bool name_not_in_func_args(node_func_definition_args_t *funcArgs, token_t *token)
+{
+  for (size_t i = 0; i < funcArgs->count; ++i)
+  {
+    if (ss_compare(&token->as.symbol, node_func_args_at(funcArgs, i)))
+    {
+      S_ERROR_SS(token->cursor, "Function argument '" SS_FMT "' already used!", &token->as.symbol);
+      return true;
+    }
+  }
+  return false;
+}
+
 static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer)
 {
   ASSERT_NULL(vs);
@@ -487,22 +500,19 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
   }
 
   node_func_definition_args_t funcArgs = {0};
-  token_t *currTok = NULL;
   token_t *lastTok = NULL;
 
   do
   {
-    lastTok = currTok;
+    lex_seek(lexer);
 
-    currTok = lex_seek(lexer);
-
-    if (!lastTok && tok_is_specific_literal(currTok, CLT_COMMA))
+    if (!lastTok && lex_current_is_specific_literal(lexer, CLT_COMMA))
     {
       S_ERROR(lex_current_cursor(lexer), "Expected a name!");
       return false;
     }
 
-    if (lastTok && tok_is_specific_literal(lastTok, CLT_COMMA) && tok_is_specific_literal(currTok, CLT_COMMA))
+    if (lastTok && tok_is_specific_literal(lastTok, CLT_COMMA) && lex_current_is_specific_literal(lexer, CLT_COMMA))
     {
       S_ERROR(lex_current_cursor(lexer), "Expected a name!");
       return false;
@@ -511,30 +521,34 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
     if (lex_at_end(lexer))
       return false;
 
-    if (tok_is(currTok, TT_SYMBOL))
+    // Parse arg name.
+    if (lex_current_is(lexer, TT_SYMBOL))
     {
-      // Check if function argument is already used in definition.
-      for (size_t i = 0; i < funcArgs.count; ++i)
+      token_t *currTok = lex_current(lexer);
+      // Check if function argument is already used.
+
+      if (name_not_in_func_args(&funcArgs, currTok))
       {
-        if (ss_compare(&currTok->as.symbol, node_func_args_at(&funcArgs, i)))
-        {
-          S_ERROR_SS(lex_current_cursor(lexer), "Function argument '" SS_FMT "' already used!", &currTok->as.symbol);
-          return false;
-        }
+        printf("TEST!\n");
+        return false;
       }
 
       // Add the argument if valid.
       node_func_definition_args_append(arena, &funcArgs, currTok->as.symbol);
     }
-    else if (tok_is_specific_literal(currTok, CLT_COMMA))
+    // Continue to next arg name.
+    else if (lex_current_is_specific_literal(lexer, CLT_COMMA))
       continue;
-    else if (tok_is_specific_paren(currTok, PT_CPAREN))
+    // End arg name parsing.
+    else if (lex_current_is_specific_paren(lexer, PT_CPAREN))
       break;
     else
     {
       S_ERROR(lex_current_cursor(lexer), "Unexpected token!");
       return false;
     }
+
+    lastTok = lex_current(lexer);
   } while (!lex_at_end(lexer));
 
   if (lastTok && tok_is_specific_literal(lastTok, CLT_COMMA))
@@ -543,13 +557,13 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
     return false;
   }
 
-  if (lex_at_end(lexer) || tok_not_specific_paren(currTok, PT_CPAREN))
+  if (lex_at_end(lexer) || lex_current_not_specific_paren(lexer, PT_CPAREN))
   {
     S_ERROR(lex_current_cursor(lexer), "Expected a closing paren, then an assignment and then an expression!");
     return false;
   }
 
-  if (funcArgs.count <= 0)
+  if (node_func_args_empty(&funcArgs))
   {
     S_ERROR(lex_current_cursor(lexer), "Expected at least one function argument!");
     return false;
@@ -704,12 +718,6 @@ static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer)
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
 
-  if (!lex_is_valid(lexer))
-  {
-    fprintf(stderr, "ERROR: Lexer invalid! (pos=%zu, count=%zu)\n", lexer->pos, lexer->count);
-    return NULL;
-  }
-
   if (lex_at_end(lexer))
     return NULL;
 
@@ -773,23 +781,22 @@ static node_t *next_node_by_precedence(arena_t *arena, lexer_t *lexer, size_t *d
   if (precedence <= BP_EXPONENT)
     node = try_parse_binop(arena, lexer, depth, precedence + 1);
 
-  // if (precedence == BP_PRIMARY)
-  // ...
+  if (precedence != BP_PRIMARY)
+    return node;
 
   if (!node)
     node = try_parse_paren(arena, lexer, depth);
+
   if (!node)
     node = try_parse_func(arena, lexer, depth);
+
   if (!node)
     node = try_parse_constant(arena, lexer);
 
-  return node;
-}
+  if (!lex_at_end(lexer) && !node)
+    S_ERROR(lex_current_cursor(lexer), "Invalid token found!");
 
-bool node_check_if_current_is_end_of_scope(lexer_t *lexer, size_t depth)
-{
-  ASSERT_NULL(lexer);
-  return depth != 0 && (lex_current_is_specific_paren(lexer, PT_CPAREN) || lex_current_is_specific_literal(lexer, CLT_COMMA));
+  return node;
 }
 
 // TODO: Fix right associative ('pow') parsing!
@@ -799,56 +806,50 @@ static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *depth, e_
   ASSERT_NULL(lexer);
   ASSERT_NULL(depth);
 
-  if (!lex_is_valid(lexer))
-  {
-    fprintf(stderr, "ERROR: Lexer invalid! (pos=%zu, count=%zu)\n", lexer->pos, lexer->count);
-    return NULL;
-  }
-
   if (lex_at_end(lexer))
     return NULL;
 
   node_t *lhs = next_node_by_precedence(arena, lexer, depth, precedence);
   if (!lhs)
-  {
-    S_ERROR(lex_current_cursor(lexer), "LHS Parsing failed!");
     return NULL;
-  }
 
   if (lex_at_end(lexer))
     return lhs;
 
-  token_t *opToken = lex_current(lexer);
-
-  // Used for ending the paren or function parsing.
-  if (node_check_if_current_is_end_of_scope(lexer, *depth))
-    return lhs;
-
   if (lex_current_not(lexer, TT_OPERATOR))
   {
+    // The specific functions should handle that token.
+    if (*depth != 0)
+      return lhs;
+
     S_ERROR(lex_current_cursor(lexer), "Expected an operator!");
     return NULL;
   }
 
-  e_operator_type op = opToken->as.op;
+  token_t *opTok = lex_current(lexer);
+
+  e_operator_type opType = opTok->as.op;
 
   // TODO: precedence is wrong!
-  if (precedence < operatorPrecedence[op])
+  if (precedence < operatorPrecedence[opType])
   {
-    fprintf(stderr, "ERROR(%zu): OPERATOR = %s, PRECEDENCE = %d\n", lex_current_cursor(lexer), operatorTypeNames[op], precedence);
+    fprintf(stderr, "ERROR(%zu): OPERATOR = %s, PRECEDENCE = %d\n", lex_current_cursor(lexer), operatorTypeNames[opType], precedence);
     return lhs;
   }
 
   lex_seek(lexer);
 
-  node_t *rhs = next_node_by_precedence(arena, lexer, depth, precedence);
-  if (!rhs)
+  if (lex_at_end(lexer))
   {
-    S_ERROR(lex_current_cursor(lexer), "RHS Parsing failed!");
+    S_ERROR(lex_current_cursor(lexer), "Expected an expression!");
     return NULL;
   }
 
-  return node_binop(arena, opToken->cursor, op, lhs, rhs);
+  node_t *rhs = next_node_by_precedence(arena, lexer, depth, precedence);
+  if (!rhs)
+    return NULL;
+
+  return node_binop(arena, opTok->cursor, opType, lhs, rhs);
 }
 
 static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *depth)
@@ -857,19 +858,13 @@ static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *depth)
   ASSERT_NULL(lexer);
   ASSERT_NULL(depth);
 
-  if (!lex_is_valid(lexer))
-  {
-    fprintf(stderr, "ERROR: Lexer invalid! (pos=%zu, count=%zu)\n", lexer->pos, lexer->count);
-    return NULL;
-  }
-
   if (lex_at_end(lexer))
     return NULL;
 
-  size_t tokOParenCursor = lex_current_cursor(lexer);
-
   if (!lex_current_is_specific_paren(lexer, PT_OPAREN))
     return NULL;
+
+  size_t tokOParenCursor = lex_current_cursor(lexer);
 
   if (!lex_can_peek(lexer))
   {
@@ -878,8 +873,6 @@ static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *depth)
   }
 
   lex_seek(lexer);
-
-  size_t argCursor = lex_current_cursor(lexer);
 
   if (lex_at_end(lexer))
   {
@@ -891,7 +884,7 @@ static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *depth)
   node_t *arg = try_parse_binop(arena, lexer, depth, BP_LINE);
   if (!arg)
   {
-    S_ERROR(argCursor, "Expected an argument!");
+    S_ERROR(lex_current_cursor(lexer), "Invalid expression!");
     --(*depth);
     return NULL;
   }
@@ -915,32 +908,33 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *depth)
   ASSERT_NULL(lexer);
   ASSERT_NULL(depth);
 
-  if (!lex_is_valid(lexer))
-  {
-    fprintf(stderr, "ERROR: Lexer invalid! (pos=%zu, count=%zu)\n", lexer->pos, lexer->count);
-    return NULL;
-  }
-
   if (lex_at_end(lexer))
     return NULL;
-
-  token_t *funcNameTok = lex_current(lexer);
 
   if (lex_current_not(lexer, TT_SYMBOL))
     return NULL;
 
-  // Checks if the symbol is a valid function name.
-  e_function_type ft = ss_to_function_type(&funcNameTok->as.symbol);
-  if (ft == FT_INVALID)
-    return NULL;
+  token_t *funcNameTok = lex_current(lexer);
 
   if (!lex_can_peek(lexer))
     return NULL;
 
   lex_seek(lexer);
 
+  // Maybe its just a variable.
   if (lex_at_end(lexer) || lex_current_not_specific_paren(lexer, PT_OPAREN))
+  {
+    lex_revert_seek(lexer);
     return NULL;
+  }
+
+  // Checks if the symbol is a valid function name.
+  e_function_type ft = ss_to_function_type(&funcNameTok->as.symbol);
+  if (ft == FT_INVALID)
+  {
+    S_ERROR(lex_current_cursor(lexer), "Function not found!");
+    return NULL;
+  }
 
   if (!lex_can_peek(lexer))
   {
@@ -949,38 +943,37 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *depth)
   }
 
   node_func_args_t argsList = {0};
-  token_t *currTok = NULL;
   token_t *lastTok = NULL;
 
   do
   {
-    currTok = lex_seek(lexer);
+    lex_seek(lexer);
 
     if (lex_at_end(lexer))
     {
-      S_ERROR(funcNameTok->cursor, "Expected a valid function!");
+      S_ERROR(lex_current_cursor(lexer), "Expected a valid function!");
       return NULL;
     }
 
-    if (!lastTok && tok_is_specific_literal(currTok, CLT_COMMA))
+    if (!lastTok && lex_current_is_specific_literal(lexer, CLT_COMMA))
     {
       S_ERROR(lex_current_cursor(lexer), "Expected a function argument!");
       return false;
     }
 
-    if (lastTok && tok_is_specific_literal(lastTok, CLT_COMMA) && tok_is_specific_literal(currTok, CLT_COMMA))
+    if (lastTok && tok_is_specific_literal(lastTok, CLT_COMMA) && lex_current_is_specific_literal(lexer, CLT_COMMA))
     {
       S_ERROR(lex_current_cursor(lexer), "Expected a function argument!");
       return false;
     }
 
-    if (lastTok && tok_is_specific_paren(currTok, PT_CPAREN) && tok_is_specific_literal(lastTok, CLT_COMMA))
+    if (lastTok && lex_current_is_specific_paren(lexer, PT_CPAREN) && tok_is_specific_literal(lastTok, CLT_COMMA))
     {
       S_ERROR(lex_current_cursor(lexer), "Expected a function argument!");
       return false;
     }
 
-    if (!lastTok && tok_is_specific_paren(currTok, PT_CPAREN))
+    if (!lastTok && lex_current_is_specific_paren(lexer, PT_CPAREN))
     {
       S_ERROR(lex_current_cursor(lexer), "Expected a function argument!");
       return NULL;
@@ -996,8 +989,7 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *depth)
     }
     --(*depth);
 
-    currTok = lex_current(lexer);
-    lastTok = currTok;
+    lastTok = lex_current(lexer);
 
     // Add argument to list.
     node_func_args_append(arena, &argsList, arg);
@@ -1014,17 +1006,10 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *depth)
   return node_func(arena, funcNameTok->cursor, ft, argsList);
 }
 
-// AST: "add(EN, divide(5, paren(mult(5, 0))))"
 node_t *parser_execute(arena_t *arena, lexer_t *lexer)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
-
-  if (!lex_is_valid(lexer))
-  {
-    fprintf(stderr, "ERROR: Lexer invalid! (pos=%zu, count=%zu)\n", lexer->pos, lexer->count);
-    return NULL;
-  }
 
   if (lex_at_end(lexer))
     return NULL;
@@ -1642,6 +1627,7 @@ static bool handle_test_result(arena_t *arena, node_test_t *test, const char *na
     }
   }
 
+  printf("PASSED!\n");
   return true;
 }
 
