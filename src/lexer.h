@@ -162,7 +162,7 @@ const char *mathConstantTypeNames[MC_COUNT] = {
     [MC_GAUSS_CONSTANT] = "Gauss's constant",
 };
 
-e_math_constant_type cstr_to_math_constant_type_ex(const char *cstr, size_t len)
+e_math_constant_type cstr_to_math_constant_ex(const char *cstr, size_t len)
 {
   if (!cstr || len == 0)
     return MC_INVALID;
@@ -175,7 +175,7 @@ e_math_constant_type cstr_to_math_constant_type_ex(const char *cstr, size_t len)
   return MC_INVALID;
 }
 
-e_math_constant_type cstr_to_math_constant_type(const char *cstr)
+e_math_constant_type cstr_to_math_constant(const char *cstr)
 {
   if (!cstr)
     return MC_INVALID;
@@ -201,13 +201,9 @@ e_math_constant_type ss_to_math_constant(string_slice_t *name)
   return MC_INVALID;
 }
 
-bool ss_in_math_constants(string_slice_t *name)
-{
-  return ss_to_math_constant(name) != MC_INVALID;
-}
-
-#define cstr_is_math_constant_ex(cstr, len) (cstr_to_math_constant_type_ex(cstr, len) != MC_INVALID)
-#define cstr_is_math_constant(cstr) (cstr_to_math_constant_type(cstr) != MC_INVALID)
+#define cstr_is_math_constant_ex(cstr, len) (cstr_to_math_constant_ex(cstr, len) != MC_INVALID)
+#define cstr_is_math_constant(cstr) (cstr_to_math_constant(cstr) != MC_INVALID)
+#define ss_is_math_constant(ss) (ss_to_math_constant(ss) != MC_INVALID)
 
 typedef enum
 {
@@ -341,13 +337,9 @@ e_function_type ss_to_function_type(string_slice_t *name)
   return FT_INVALID;
 }
 
-bool ss_in_function_types(string_slice_t *name)
-{
-  return ss_to_function_type(name) != FT_INVALID;
-}
-
-#define cstr_is_function_ex(cstr, len) (cstr_to_function_type_ex(cstr, len) != FT_INVALID)
-#define cstr_is_function(cstr) (cstr_to_function_type(cstr) != FT_INVALID)
+#define cstr_is_function_type_ex(cstr, len) (cstr_to_function_type_ex(cstr, len) != FT_INVALID)
+#define cstr_is_function_type(cstr) (cstr_to_function_type(cstr) != FT_INVALID)
+#define ss_is_function_type(ss) (ss_to_function_type(ss) != FT_INVALID)
 
 typedef enum
 {
@@ -689,8 +681,10 @@ typedef struct
   bool isError;
 
   // Could be used to internally traverse from first to last token without having to check an external variable.
-  size_t cursor;
+  size_t pos;
 } lexer_t;
+
+typedef bool (*lex_comparator_func)(lexer_t *lexer, token_t *current, size_t pos);
 
 #define add_number_token(a, lexer, num, curr) \
   arena_da_append((a), (lexer), ((token_t){.type = TT_NUMBER, .as.number = (num), .cursor = (curr)}))
@@ -707,13 +701,12 @@ typedef struct
 #define add_eof_token(a, lexer, curr) \
   arena_da_append((a), (lexer), ((token_t){.type = TT_EOF, .cursor = (curr)}))
 
-#define lex_at(lexer, idx) (&(lexer)->items[(idx)])
-
-#define lex_in_range(lexer, idx) ((idx) < (lexer)->count)
-#define lex_next_in_range(lexer, idx) (((idx) + 1) < (lexer)->count)
-
 #define tok_is(tok, t) ((tok)->type == (t))
 #define tok_not(tok, t) ((tok)->type != (t))
+
+#define tok_is_eol(tok) (tok_is(tok, TT_EOL))
+#define tok_is_eof(tok) (tok_is(tok, TT_EOF))
+#define tok_is_end(tok) (tok_is_eol(tok) || tok_is_eof(tok))
 
 #define tok_is_specific_operator(tok, ot) \
   (tok_is(tok, TT_OPERATOR) && (tok)->as.op == (ot))
@@ -732,125 +725,153 @@ typedef struct
 #define tok_not_specific_literal(tok, lt) \
   (tok_not(tok, TT_LITERAL) || (tok)->as.literal != (lt))
 
-#define tok_is_eol(tok) (tok_is(tok, TT_EOL))
-#define tok_is_eof(tok) (tok_is(tok, TT_EOF))
-#define tok_is_end(tok) (tok_is_eol(tok) || tok_is_eof(tok))
+#define tok_is_math_constant(tok) \
+  (tok_is(tok, TT_SYMBOL) && ss_is_math_constant(&tok->as.symbol))
+#define tok_is_function_type(tok) \
+  (tok_is(tok, TT_SYMBOL) && ss_is_function_type(&tok->as.symbol))
 
-typedef bool (*lex_comparator_func)(token_t *token, size_t cursor);
+bool lex_in_range(lexer_t *lexer, size_t pos)
+{
+  assert(lexer);
+  return pos < lexer->count;
+}
+
+bool lex_next_in_range(lexer_t *lexer, size_t pos)
+{
+  assert(lexer);
+  return (pos + 1) < lexer->count;
+}
 
 bool lex_is_valid(lexer_t *lexer)
 {
   assert(lexer);
-  return !lexer->isError && lexer->count > 0 && lex_in_range(lexer, lexer->cursor);
+  return !lexer->isError && lexer->count > 0 && lex_in_range(lexer, lexer->pos);
 }
 
-void lex_cursor_to(lexer_t *lexer, size_t cursor)
+token_t *lex_at(lexer_t *lexer, size_t pos)
 {
   assert(lexer);
   assert(lex_is_valid(lexer));
-  lexer->cursor = cursor;
-  assert(lex_is_valid(lexer));
-}
-
-bool lex_at_eol(lexer_t *lexer)
-{
-  assert(lexer);
-  assert(lex_is_valid(lexer));
-  return tok_is(lex_at(lexer, lexer->cursor), TT_EOL);
-}
-
-bool lex_at_eof(lexer_t *lexer)
-{
-  assert(lexer);
-  assert(lex_is_valid(lexer));
-  return tok_is(lex_at(lexer, lexer->cursor), TT_EOF);
-}
-
-bool lex_at_end(lexer_t *lexer)
-{
-  assert(lexer);
-  assert(lex_is_valid(lexer));
-  return lex_at_eol(lexer) || lex_at_eof(lexer);
-}
-
-size_t lex_current_cursor(lexer_t *lexer)
-{
-  assert(lexer);
-  assert(lex_is_valid(lexer));
-  return lexer->cursor;
+  assert(lex_in_range(lexer, pos));
+  return &lexer->items[pos];
 }
 
 token_t *lex_current(lexer_t *lexer)
 {
   assert(lexer);
   assert(lex_is_valid(lexer));
-  return lex_at(lexer, lexer->cursor);
+  return lex_at(lexer, lexer->pos);
+}
+
+// Returns the current index in the list.
+size_t lex_current_pos(lexer_t *lexer)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  return lexer->pos;
+}
+
+// Returns the cursor of the current token from the input.
+size_t lex_current_cursor(lexer_t *lexer)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  return lex_current(lexer)->cursor;
+}
+
+void lex_pos_to(lexer_t *lexer, size_t pos)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  assert(lex_in_range(lexer, pos));
+  lexer->pos = pos;
 }
 
 bool lex_at_start(lexer_t *lexer)
 {
   assert(lexer);
   assert(lex_is_valid(lexer));
-  return lexer->cursor == 0;
+  return lexer->pos == 0;
+}
+
+bool lex_at_eol(lexer_t *lexer)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  return tok_is_eol(lex_current(lexer));
+}
+
+bool lex_at_eof(lexer_t *lexer)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  return tok_is_eof(lex_current(lexer));
+}
+
+bool lex_at_end(lexer_t *lexer)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  return tok_is_end(lex_current(lexer));
 }
 
 bool lex_at_start_of_line(lexer_t *lexer)
 {
   assert(lexer);
   assert(lex_is_valid(lexer));
-  return lex_at_start(lexer) || tok_is_eol(lex_at(lexer, lexer->cursor - 1));
+  return lex_at_start(lexer) || tok_is_eol(lex_at(lexer, lexer->pos - 1));
 }
 
 bool lex_can_peek_ex(lexer_t *lexer, size_t count)
 {
   assert(lexer);
   assert(lex_is_valid(lexer));
-  return lex_in_range(lexer, lexer->cursor + count);
+  return lex_in_range(lexer, lexer->pos + count);
 }
 
 bool lex_can_peek(lexer_t *lexer)
 {
   assert(lexer);
   assert(lex_is_valid(lexer));
-  return lex_next_in_range(lexer, lexer->cursor);
+  return lex_next_in_range(lexer, lexer->pos);
 }
 
 token_t *lex_peek_ex(lexer_t *lexer, size_t count)
 {
   assert(lexer);
   assert(lex_is_valid(lexer));
-  assert(lex_in_range(lexer, lexer->cursor + count));
-  return &lexer->items[lexer->cursor + count];
+  assert(lex_in_range(lexer, lexer->pos + count));
+  return &lexer->items[lexer->pos + count];
 }
 
 token_t *lex_peek(lexer_t *lexer)
 {
   assert(lexer);
-  assert(lex_next_in_range(lexer, lexer->cursor));
-  return &lexer->items[lexer->cursor + 1];
+  assert(lex_next_in_range(lexer, lexer->pos));
+  return &lexer->items[lexer->pos + 1];
 }
 
 token_t *lex_seek_ex(lexer_t *lexer, size_t count)
 {
   assert(lexer);
   assert(lex_is_valid(lexer));
-  assert(lex_in_range(lexer, lexer->cursor + count));
-  lexer->cursor += count;
-  return lex_at(lexer, lexer->cursor);
+  assert(lex_in_range(lexer, lexer->pos + count));
+  lexer->pos += count;
+  return lex_at(lexer, lexer->pos);
 }
 
 token_t *lex_seek(lexer_t *lexer)
 {
   assert(lexer);
-  assert((lexer->cursor + 1) < lexer->count);
-  ++lexer->cursor;
-  return lex_at(lexer, lexer->cursor);
+  assert((lexer->pos + 1) < lexer->count);
+  ++lexer->pos;
+  return lex_at(lexer, lexer->pos);
 }
 
 // Seeks till eof or the comparator with the return value 'true'.
 void lex_seek_till_or_eof(lexer_t *lexer, lex_comparator_func comparator)
 {
-  while (!lex_at_eof(lexer) && !comparator(lex_current(lexer), lex_current_cursor(lexer)))
+  while (!lex_at_eof(lexer) && !comparator(lexer, lex_current(lexer), lex_current_pos(lexer)))
     lex_seek(lexer);
 }
 
@@ -859,7 +880,7 @@ void lex_seek_till_or_end(lexer_t *lexer, lex_comparator_func comparator)
 {
   assert(lexer);
   assert(lex_is_valid(lexer));
-  while (!lex_at_end(lexer) && !comparator(lex_current(lexer), lex_current_cursor(lexer)))
+  while (!lex_at_end(lexer) && !comparator(lexer, lex_current(lexer), lex_current_pos(lexer)))
     lex_seek(lexer);
 }
 
@@ -872,11 +893,11 @@ void lex_seek_till_end(lexer_t *lexer)
     lex_seek(lexer);
 }
 
-void lex_reset(lexer_t *lexer)
+void lex_reset_pos(lexer_t *lexer)
 {
   assert(lexer);
   assert(lex_is_valid(lexer));
-  lex_cursor_to(lexer, 0);
+  lex_pos_to(lexer, 0);
 }
 
 void lex_reset_to_start_of_line(lexer_t *lexer)
@@ -884,19 +905,97 @@ void lex_reset_to_start_of_line(lexer_t *lexer)
   assert(lexer);
   assert(lex_is_valid(lexer));
   while (!lex_at_start_of_line(lexer))
-    lexer->cursor--;
+    lexer->pos--;
 }
 
 bool lex_contains_in_current_line(lexer_t *lexer, lex_comparator_func comparator)
 {
   assert(lexer);
   assert(lex_is_valid(lexer));
-  size_t currCursor = lexer->cursor;
+  size_t currPos = lexer->pos;
   lex_reset_to_start_of_line(lexer);
   lex_seek_till_or_end(lexer, comparator);
   bool res = !lex_at_end(lexer);
-  lex_cursor_to(lexer, currCursor);
+  lex_pos_to(lexer, currPos);
   return res;
+}
+
+bool lex_current_is(lexer_t *lexer, e_token_type tt)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  return tok_is(lex_current(lexer), tt);
+}
+
+bool lex_current_not(lexer_t *lexer, e_token_type tt)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  return tok_not(lex_current(lexer), tt);
+}
+
+bool lex_current_is_specific_operator(lexer_t *lexer, e_operator_type ot)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  return tok_is_specific_operator(lex_current(lexer), ot);
+}
+
+bool lex_current_not_specific_operator(lexer_t *lexer, e_operator_type ot)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  return tok_not_specific_operator(lex_current(lexer), ot);
+}
+
+bool lex_current_is_number_prefix_operator(lexer_t *lexer)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  return tok_is_number_prefix_operator(lex_current(lexer));
+}
+
+bool lex_current_is_specific_paren(lexer_t *lexer, e_paren_type pt)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  return tok_is_specific_paren(lex_current(lexer), pt);
+}
+
+bool lex_current_not_specific_paren(lexer_t *lexer, e_paren_type pt)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  token_t *tok = lex_current(lexer);
+  return tok_not_specific_paren(tok, pt);
+}
+
+bool lex_current_is_specific_literal(lexer_t *lexer, e_common_literal_type lt)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  return tok_is_specific_literal(lex_current(lexer), lt);
+}
+
+bool lex_current_not_specific_literal(lexer_t *lexer, e_common_literal_type lt)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  return tok_not_specific_literal(lex_current(lexer), lt);
+}
+
+bool lex_current_is_math_constant(lexer_t *lexer)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  return tok_is_math_constant(lex_current(lexer));
+}
+
+bool lex_current_is_function_type(lexer_t *lexer)
+{
+  assert(lexer);
+  assert(lex_is_valid(lexer));
+  return tok_is_function_type(lex_current(lexer));
 }
 
 lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
@@ -1002,7 +1101,7 @@ lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
   return lexer;
 }
 
-void lexer_print(const lexer_t *lexer)
+void lexer_print(lexer_t *lexer)
 {
   ASSERT_NULL(lexer);
 
@@ -1035,14 +1134,14 @@ void lexer_print(const lexer_t *lexer)
       break;
     case TT_SYMBOL:
       printf("('" SS_FMT "')", SS_ARG(&token->as.symbol));
-      if (cstr_is_math_constant_ex(token->as.symbol.src, token->as.symbol.len))
+      if (ss_is_math_constant(&token->as.symbol))
       {
-        e_math_constant_type mc = cstr_to_math_constant_type_ex(token->as.symbol.src, token->as.symbol.len);
+        e_math_constant_type mc = ss_to_math_constant(&token->as.symbol);
         printf(": Math-Constant(" DOUBLE_PRINT_FORMAT ", %s)", mathConstantTypeValues[mc], mathConstantTypeNames[mc]);
       }
-      else if (cstr_is_function_ex(token->as.symbol.src, token->as.symbol.len))
+      else if (ss_is_function_type(&token->as.symbol))
       {
-        e_function_type ft = cstr_to_function_type_ex(token->as.symbol.src, token->as.symbol.len);
+        e_function_type ft = ss_to_function_type(&token->as.symbol);
         printf(": Function(%s)", functionTypeNames[ft]);
       }
       break;
