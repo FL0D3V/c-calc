@@ -286,6 +286,9 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
     return false;
   }
 
+  argc = flag_c_rest_argc(c);
+  argv = flag_c_rest_argv(c);
+
   // The help flag has the highest priority and will be executed first.
   if (help)
   {
@@ -327,9 +330,6 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
   }
 
   // The math expression has the third highest priority and will be executed third.
-  argc = flag_c_rest_argc(c);
-  argv = flag_c_rest_argv(c);
-
   const char *input = *mathExpression;
 
   if (argc > 0 && !input)
