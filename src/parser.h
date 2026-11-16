@@ -20,6 +20,7 @@
 #define E_ERROR(cursor, message) _PARSER_ERROR(_E_ERROR_NAME, cursor, message)
 #define E_ERROR_SS(cursor, message, ss) _PARSER_ERROR_SS(_E_ERROR_NAME, cursor, message, ss)
 
+// TODO: Maybe remove!
 #define DEBUG_PRINT_TOK_EX_2(tok, idx, d) printf("DEPTH(%zu), TOKEN(%zu) = %s\n", d, idx, tokenTypeNames[(tok)->type])
 #define DEBUG_PRINT_TOK_EX_1(tok, idx) printf("TOKEN(%zu) = %s\n", idx, tokenTypeNames[(tok)->type])
 #define DEBUG_PRINT_TOK(tok) printf("TOKEN = %s\n", tokenTypeNames[(tok)->type])
@@ -111,25 +112,36 @@ typedef struct
 {
   e_const_node_type type;
   u_const_node_as as;
-
   bool hasPrefixMinus;
 } node_const_t;
 
 static inline node_const_t node_constant_value_ex(double val, bool minus)
 {
-  return (node_const_t){.type = CN_VALUE, .as.value = val, .hasPrefixMinus = minus};
+  return (node_const_t){
+      .type = CN_VALUE,
+      .as.value = val,
+      .hasPrefixMinus = minus,
+  };
 }
 #define node_constant_value(val) node_constant_value_ex(val, false)
 
 static inline node_const_t node_constant_buildin_const_ex(e_math_constant_type val, bool minus)
 {
-  return (node_const_t){.type = CN_BUILDIN_CONST, .as.buildinConstant = val, .hasPrefixMinus = minus};
+  return (node_const_t){
+      .type = CN_BUILDIN_CONST,
+      .as.buildinConstant = val,
+      .hasPrefixMinus = minus,
+  };
 }
 #define node_constant_buildin_const(val) node_constant_buildin_const_ex(val, false)
 
 static inline node_const_t node_constant_variable_ex(string_slice_t val, bool minus)
 {
-  return (node_const_t){.type = CN_VARIABLE, .as.variableName = val, .hasPrefixMinus = minus};
+  return (node_const_t){
+      .type = CN_VARIABLE,
+      .as.variableName = val,
+      .hasPrefixMinus = minus,
+  };
 }
 #define node_constant_variable(val) node_constant_variable_ex(val, false)
 
@@ -148,7 +160,6 @@ struct node
   u_node_as as;
 };
 
-// Creating new nodes
 static node_t *base_node(arena_t *arena, size_t cursor, e_node_type type)
 {
   ASSERT_NULL(arena);
@@ -176,9 +187,6 @@ node_t *node_binop(arena_t *arena, size_t cursor, e_operator_type type, node_t *
   ASSERT_NULL(lhs);
   ASSERT_NULL(rhs);
   node_t *node = base_node(arena, cursor, NT_BINOP);
-  // node->as.binop.type = type;
-  // node->as.binop.lhs = lhs;
-  // node->as.binop.rhs = rhs;
   node->as.binop = (node_binop_t){
       .type = type,
       .lhs = lhs,
@@ -191,15 +199,19 @@ node_t *node_func(arena_t *arena, size_t cursor, e_function_type type, node_func
 {
   assert(type < FT_COUNT);
   node_t *node = base_node(arena, cursor, NT_FUNCTION);
-  node->as.func.type = type;
-  node->as.func.args = args;
+  node->as.func = (node_function_t){
+      .type = type,
+      .args = args,
+  };
   return node;
 }
 
 node_t *node_paren(arena_t *arena, size_t cursor, node_t *arg)
 {
   node_t *node = base_node(arena, cursor, NT_PAREN);
-  node->as.paren.arg = arg;
+  node->as.paren = (node_paren_t){
+      .arg = arg,
+  };
   return node;
 }
 
@@ -458,17 +470,30 @@ static bool try_parse_const_variable(node_variable_stack_t *vs, arena_t *arena, 
   return true;
 }
 
-static bool name_not_in_func_args(node_func_definition_args_t *funcArgs, token_t *token)
+static bool func_arg_name_valid(node_variable_stack_t *vs, string_slice_t *funcName, node_func_definition_args_t *funcArgs, string_slice_t *varName, size_t cursor)
 {
+  // Checks if the name is the function name.
+  if (ss_compare(varName, funcName))
+  {
+    S_ERROR_SS(cursor, "Variable '" SS_FMT "' can't have the same name as the function definition!", varName);
+    return false;
+  }
+
+  // Checks if the name is already used in the func args.
   for (size_t i = 0; i < funcArgs->count; ++i)
   {
-    if (ss_compare(&token->as.symbol, node_func_args_at(funcArgs, i)))
+    if (ss_compare(varName, node_func_args_at(funcArgs, i)))
     {
-      S_ERROR_SS(token->cursor, "Function argument '" SS_FMT "' already used!", &token->as.symbol);
-      return true;
+      S_ERROR_SS(cursor, "Variable '" SS_FMT "' already used in function definition!", varName);
+      return false;
     }
   }
-  return false;
+
+  // Checks if the name is in the variable stack or is a buildin constant or function.
+  if (!vs_check_variable_name_errors(vs, varName, cursor))
+    return false;
+
+  return true;
 }
 
 static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer)
@@ -525,13 +550,10 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
     if (lex_current_is(lexer, TT_SYMBOL))
     {
       token_t *currTok = lex_current(lexer);
-      // Check if function argument is already used.
 
-      if (name_not_in_func_args(&funcArgs, currTok))
-      {
-        printf("TEST!\n");
+      // Check if function argument is already used.
+      if (!func_arg_name_valid(vs, &varNameTok->as.symbol, &funcArgs, &currTok->as.symbol, currTok->cursor))
         return false;
-      }
 
       // Add the argument if valid.
       node_func_definition_args_append(arena, &funcArgs, currTok->as.symbol);
@@ -605,7 +627,7 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
   return true;
 }
 
-static inline bool contains_equals(lexer_t *lexer, token_t *current, size_t pos)
+static inline bool _contains_equals(lexer_t *lexer, token_t *current, size_t pos)
 {
   (void)lexer;
   (void)pos;
@@ -623,10 +645,12 @@ bool parse_node_variables(node_variable_stack_t *vs, arena_t *arena, lexer_t *le
 
   lex_reset_pos(lexer);
 
+  size_t varCount = 0;
+
   while (!lex_at_eof(lexer))
   {
     // Not really needed propably.
-    if (!lex_contains_in_current_line(lexer, contains_equals))
+    if (!lex_contains_in_current_line(lexer, _contains_equals))
     {
       lex_seek_till_end(lexer);
 
@@ -636,6 +660,8 @@ bool parse_node_variables(node_variable_stack_t *vs, arena_t *arena, lexer_t *le
 
       continue;
     }
+
+    ++varCount;
 
     if (try_parse_const_variable(vs, arena, lexer))
     {
@@ -658,7 +684,7 @@ bool parse_node_variables(node_variable_stack_t *vs, arena_t *arena, lexer_t *le
 
   lex_reset_pos(lexer);
 
-  return vs->count > 0;
+  return vs->count == varCount;
 }
 
 void print_variable_stack(node_variable_stack_t *vs, bool showValue, bool indented)
@@ -836,15 +862,15 @@ static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *depth, e_
   // TODO: precedence is wrong!
   if (precedence < operatorPrecedence[opType])
   {
-    fprintf(stderr, "ERROR(%zu): OPERATOR = %s, PRECEDENCE = %d\n", lex_current_cursor(lexer), operatorTypeNames[opType], precedence);
-    return lhs;
+    fprintf(stderr, "ERROR(%zu): Invalid precedence for current operator! (OPERATOR: '%s', PRECEDENCE = '%d')\n", lex_current_cursor(lexer), operatorTypeNames[opType], precedence);
+    return NULL;
   }
 
   lex_seek(lexer);
 
   if (lex_at_end(lexer))
   {
-    S_ERROR(lex_current_cursor(lexer), "Expected an expression!");
+    S_ERROR(lex_current_cursor(lexer) - 1, "Expected an expression after an operator!");
     return NULL;
   }
 

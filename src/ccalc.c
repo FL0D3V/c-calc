@@ -214,14 +214,20 @@ static bool execute_math_expression(const char *input, bool verbose)
 
   // Parse the variables
   node_variable_stack_t vs = {0};
-
-  bool varParsingRes = parse_node_variables(&vs, &arena, &lexer);
+  bool varParseRes = parse_node_variables(&vs, &arena, &lexer);
+  if (!varParseRes)
+  {
+    // Cleanup
+    arena_free(&arena);
+    return true;
+  }
   if (verbose)
   {
     print_variable_stack(&vs, true, true);
     printf("\n");
   }
-  if (varParsingRes && vs.count > 0)
+  // TODO: Remove as soon as multiline parsing is implemented.
+  if (varParseRes)
   {
     // Cleanup
     arena_free(&arena);
@@ -897,8 +903,8 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
   const char *inputVariables =
       "test = 20 * 10 + a\n"
       "a = (2 ^ 5) - EC\n"
-      "cos = 2^5\n"
       "(100 ^ 5) + (30 / 2)\n"
+      "cos = 2^5\n"
       "atan2(x,y,z) = test * 20 * x + 10 * y - 5 * z\n"
       "PI = test * 20\n"
       "func(x,y,z) = (test * 20 * x) + (10 * y) - (5 * z)";
@@ -932,7 +938,7 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
     lexer_print(&lexerVariables);
     printf("\n");
   }
-  if (!parse_node_variables(&vs, &arena, &lexerVariables))
+  if (!parse_node_variables(&vs, &arena, &lexerVariables) && vs.count == 0)
   {
     fprintf(stderr, "No variables found!\n");
     arena_free(&arena);
