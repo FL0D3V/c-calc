@@ -885,11 +885,17 @@ static node_t *try_parse_prefix_expression(arena_t *arena, lexer_t *lexer, size_
 
   if (!lex_can_peek(lexer))
   {
-    S_ERROR(token->cursor, "Expected an expression after a prefix operator!");
+    S_ERROR(lex_current_cursor(lexer), "Expected an expression after a prefix operator!");
     return NULL;
   }
 
   lex_seek(lexer);
+
+  if (!lex_at_end(lexer) && lex_current_is(lexer, TT_OPERATOR))
+  {
+    S_ERROR(lex_current_cursor(lexer), "Nested prefix operators are not allowed!");
+    return NULL;
+  }
 
   node_t *child = try_parse_binop(arena, lexer, depth, BP_LINE);
   if (!child)
@@ -898,6 +904,7 @@ static node_t *try_parse_prefix_expression(arena_t *arena, lexer_t *lexer, size_
   return node_prefix_expression(arena, token->cursor, type, child);
 }
 
+// TODO: FIX!
 static node_t *next_node_by_precedence(arena_t *arena, lexer_t *lexer, size_t *depth, e_precedence precedence)
 {
   node_t *node = NULL;
@@ -914,6 +921,9 @@ static node_t *next_node_by_precedence(arena_t *arena, lexer_t *lexer, size_t *d
   if (!node)
     node = try_parse_func(arena, lexer, depth);
 
+  // TODO:
+  // This wraps everything currently, should only wrap the next prime
+  // (e.g.: '-10 * (20 + 5)' should only wrap '10' with 'prefix_minus(10)').
   if (!node)
     node = try_parse_prefix_expression(arena, lexer, depth);
 
@@ -1506,6 +1516,12 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
   case NT_PREFIX_EXPRESSION:
   {
     node_prefix_t *prefix = &expr->as.prefix;
+
+    if (prefix->child && prefix->child->type == NT_PREFIX_EXPRESSION)
+    {
+      E_ERROR(prefix->child->cursor, "Nested prefix operator found!");
+      return NULL;
+    }
 
     node_t *child = ast_eval_ex(arena, vs, prefix->child);
     if (!child)
