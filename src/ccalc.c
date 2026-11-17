@@ -227,7 +227,7 @@ static bool execute_math_expression(const char *input, bool verbose)
     printf("\n");
   }
   // TODO: Remove as soon as multiline parsing is implemented.
-  if (varParseRes)
+  if (varParseRes && vs.count != 0)
   {
     // Cleanup
     arena_free(&arena);
@@ -644,77 +644,25 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
           .expectedResult = 102.30258,
           .expressionTree = node_binop(&arena, 3, OP_ADD,
                                        node_constant(&arena, 0, node_constant_value(100)),
-                                       node_func(&arena, 4, FT_LN, test2ArgsList1)),
+                                       node_func(&arena, 4, node_func_buildin(FT_LN, test2ArgsList1))),
       },
       // Test 3
       {
           .input = "100.53 + sqrt(3.5 - EN) + cos(44.23 * 6.4^2) / 8.3 + ln(10) - PI + ln(5^EC)",
           .expectedResult = 101.44295,
-          // node_binop(&arena, 0, OP_ADD,
-          //            node_constant(&arena, 0, node_constant_value(100.53)),
-          //            node_binop(&arena, 0, OP_ADD,
-          //                       node_func(&arena, 0, FT_SQRT, test3ArgsList1),
-          //                       node_binop(&arena, 0, OP_ADD,
-          //                                  node_binop(&arena, 0, OP_DIV,
-          //                                             node_func(&arena, 0, FT_COS, test3ArgsList2),
-          //                                             node_constant(&arena, 0, node_constant_value(8.3))),
-          //                                  node_binop(&arena, 0, OP_SUB,
-          //                                             node_func(&arena, 0, FT_LN, test3ArgsList3),
-          //                                             node_binop(&arena, 0, OP_ADD,
-          //                                                        node_constant(&arena, 0, node_constant_buildin_const(MC_PI)),
-          //                                                        node_func(&arena, 0, FT_LN, test3ArgsList4)))))),
           .expressionTree = node_binop(&arena, 0, OP_ADD,
                                        node_binop(&arena, 0, OP_ADD,
                                                   node_binop(&arena, 0, OP_ADD,
                                                              node_constant(&arena, 0, node_constant_value(100.53)),
-                                                             node_func(&arena, 0, FT_SQRT, test3ArgsList1)),
+                                                             node_func(&arena, 0, node_func_buildin(FT_SQRT, test3ArgsList1))),
                                                   node_binop(&arena, 0, OP_DIV,
-                                                             node_func(&arena, 0, FT_COS, test3ArgsList2),
+                                                             node_func(&arena, 0, node_func_buildin(FT_COS, test3ArgsList2)),
                                                              node_constant(&arena, 0, node_constant_value(8.3)))),
                                        node_binop(&arena, 0, OP_ADD,
                                                   node_binop(&arena, 0, OP_SUB,
-                                                             node_func(&arena, 0, FT_LN, test3ArgsList3),
+                                                             node_func(&arena, 0, node_func_buildin(FT_LN, test3ArgsList3)),
                                                              node_constant(&arena, 0, node_constant_buildin_const(MC_PI))),
-                                                  node_func(&arena, 0, FT_LN, test3ArgsList4))),
-          /*
-          add(
-          - add(
-          -  - add(
-          -  -  - 100.53000,
-          -  -  - sqrt(
-          -  -  -  - subtract(
-          -  -  -  -  - 3.50000,
-          -  -  -  -  - EN (2.71828, Euler's number)
-          -  -  -  - )
-          -  -  - )
-          -  - ),
-          -  - divide(
-          -  -  - cos(
-          -  -  -  - multiply(
-          -  -  -  -  - 44.23000,
-          -  -  -  -  - pow(
-          -  -  -  -  -  - 6.40000,
-          -  -  -  -  -  - 2.00000
-          -  -  -  -  - )
-          -  -  -  - )
-          -  -  - ),
-          -  -  - 8.30000
-          -  - )
-          - ),
-          - add(
-          -  - subtract(
-          -  -  - ln(10.00000),
-          -  -  - PI (3.14159, Pi)
-          -  - ),
-          -  - ln(
-          -  -  - pow(
-          -  -  -  - 5.00000,
-          -  -  -  - EC (0.57722, Euler's constant)
-          -  -  - )
-          -  - )
-          - )
-          )
-          */
+                                                  node_func(&arena, 0, node_func_buildin(FT_LN, test3ArgsList4)))),
       },
       // Test 4
       {
@@ -725,7 +673,7 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
           .expectedResult = 573.28058,
           .expressionTree = node_binop(&arena, 0, OP_MUL,
                                        node_constant(&arena, 0, node_constant_value(10.5)),
-                                       node_func(&arena, 0, FT_EXP, test4ArgsList1)),
+                                       node_func(&arena, 0, node_func_buildin(FT_EXP, test4ArgsList1))),
       },
       // Test 5
       {
@@ -824,7 +772,7 @@ static bool test_run(command_t *self, const char *programName, int argc, char **
                                                              node_binop(&arena, 7, OP_ADD,
                                                                         node_constant(&arena, 6, node_constant_value(2)),
                                                                         node_constant(&arena, 8, node_constant_value(3))))),
-                                       node_func(&arena, 11, FT_ATAN2, test11ArgsList1)),
+                                       node_func(&arena, 11, node_func_buildin(FT_ATAN2, test11ArgsList1))),
       },
       // Test 12
       {
@@ -896,7 +844,7 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
 
   flag_c_free(c);
 
-  const char *input = "1 + ((test) / (2 * sqrt((PI ^ 2) + (3 ^ 2))) - 2) * (2 + 2) + atan2(5, 10)";
+  const char *input = "1 + ((test) / (2 * sqrt((PI ^ 2) + (3 ^ 2))) - 2) * (2 + 2) + atan2(5, 10) - func(10+5, PI, a)";
 
   // Tests if the variable names are checked against builtin function or
   // constant names and also if constants or functions can be defined.

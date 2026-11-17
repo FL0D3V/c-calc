@@ -6,18 +6,24 @@
 #define _G_ERROR_NAME "ERROR"
 #define _S_ERROR_NAME "SEMANTIC-ERROR"
 #define _E_ERROR_NAME "EVALUATION-ERROR"
+#define _PARSER_ERROR_EX_2(type, cursor, message, arg1, arg2) \
+  fprintf(stderr, type ":%zu: " message "\n", cursor, arg1, arg2)
 #define _PARSER_ERROR_EX(type, cursor, message, arg) \
   fprintf(stderr, type ":%zu: " message "\n", cursor, arg)
 #define _PARSER_ERROR(type, cursor, message) \
   fprintf(stderr, type ":%zu: %s\n", cursor, message)
+#define _PARSER_ERROR_SS_2(type, cursor, message, ss, arg) \
+  fprintf(stderr, type ":%zu: " message "\n", cursor, SS_ARG(ss), arg)
 #define _PARSER_ERROR_SS(type, cursor, message, ss) \
   fprintf(stderr, type ":%zu: " message "\n", cursor, SS_ARG(ss))
 #define G_ERROR(message) \
   fprintf(stderr, _G_ERROR_NAME ": %s\n", message)
 #define S_ERROR(cursor, message) _PARSER_ERROR(_S_ERROR_NAME, cursor, message)
 #define S_ERROR_SS(cursor, message, ss) _PARSER_ERROR_SS(_S_ERROR_NAME, cursor, message, ss)
+#define E_ERROR_EX_2(cursor, message, arg1, arg2) _PARSER_ERROR_EX_2(_E_ERROR_NAME, cursor, message, arg1, arg2)
 #define E_ERROR_EX(cursor, message, arg) _PARSER_ERROR_EX(_E_ERROR_NAME, cursor, message, arg)
 #define E_ERROR(cursor, message) _PARSER_ERROR(_E_ERROR_NAME, cursor, message)
+#define E_ERROR_SS_2(cursor, message, ss, arg) _PARSER_ERROR_SS_2(_E_ERROR_NAME, cursor, message, ss, arg)
 #define E_ERROR_SS(cursor, message, ss) _PARSER_ERROR_SS(_E_ERROR_NAME, cursor, message, ss)
 
 // TODO: Maybe remove!
@@ -72,11 +78,51 @@ typedef struct
 #define node_func_args_append(a, args, arg) \
   arena_da_append(a, args, arg)
 
+typedef union
+{
+  e_function_type buildinFunc;
+  string_slice_t variableName;
+} u_func_node_as;
+
+typedef enum
+{
+  FN_BUILDIN_FUNC,
+  FN_VARIABLE,
+
+  FN_COUNT
+} e_func_node_type;
+
+static_assert(FN_COUNT == 2, "Amount of value node types have changed!");
+
+const char *funcNodeTypeNames[FN_COUNT] = {
+    [FN_BUILDIN_FUNC] = "Buildin-Function",
+    [FN_VARIABLE] = "Variable",
+};
+
 typedef struct
 {
-  e_function_type type;
+  e_func_node_type type;
+  u_func_node_as as;
   node_func_args_t args;
-} node_function_t;
+} node_func_t;
+
+static inline node_func_t node_func_buildin(e_function_type type, node_func_args_t args)
+{
+  return (node_func_t){
+      .type = FN_BUILDIN_FUNC,
+      .as.buildinFunc = type,
+      .args = args,
+  };
+}
+
+static inline node_func_t node_func_variable(string_slice_t val, node_func_args_t args)
+{
+  return (node_func_t){
+      .type = FN_VARIABLE,
+      .as.variableName = val,
+      .args = args,
+  };
+}
 
 typedef struct
 {
@@ -100,7 +146,7 @@ typedef enum
   CN_COUNT
 } e_const_node_type;
 
-static_assert(CN_COUNT == 3, "Amount of value node types have changed");
+static_assert(CN_COUNT == 3, "Amount of const-node-types have changed!");
 
 const char *constNodeTypeNames[CN_COUNT] = {
     [CN_VALUE] = "Value",
@@ -149,7 +195,7 @@ typedef union
 {
   node_const_t constant;
   node_binop_t binop;
-  node_function_t func;
+  node_func_t func;
   node_paren_t paren;
 } u_node_as;
 
@@ -195,19 +241,18 @@ node_t *node_binop(arena_t *arena, size_t cursor, e_operator_type type, node_t *
   return node;
 }
 
-node_t *node_func(arena_t *arena, size_t cursor, e_function_type type, node_func_args_t args)
+node_t *node_func(arena_t *arena, size_t cursor, node_func_t function)
 {
-  assert(type < FT_COUNT);
+  ASSERT_NULL(arena);
   node_t *node = base_node(arena, cursor, NT_FUNCTION);
-  node->as.func = (node_function_t){
-      .type = type,
-      .args = args,
-  };
+  node->as.func = function;
   return node;
 }
 
 node_t *node_paren(arena_t *arena, size_t cursor, node_t *arg)
 {
+  ASSERT_NULL(arena);
+  ASSERT_NULL(arg);
   node_t *node = base_node(arena, cursor, NT_PAREN);
   node->as.paren = (node_paren_t){
       .arg = arg,
@@ -930,7 +975,6 @@ static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *depth)
   return node_paren(arena, tokOParenCursor, arg);
 }
 
-// TODO: Handle user defined functions!
 static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *depth)
 {
   ASSERT_NULL(arena);
@@ -954,14 +998,6 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *depth)
   if (lex_at_end(lexer) || lex_current_not_specific_paren(lexer, PT_OPAREN))
   {
     lex_revert_seek(lexer);
-    return NULL;
-  }
-
-  // Checks if the symbol is a valid function name.
-  e_function_type ft = ss_to_function_type(&funcNameTok->as.symbol);
-  if (ft == FT_INVALID)
-  {
-    S_ERROR(lex_current_cursor(lexer), "Function not found!");
     return NULL;
   }
 
@@ -1030,9 +1066,18 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *depth)
     return NULL;
   }
 
+  node_func_t function = {0};
+
+  // Checks if the symbol is a valid function name.
+  e_function_type ft = ss_to_function_type(&funcNameTok->as.symbol);
+  if (ft != FT_INVALID)
+    function = node_func_buildin(ft, argsList);
+  else
+    function = node_func_variable(funcNameTok->as.symbol, argsList);
+
   lex_seek(lexer);
 
-  return node_func(arena, funcNameTok->cursor, ft, argsList);
+  return node_func(arena, funcNameTok->cursor, function);
 }
 
 node_t *parser_execute(arena_t *arena, lexer_t *lexer)
@@ -1051,7 +1096,7 @@ node_t *parser_execute(arena_t *arena, lexer_t *lexer)
   return root;
 }
 
-double node_constant_to_value(arena_t *arena, node_variable_stack_t *vs, node_t *node, bool *isError)
+static double node_constant_to_value(arena_t *arena, node_variable_stack_t *vs, node_t *node, bool *isError)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(vs);
@@ -1113,7 +1158,7 @@ double node_constant_to_value(arena_t *arena, node_variable_stack_t *vs, node_t 
   return result;
 }
 
-node_t *ast_eval_binop(arena_t *arena, node_variable_stack_t *vs, size_t cursor, node_t *lhs, node_t *rhs, e_operator_type op)
+static node_t *ast_eval_binop(arena_t *arena, node_variable_stack_t *vs, size_t cursor, node_t *lhs, node_t *rhs, e_operator_type op)
 {
   bool isError = false;
 
@@ -1159,6 +1204,235 @@ node_t *ast_eval_binop(arena_t *arena, node_variable_stack_t *vs, size_t cursor,
   }
 }
 
+static node_t *ast_eval_buildin_func(arena_t *arena, node_variable_stack_t *vs, size_t cursor, e_function_type ft, node_func_args_t *args)
+{
+  bool isError = false;
+
+  switch (ft)
+  {
+  case FT_SQRT:
+  {
+    if (args->count != 1)
+    {
+      E_ERROR_EX(cursor, "%s() takes one argument!", functionTypeIdentifiers[ft]);
+      return NULL;
+    }
+    node_t *arg = ast_eval_ex(arena, vs, args->items[0]);
+    if (!arg)
+      return NULL;
+    double value = node_constant_to_value(arena, vs, arg, &isError);
+    if (isError)
+      return NULL;
+    return node_constant(arena, cursor, node_constant_value(sqrt(value)));
+  }
+  case FT_EXP:
+  {
+    if (args->count != 1)
+    {
+      E_ERROR_EX(cursor, "%s() takes one argument!", functionTypeIdentifiers[ft]);
+      return NULL;
+    }
+    node_t *arg = ast_eval_ex(arena, vs, args->items[0]);
+    if (!arg)
+      return NULL;
+    double value = node_constant_to_value(arena, vs, arg, &isError);
+    if (isError)
+      return NULL;
+    return node_constant(arena, cursor, node_constant_value(exp(value)));
+  }
+  case FT_SIN:
+  {
+    if (args->count != 1)
+    {
+      E_ERROR_EX(cursor, "%s() takes one argument!", functionTypeIdentifiers[ft]);
+      return NULL;
+    }
+    node_t *arg = ast_eval_ex(arena, vs, args->items[0]);
+    if (!arg)
+      return NULL;
+    double value = node_constant_to_value(arena, vs, arg, &isError);
+    if (isError)
+      return NULL;
+    return node_constant(arena, cursor, node_constant_value(sin(value)));
+  }
+  case FT_ASIN:
+  {
+    if (args->count != 1)
+    {
+      E_ERROR_EX(cursor, "%s() takes one argument!", functionTypeIdentifiers[ft]);
+      return NULL;
+    }
+    node_t *arg = ast_eval_ex(arena, vs, args->items[0]);
+    if (!arg)
+      return NULL;
+    double value = node_constant_to_value(arena, vs, arg, &isError);
+    if (isError)
+      return NULL;
+    return node_constant(arena, cursor, node_constant_value(asin(value)));
+  }
+  case FT_SINH:
+  {
+    if (args->count != 1)
+    {
+      E_ERROR_EX(cursor, "%s() takes one argument!", functionTypeIdentifiers[ft]);
+      return NULL;
+    }
+    node_t *arg = ast_eval_ex(arena, vs, args->items[0]);
+    if (!arg)
+      return NULL;
+    double value = node_constant_to_value(arena, vs, arg, &isError);
+    if (isError)
+      return NULL;
+    return node_constant(arena, cursor, node_constant_value(sinh(value)));
+  }
+  case FT_COS:
+  {
+    if (args->count != 1)
+    {
+      E_ERROR_EX(cursor, "%s() takes one argument!", functionTypeIdentifiers[ft]);
+      return NULL;
+    }
+    node_t *arg = ast_eval_ex(arena, vs, args->items[0]);
+    if (!arg)
+      return NULL;
+    double value = node_constant_to_value(arena, vs, arg, &isError);
+    if (isError)
+      return NULL;
+    return node_constant(arena, cursor, node_constant_value(cos(value)));
+  }
+  case FT_ACOS:
+  {
+    if (args->count != 1)
+    {
+      E_ERROR_EX(cursor, "%s() takes one argument!", functionTypeIdentifiers[ft]);
+      return NULL;
+    }
+    node_t *arg = ast_eval_ex(arena, vs, args->items[0]);
+    if (!arg)
+      return NULL;
+    double value = node_constant_to_value(arena, vs, arg, &isError);
+    if (isError)
+      return NULL;
+    return node_constant(arena, cursor, node_constant_value(acos(value)));
+  }
+  case FT_COSH:
+  {
+    if (args->count != 1)
+    {
+      E_ERROR_EX(cursor, "%s() takes one argument!", functionTypeIdentifiers[ft]);
+      return NULL;
+    }
+    node_t *arg = ast_eval_ex(arena, vs, args->items[0]);
+    if (!arg)
+      return NULL;
+    double value = node_constant_to_value(arena, vs, arg, &isError);
+    if (isError)
+      return NULL;
+    return node_constant(arena, cursor, node_constant_value(cosh(value)));
+  }
+  case FT_TAN:
+  {
+    if (args->count != 1)
+    {
+      E_ERROR_EX(cursor, "%s() takes one argument!", functionTypeIdentifiers[ft]);
+      return NULL;
+    }
+    node_t *arg = ast_eval_ex(arena, vs, args->items[0]);
+    if (!arg)
+      return NULL;
+    double value = node_constant_to_value(arena, vs, arg, &isError);
+    if (isError)
+      return NULL;
+    return node_constant(arena, cursor, node_constant_value(tan(value)));
+  }
+  case FT_ATAN:
+  {
+    if (args->count != 1)
+    {
+      E_ERROR_EX(cursor, "%s() takes one argument!", functionTypeIdentifiers[ft]);
+      return NULL;
+    }
+    node_t *arg = ast_eval_ex(arena, vs, args->items[0]);
+    if (!arg)
+      return NULL;
+    double value = node_constant_to_value(arena, vs, arg, &isError);
+    if (isError)
+      return NULL;
+    return node_constant(arena, cursor, node_constant_value(atan(value)));
+  }
+  case FT_TANH:
+  {
+    if (args->count != 1)
+    {
+      E_ERROR_EX(cursor, "%s() takes one argument!", functionTypeIdentifiers[ft]);
+      return NULL;
+    }
+    node_t *arg = ast_eval_ex(arena, vs, args->items[0]);
+    if (!arg)
+      return NULL;
+    double value = node_constant_to_value(arena, vs, arg, &isError);
+    if (isError)
+      return NULL;
+    return node_constant(arena, cursor, node_constant_value(tanh(value)));
+  }
+  case FT_ATAN2:
+  {
+    if (args->count != 2)
+    {
+      E_ERROR_EX(cursor, "%s() takes two arguments!", functionTypeIdentifiers[ft]);
+      return NULL;
+    }
+    node_t *arg1 = ast_eval_ex(arena, vs, args->items[0]);
+    if (!arg1)
+      return NULL;
+    node_t *arg2 = ast_eval_ex(arena, vs, args->items[1]);
+    if (!arg2)
+      return NULL;
+    double value1 = node_constant_to_value(arena, vs, arg1, &isError);
+    if (isError)
+      return NULL;
+    double value2 = node_constant_to_value(arena, vs, arg2, &isError);
+    if (isError)
+      return NULL;
+    return node_constant(arena, cursor, node_constant_value(atan2(value1, value2)));
+  }
+  case FT_LN:
+  {
+    if (args->count != 1)
+    {
+      E_ERROR_EX(cursor, "%s() takes one argument!", functionTypeIdentifiers[ft]);
+      return NULL;
+    }
+    node_t *arg = ast_eval_ex(arena, vs, args->items[0]);
+    if (!arg)
+      return NULL;
+    double value = node_constant_to_value(arena, vs, arg, &isError);
+    if (isError)
+      return NULL;
+    return node_constant(arena, cursor, node_constant_value(log(value)));
+  }
+  case FT_LOG10:
+  {
+    if (args->count != 1)
+    {
+      E_ERROR_EX(cursor, "%s() takes one argument!", functionTypeIdentifiers[ft]);
+      return NULL;
+    }
+    node_t *arg = ast_eval_ex(arena, vs, args->items[0]);
+    if (!arg)
+      return NULL;
+    double value = node_constant_to_value(arena, vs, arg, &isError);
+    if (isError)
+      return NULL;
+    return node_constant(arena, cursor, node_constant_value(log10(value)));
+  }
+  case FT_COUNT:
+  case FT_INVALID:
+  default:
+    UNREACHABLE("Invalid function-type!");
+  }
+}
+
 node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
 {
   ASSERT_NULL(arena);
@@ -1179,246 +1453,76 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
   }
   case NT_BINOP:
   {
-    node_t *lhs = ast_eval_ex(arena, vs, expr->as.binop.lhs);
+    node_binop_t *binop = &expr->as.binop;
+
+    node_t *lhs = ast_eval_ex(arena, vs, binop->lhs);
     if (!lhs)
       return NULL;
 
-    node_t *rhs = ast_eval_ex(arena, vs, expr->as.binop.rhs);
+    node_t *rhs = ast_eval_ex(arena, vs, binop->rhs);
     if (!rhs)
       return NULL;
 
-    return ast_eval_binop(arena, vs, expr->cursor, lhs, rhs, expr->as.binop.type);
+    return ast_eval_binop(arena, vs, expr->cursor, lhs, rhs, binop->type);
   }
   case NT_FUNCTION:
   {
-    switch (expr->as.func.type)
+    node_func_t *funcNode = &expr->as.func;
+
+    switch (funcNode->type)
     {
-    case FT_SQRT:
+    case FN_BUILDIN_FUNC:
     {
-      if (expr->as.func.args.count != 1)
+      return ast_eval_buildin_func(arena, vs, expr->cursor, funcNode->as.buildinFunc, &funcNode->args);
+    }
+    case FN_VARIABLE:
+    {
+      string_slice_t *funcName = &funcNode->as.variableName;
+
+      node_variable_t *variable = vs_find_variable_ex(vs, funcName, FVM_FUNC);
+      if (!variable)
       {
-        E_ERROR_EX(expr->cursor, "%s() takes one argument!", functionTypeIdentifiers[expr->as.func.type]);
+        E_ERROR_SS(expr->cursor, "Variable '" SS_FMT "' not found!", funcName);
         return NULL;
       }
-      node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
-      if (!arg)
-        return NULL;
-      double value = node_constant_to_value(arena, vs, arg, &isError);
-      if (isError)
-        return NULL;
-      return node_constant(arena, expr->cursor, node_constant_value(sqrt(value)));
-    }
-    case FT_EXP:
-    {
-      if (expr->as.func.args.count != 1)
+
+      if (funcNode->args.count != variable->as.funcDef.args.count)
       {
-        E_ERROR_EX(expr->cursor, "%s() takes one argument!", functionTypeIdentifiers[expr->as.func.type]);
+        E_ERROR_SS_2(expr->cursor, SS_FMT "() takes '%zu' argument!", &variable->as.funcDef.name, variable->as.funcDef.args.count);
         return NULL;
       }
-      node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
-      if (!arg)
-        return NULL;
-      double value = node_constant_to_value(arena, vs, arg, &isError);
-      if (isError)
-        return NULL;
-      return node_constant(arena, expr->cursor, node_constant_value(exp(value)));
-    }
-    case FT_SIN:
-    {
-      if (expr->as.func.args.count != 1)
+
+      for (size_t i = 0; i < funcNode->args.count; ++i)
       {
-        E_ERROR_EX(expr->cursor, "%s() takes one argument!", functionTypeIdentifiers[expr->as.func.type]);
-        return NULL;
+        // This is how the arg name can be read.
+        // string_slice_t *argName = &variable->as.funcDef.args.items[i];
+
+        node_t *arg = ast_eval_ex(arena, vs, funcNode->args.items[i]);
+        if (!arg)
+          return NULL;
+
+        double value = node_constant_to_value(arena, vs, arg, &isError);
+        if (isError)
+          return NULL;
+
+        printf("FUNC('" SS_FMT "') -> ARG-%zu = '%f'\n", SS_ARG(&variable->as.funcDef.name), i, value);
       }
-      node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
-      if (!arg)
-        return NULL;
-      double value = node_constant_to_value(arena, vs, arg, &isError);
-      if (isError)
-        return NULL;
-      return node_constant(arena, expr->cursor, node_constant_value(sin(value)));
+
+      // TODO: Implement!
+      // return node_constant(arena, expr->cursor, node_constant_value(log(value)));
+
+      E_ERROR(expr->cursor, "Function variable evaluation not implemented yet!");
+      return NULL;
     }
-    case FT_ASIN:
-    {
-      if (expr->as.func.args.count != 1)
-      {
-        E_ERROR_EX(expr->cursor, "%s() takes one argument!", functionTypeIdentifiers[expr->as.func.type]);
-        return NULL;
-      }
-      node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
-      if (!arg)
-        return NULL;
-      double value = node_constant_to_value(arena, vs, arg, &isError);
-      if (isError)
-        return NULL;
-      return node_constant(arena, expr->cursor, node_constant_value(asin(value)));
-    }
-    case FT_SINH:
-    {
-      if (expr->as.func.args.count != 1)
-      {
-        E_ERROR_EX(expr->cursor, "%s() takes one argument!", functionTypeIdentifiers[expr->as.func.type]);
-        return NULL;
-      }
-      node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
-      if (!arg)
-        return NULL;
-      double value = node_constant_to_value(arena, vs, arg, &isError);
-      if (isError)
-        return NULL;
-      return node_constant(arena, expr->cursor, node_constant_value(sinh(value)));
-    }
-    case FT_COS:
-    {
-      if (expr->as.func.args.count != 1)
-      {
-        E_ERROR_EX(expr->cursor, "%s() takes one argument!", functionTypeIdentifiers[expr->as.func.type]);
-        return NULL;
-      }
-      node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
-      if (!arg)
-        return NULL;
-      double value = node_constant_to_value(arena, vs, arg, &isError);
-      if (isError)
-        return NULL;
-      return node_constant(arena, expr->cursor, node_constant_value(cos(value)));
-    }
-    case FT_ACOS:
-    {
-      if (expr->as.func.args.count != 1)
-      {
-        E_ERROR_EX(expr->cursor, "%s() takes one argument!", functionTypeIdentifiers[expr->as.func.type]);
-        return NULL;
-      }
-      node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
-      if (!arg)
-        return NULL;
-      double value = node_constant_to_value(arena, vs, arg, &isError);
-      if (isError)
-        return NULL;
-      return node_constant(arena, expr->cursor, node_constant_value(acos(value)));
-    }
-    case FT_COSH:
-    {
-      if (expr->as.func.args.count != 1)
-      {
-        E_ERROR_EX(expr->cursor, "%s() takes one argument!", functionTypeIdentifiers[expr->as.func.type]);
-        return NULL;
-      }
-      node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
-      if (!arg)
-        return NULL;
-      double value = node_constant_to_value(arena, vs, arg, &isError);
-      if (isError)
-        return NULL;
-      return node_constant(arena, expr->cursor, node_constant_value(cosh(value)));
-    }
-    case FT_TAN:
-    {
-      if (expr->as.func.args.count != 1)
-      {
-        E_ERROR_EX(expr->cursor, "%s() takes one argument!", functionTypeIdentifiers[expr->as.func.type]);
-        return NULL;
-      }
-      node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
-      if (!arg)
-        return NULL;
-      double value = node_constant_to_value(arena, vs, arg, &isError);
-      if (isError)
-        return NULL;
-      return node_constant(arena, expr->cursor, node_constant_value(tan(value)));
-    }
-    case FT_ATAN:
-    {
-      if (expr->as.func.args.count != 1)
-      {
-        E_ERROR_EX(expr->cursor, "%s() takes one argument!", functionTypeIdentifiers[expr->as.func.type]);
-        return NULL;
-      }
-      node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
-      if (!arg)
-        return NULL;
-      double value = node_constant_to_value(arena, vs, arg, &isError);
-      if (isError)
-        return NULL;
-      return node_constant(arena, expr->cursor, node_constant_value(atan(value)));
-    }
-    case FT_TANH:
-    {
-      if (expr->as.func.args.count != 1)
-      {
-        E_ERROR_EX(expr->cursor, "%s() takes one argument!", functionTypeIdentifiers[expr->as.func.type]);
-        return NULL;
-      }
-      node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
-      if (!arg)
-        return NULL;
-      double value = node_constant_to_value(arena, vs, arg, &isError);
-      if (isError)
-        return NULL;
-      return node_constant(arena, expr->cursor, node_constant_value(tanh(value)));
-    }
-    case FT_ATAN2:
-    {
-      if (expr->as.func.args.count != 2)
-      {
-        E_ERROR_EX(expr->cursor, "%s() takes two arguments!", functionTypeIdentifiers[expr->as.func.type]);
-        return NULL;
-      }
-      node_t *arg1 = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
-      if (!arg1)
-        return NULL;
-      node_t *arg2 = ast_eval_ex(arena, vs, expr->as.func.args.items[1]);
-      if (!arg2)
-        return NULL;
-      double value1 = node_constant_to_value(arena, vs, arg1, &isError);
-      if (isError)
-        return NULL;
-      double value2 = node_constant_to_value(arena, vs, arg2, &isError);
-      if (isError)
-        return NULL;
-      return node_constant(arena, expr->cursor, node_constant_value(atan2(value1, value2)));
-    }
-    case FT_LN:
-    {
-      if (expr->as.func.args.count != 1)
-      {
-        E_ERROR_EX(expr->cursor, "%s() takes one argument!", functionTypeIdentifiers[expr->as.func.type]);
-        return NULL;
-      }
-      node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
-      if (!arg)
-        return NULL;
-      double value = node_constant_to_value(arena, vs, arg, &isError);
-      if (isError)
-        return NULL;
-      return node_constant(arena, expr->cursor, node_constant_value(log(value)));
-    }
-    case FT_LOG10:
-    {
-      if (expr->as.func.args.count != 1)
-      {
-        E_ERROR_EX(expr->cursor, "%s() takes one argument!", functionTypeIdentifiers[expr->as.func.type]);
-        return NULL;
-      }
-      node_t *arg = ast_eval_ex(arena, vs, expr->as.func.args.items[0]);
-      if (!arg)
-        return NULL;
-      double value = node_constant_to_value(arena, vs, arg, &isError);
-      if (isError)
-        return NULL;
-      return node_constant(arena, expr->cursor, node_constant_value(log10(value)));
-    }
-    case FT_COUNT:
-    case FT_INVALID:
+    case FN_COUNT:
     default:
-      UNREACHABLE("Invalid function-type!");
+      UNREACHABLE("Invalid func-node-type!");
     }
-    break;
   }
   case NT_PAREN:
   {
-    node_t *arg = ast_eval_ex(arena, vs, expr->as.paren.arg);
+    node_paren_t *parenNode = &expr->as.paren;
+    node_t *arg = ast_eval_ex(arena, vs, parenNode->arg);
     if (!arg)
       return NULL;
     return node_constant(arena, expr->cursor, arg->as.constant);
@@ -1473,7 +1577,7 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
     {
       e_math_constant_type mc = node->as.constant.as.buildinConstant;
       if (mc == MC_INVALID)
-        UNREACHABLE("Invalid math constant type!");
+        UNREACHABLE("Invalid math-constant-type!");
 
       if (node->as.constant.hasPrefixMinus)
         printf("%s (-" DOUBLE_PRINT_FORMAT ", %s)", mathConstantTypeIdentifiers[mc], mathConstantTypeValues[mc], mathConstantTypeNames[mc]);
@@ -1483,18 +1587,17 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
     break;
     case CN_VARIABLE:
     {
-      bool indentedInternal = indented;
-      printf("'" SS_FMT "' =%s", SS_ARG(&node->as.constant.as.variableName), indentedInternal ? "\n" : " ");
+      printf("'" SS_FMT "' =%s", SS_ARG(&node->as.constant.as.variableName), indented ? "\n" : " ");
 
       node_variable_t *variable = vs_find_variable_ex(vs, &node->as.constant.as.variableName, FVM_CONST);
       if (!variable)
       {
-        _PRINT_DEPTH_SPACES(indentedInternal, depth + 1);
-        printf("Variable not found!");
+        _PRINT_DEPTH_SPACES(indented, depth + 1);
+        printf("[Variable not found]");
         break;
       }
 
-      print_node_ex(vs, variable->expression, indentedInternal, depth + 1);
+      print_node_ex(vs, variable->expression, indented, depth + 1);
     }
     break;
     case CN_COUNT:
@@ -1523,18 +1626,43 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
   }
   case NT_FUNCTION:
   {
-    node_function_t *funcNode = &node->as.func;
-    if (funcNode->type >= FT_COUNT)
-      UNREACHABLE("Invalid function-type!");
+    node_func_t *funcNode = &node->as.func;
+
+    _PRINT_DEPTH_SPACES(indented, depth);
+
+    switch (funcNode->type)
+    {
+    case FN_BUILDIN_FUNC:
+    {
+      if (funcNode->as.buildinFunc >= FT_COUNT)
+        UNREACHABLE("Invalid function-type!");
+
+      printf("%s(", functionTypeIdentifiers[funcNode->as.buildinFunc]);
+    }
+    break;
+    case FN_VARIABLE:
+    {
+      printf("'" SS_FMT "'", SS_ARG(&funcNode->as.variableName));
+
+      node_variable_t *variable = vs_find_variable_ex(vs, &funcNode->as.variableName, FVM_FUNC);
+      if (!variable)
+      {
+        printf(" - [Variable not found] (");
+        break;
+      }
+      else
+        printf("(");
+    }
+    break;
+    case FN_COUNT:
+    default:
+      UNREACHABLE("Invalid func-node-type!");
+    }
 
     node_func_args_t *args = &funcNode->args;
 
     if (args->count <= 0)
       UNREACHABLE("No arguments found in function node!");
-
-    _PRINT_DEPTH_SPACES(indented, depth);
-
-    printf("%s(", functionTypeIdentifiers[funcNode->type]);
 
     if (args->count == 1)
     {
