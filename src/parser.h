@@ -18,6 +18,7 @@
   fprintf(stderr, type ":%zu: " message "\n", cursor, SS_ARG(ss))
 #define G_ERROR(message) \
   fprintf(stderr, _G_ERROR_NAME ": %s\n", message)
+#define S_ERROR_EX(cursor, message, arg) _PARSER_ERROR_EX(_S_ERROR_NAME, cursor, message, arg)
 #define S_ERROR(cursor, message) _PARSER_ERROR(_S_ERROR_NAME, cursor, message)
 #define S_ERROR_SS(cursor, message, ss) _PARSER_ERROR_SS(_S_ERROR_NAME, cursor, message, ss)
 #define E_ERROR_EX_2(cursor, message, arg1, arg2) _PARSER_ERROR_EX_2(_E_ERROR_NAME, cursor, message, arg1, arg2)
@@ -38,25 +39,6 @@
       for (size_t i = 0; i < (depth); ++i)   \
         printf(" - ");                       \
   } while (0)
-
-typedef enum
-{
-  NT_CONSTANT,
-  NT_BINOP,
-  NT_FUNCTION,
-  NT_PAREN,
-
-  NT_COUNT
-} e_node_type;
-
-static_assert(NT_COUNT == 4, "Amount of node-types have changed");
-
-const char *nodeTypeNames[NT_COUNT] = {
-    [NT_CONSTANT] = "constant",
-    [NT_BINOP] = "operator",
-    [NT_FUNCTION] = "function",
-    [NT_PAREN] = "parenthesis",
-};
 
 // Node definitions
 typedef struct node node_t;
@@ -126,7 +108,7 @@ static inline node_func_t node_func_variable(string_slice_t val, node_func_args_
 
 typedef struct
 {
-  node_t *arg;
+  node_t *child;
 } node_paren_t;
 
 typedef union
@@ -158,46 +140,82 @@ typedef struct
 {
   e_const_node_type type;
   u_const_node_as as;
-  bool hasPrefixMinus;
 } node_const_t;
 
-static inline node_const_t node_constant_value_ex(double val, bool minus)
+static inline node_const_t node_constant_value(double val)
 {
   return (node_const_t){
       .type = CN_VALUE,
       .as.value = val,
-      .hasPrefixMinus = minus,
   };
 }
-#define node_constant_value(val) node_constant_value_ex(val, false)
 
-static inline node_const_t node_constant_buildin_const_ex(e_math_constant_type val, bool minus)
+static inline node_const_t node_constant_buildin_const(e_math_constant_type val)
 {
   return (node_const_t){
       .type = CN_BUILDIN_CONST,
       .as.buildinConstant = val,
-      .hasPrefixMinus = minus,
   };
 }
-#define node_constant_buildin_const(val) node_constant_buildin_const_ex(val, false)
 
-static inline node_const_t node_constant_variable_ex(string_slice_t val, bool minus)
+static inline node_const_t node_constant_variable(string_slice_t val)
 {
   return (node_const_t){
       .type = CN_VARIABLE,
       .as.variableName = val,
-      .hasPrefixMinus = minus,
   };
 }
-#define node_constant_variable(val) node_constant_variable_ex(val, false)
+
+typedef enum
+{
+  NPT_PLUS,
+  NPT_MINUS,
+
+  NPT_COUNT,
+} e_node_prefix_type;
+
+static_assert(NPT_COUNT == 2, "Amount of node-prefix-types have changed!");
+
+const char *nodePrefixTypeNames[NPT_COUNT] = {
+    [NPT_PLUS] = "Plus",
+    [NPT_MINUS] = "Minus",
+};
+
+typedef struct
+{
+  e_node_prefix_type type;
+  node_t *child;
+} node_prefix_t;
 
 typedef union
 {
+  node_prefix_t prefix;
   node_const_t constant;
   node_binop_t binop;
   node_func_t func;
   node_paren_t paren;
 } u_node_as;
+
+typedef enum
+{
+  NT_PREFIX_EXPRESSION,
+  NT_CONSTANT,
+  NT_BINOP,
+  NT_FUNCTION,
+  NT_PAREN,
+
+  NT_COUNT
+} e_node_type;
+
+static_assert(NT_COUNT == 5, "Amount of node-types have changed");
+
+const char *nodeTypeNames[NT_COUNT] = {
+    [NT_PREFIX_EXPRESSION] = "prefix",
+    [NT_CONSTANT] = "constant",
+    [NT_BINOP] = "operator",
+    [NT_FUNCTION] = "function",
+    [NT_PAREN] = "parenthesis",
+};
 
 struct node
 {
@@ -216,6 +234,17 @@ static node_t *base_node(arena_t *arena, size_t cursor, e_node_type type)
       .cursor = cursor,
   };
   return newNode;
+}
+
+node_t *node_prefix_expression(arena_t *arena, size_t cursor, e_node_prefix_type type, node_t *child)
+{
+  ASSERT_NULL(arena);
+  node_t *node = base_node(arena, cursor, NT_PREFIX_EXPRESSION);
+  node->as.prefix = (node_prefix_t){
+      .type = type,
+      .child = child,
+  };
+  return node;
 }
 
 node_t *node_constant(arena_t *arena, size_t cursor, node_const_t constant)
@@ -249,13 +278,13 @@ node_t *node_func(arena_t *arena, size_t cursor, node_func_t function)
   return node;
 }
 
-node_t *node_paren(arena_t *arena, size_t cursor, node_t *arg)
+node_t *node_paren(arena_t *arena, size_t cursor, node_t *child)
 {
   ASSERT_NULL(arena);
-  ASSERT_NULL(arg);
+  ASSERT_NULL(child);
   node_t *node = base_node(arena, cursor, NT_PAREN);
   node->as.paren = (node_paren_t){
-      .arg = arg,
+      .child = child,
   };
   return node;
 }
@@ -444,6 +473,7 @@ bool parse_node_variables(node_variable_stack_t *vs, arena_t *arena, lexer_t *le
 void print_variable_stack(node_variable_stack_t *vs, bool showValue, bool indented);
 
 static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer);
+static node_t *try_parse_prefix_expression(arena_t *arena, lexer_t *lexer, size_t *depth);
 static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *depth, e_precedence precedence);
 static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *depth);
 static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *depth);
@@ -794,31 +824,12 @@ static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer)
 
   token_t *token = lex_current(lexer);
 
-  bool hasPrefixPlus = false;
-  bool hasPrefixMinus = false;
-
-  if (lex_current_is_specific_operator(lexer, OP_SUB))
-    hasPrefixMinus = true;
-  else if (lex_current_is_specific_operator(lexer, OP_ADD))
-    hasPrefixPlus = true;
-
-  if (hasPrefixMinus || hasPrefixPlus)
-  {
-    if (!lex_can_peek(lexer))
-    {
-      S_ERROR(token->cursor, "Expected a value after!");
-      return NULL;
-    }
-
-    lex_seek(lexer);
-  }
-
   bool found = false;
   node_const_t constant = {0};
 
   if (lex_current_is(lexer, TT_NUMBER))
   {
-    constant = node_constant_value_ex(token->as.number, hasPrefixMinus);
+    constant = node_constant_value(token->as.number);
     found = true;
   }
   else if (lex_current_is_math_constant(lexer))
@@ -828,12 +839,12 @@ static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer)
     if (mc == MC_INVALID)
       UNREACHABLE("Math-Constant-Type not implemented!");
 
-    constant = node_constant_buildin_const_ex(mc, hasPrefixMinus);
+    constant = node_constant_buildin_const(mc);
     found = true;
   }
   else if (lex_current_is(lexer, TT_SYMBOL))
   {
-    constant = node_constant_variable_ex(token->as.symbol, hasPrefixMinus);
+    constant = node_constant_variable(token->as.symbol);
     found = true;
   }
 
@@ -843,6 +854,48 @@ static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer)
   lex_seek(lexer);
 
   return node_constant(arena, token->cursor, constant);
+}
+
+static node_t *try_parse_prefix_expression(arena_t *arena, lexer_t *lexer, size_t *depth)
+{
+  ASSERT_NULL(arena);
+  ASSERT_NULL(lexer);
+
+  if (lex_at_end(lexer))
+    return NULL;
+
+  if (lex_current_not(lexer, TT_OPERATOR))
+    return NULL;
+
+  token_t *token = lex_current(lexer);
+  e_node_prefix_type type = NPT_PLUS;
+
+  if (lex_current_is_specific_operator(lexer, OP_ADD))
+    type = NPT_PLUS;
+  else if (lex_current_is_specific_operator(lexer, OP_SUB))
+    type = NPT_MINUS;
+  else
+  {
+    if (token->as.op >= OP_COUNT)
+      UNREACHABLE("Invalid operator-type!");
+
+    S_ERROR_EX(lex_current_cursor(lexer), "'%c' is an invalid prefix operator!", operatorTypeIdentifiers[token->as.op]);
+    return NULL;
+  }
+
+  if (!lex_can_peek(lexer))
+  {
+    S_ERROR(token->cursor, "Expected an expression after a prefix operator!");
+    return NULL;
+  }
+
+  lex_seek(lexer);
+
+  node_t *child = try_parse_binop(arena, lexer, depth, BP_LINE);
+  if (!child)
+    return NULL;
+
+  return node_prefix_expression(arena, token->cursor, type, child);
 }
 
 static node_t *next_node_by_precedence(arena_t *arena, lexer_t *lexer, size_t *depth, e_precedence precedence)
@@ -860,6 +913,9 @@ static node_t *next_node_by_precedence(arena_t *arena, lexer_t *lexer, size_t *d
 
   if (!node)
     node = try_parse_func(arena, lexer, depth);
+
+  if (!node)
+    node = try_parse_prefix_expression(arena, lexer, depth);
 
   if (!node)
     node = try_parse_constant(arena, lexer);
@@ -955,8 +1011,8 @@ static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *depth)
   }
 
   ++(*depth);
-  node_t *arg = try_parse_binop(arena, lexer, depth, BP_LINE);
-  if (!arg)
+  node_t *child = try_parse_binop(arena, lexer, depth, BP_LINE);
+  if (!child)
   {
     S_ERROR(lex_current_cursor(lexer), "Invalid expression!");
     --(*depth);
@@ -972,7 +1028,7 @@ static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *depth)
 
   lex_seek(lexer);
 
-  return node_paren(arena, tokOParenCursor, arg);
+  return node_paren(arena, tokOParenCursor, child);
 }
 
 static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *depth)
@@ -1150,10 +1206,6 @@ static double node_constant_to_value(arena_t *arena, node_variable_stack_t *vs, 
   default:
     UNREACHABLE("Invalid constant node type!");
   }
-
-  // Handle prefix minus of the constant
-  if (constant->hasPrefixMinus)
-    result *= -1;
 
   return result;
 }
@@ -1451,6 +1503,37 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
       return NULL;
     return node_constant(arena, expr->cursor, node_constant_value(value));
   }
+  case NT_PREFIX_EXPRESSION:
+  {
+    node_prefix_t *prefix = &expr->as.prefix;
+
+    node_t *child = ast_eval_ex(arena, vs, prefix->child);
+    if (!child)
+      return NULL;
+
+    double value = node_constant_to_value(arena, vs, child, &isError);
+    if (isError)
+      return NULL;
+
+    switch (prefix->type)
+    {
+    case NPT_PLUS:
+    {
+      value = 0 + value;
+    }
+    break;
+    case NPT_MINUS:
+    {
+      value = 0 - value;
+    }
+    break;
+    case NPT_COUNT:
+    default:
+      UNREACHABLE("Invalid node-prefix-type!");
+    }
+
+    return node_constant(arena, expr->cursor, node_constant_value(value));
+  }
   case NT_BINOP:
   {
     node_binop_t *binop = &expr->as.binop;
@@ -1488,7 +1571,10 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
 
       if (funcNode->args.count != variable->as.funcDef.args.count)
       {
-        E_ERROR_SS_2(expr->cursor, SS_FMT "() takes '%zu' argument!", &variable->as.funcDef.name, variable->as.funcDef.args.count);
+        if (variable->as.funcDef.args.count == 1)
+          E_ERROR_SS_2(expr->cursor, SS_FMT "() takes '%zu' argument!", &variable->as.funcDef.name, variable->as.funcDef.args.count);
+        else
+          E_ERROR_SS_2(expr->cursor, SS_FMT "() takes '%zu' arguments!", &variable->as.funcDef.name, variable->as.funcDef.args.count);
         return NULL;
       }
 
@@ -1511,7 +1597,7 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
       // TODO: Implement!
       // return node_constant(arena, expr->cursor, node_constant_value(log(value)));
 
-      E_ERROR(expr->cursor, "Function variable evaluation not implemented yet!");
+      E_ERROR(expr->cursor, "Custom function evaluation not implemented yet!");
       return NULL;
     }
     case FN_COUNT:
@@ -1522,10 +1608,10 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
   case NT_PAREN:
   {
     node_paren_t *parenNode = &expr->as.paren;
-    node_t *arg = ast_eval_ex(arena, vs, parenNode->arg);
-    if (!arg)
+    node_t *child = ast_eval_ex(arena, vs, parenNode->child);
+    if (!child)
       return NULL;
-    return node_constant(arena, expr->cursor, arg->as.constant);
+    return node_constant(arena, expr->cursor, child->as.constant);
   }
   case NT_COUNT:
   default:
@@ -1559,12 +1645,44 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
 
   switch (node->type)
   {
+  case NT_PREFIX_EXPRESSION:
+  {
+    node_prefix_t *prefixNode = &node->as.prefix;
+    node_t *child = prefixNode->child;
+
+    _PRINT_DEPTH_SPACES(indented, depth);
+
+    switch (prefixNode->type)
+    {
+    case NPT_PLUS:
+      printf("prefix_plus(");
+      break;
+    case NPT_MINUS:
+      printf("prefix_minus(");
+      break;
+    case NPT_COUNT:
+    default:
+      UNREACHABLE("Invalid node-prefix-type!");
+    }
+
+    bool isArgTypeConst = child->type == NT_CONSTANT && child->as.constant.type != CN_VARIABLE;
+
+    if (indented && !isArgTypeConst)
+      printf("\n");
+
+    print_node_ex(vs, child, indented, !isArgTypeConst ? depth + 1 : 0);
+
+    if (indented && !isArgTypeConst)
+      printf("\n");
+
+    _PRINT_DEPTH_SPACES(indented, !isArgTypeConst ? depth : 0);
+
+    printf(")");
+  }
+  break;
   case NT_CONSTANT:
   {
     _PRINT_DEPTH_SPACES(indented, depth);
-
-    if (node->as.constant.hasPrefixMinus)
-      printf("-");
 
     switch (node->as.constant.type)
     {
@@ -1579,10 +1697,7 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
       if (mc == MC_INVALID)
         UNREACHABLE("Invalid math-constant-type!");
 
-      if (node->as.constant.hasPrefixMinus)
-        printf("%s (-" DOUBLE_PRINT_FORMAT ", %s)", mathConstantTypeIdentifiers[mc], mathConstantTypeValues[mc], mathConstantTypeNames[mc]);
-      else
-        printf("%s (" DOUBLE_PRINT_FORMAT ", %s)", mathConstantTypeIdentifiers[mc], mathConstantTypeValues[mc], mathConstantTypeNames[mc]);
+      printf("%s (" DOUBLE_PRINT_FORMAT ", %s)", mathConstantTypeIdentifiers[mc], mathConstantTypeValues[mc], mathConstantTypeNames[mc]);
     }
     break;
     case CN_VARIABLE:
@@ -1604,8 +1719,8 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
     default:
       UNREACHABLE("Invalid constant-node-type!");
     }
-    break;
   }
+  break;
   case NT_BINOP:
   {
     if (node->as.binop.type >= OP_COUNT)
@@ -1622,8 +1737,8 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
       printf("\n");
     _PRINT_DEPTH_SPACES(indented, depth);
     printf(")");
-    break;
   }
+  break;
   case NT_FUNCTION:
   {
     node_func_t *funcNode = &node->as.func;
@@ -1698,23 +1813,23 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
     }
 
     printf(")");
-    break;
   }
+  break;
   case NT_PAREN:
   {
     node_paren_t *parenNode = &node->as.paren;
-    node_t *arg = parenNode->arg;
+    node_t *child = parenNode->child;
 
     _PRINT_DEPTH_SPACES(indented, depth);
 
     printf("paren(");
 
-    bool isArgTypeConst = arg->type == NT_CONSTANT && arg->as.constant.type != CN_VARIABLE;
+    bool isArgTypeConst = child->type == NT_CONSTANT && child->as.constant.type != CN_VARIABLE;
 
     if (indented && !isArgTypeConst)
       printf("\n");
 
-    print_node_ex(vs, arg, indented, !isArgTypeConst ? depth + 1 : 0);
+    print_node_ex(vs, child, indented, !isArgTypeConst ? depth + 1 : 0);
 
     if (indented && !isArgTypeConst)
       printf("\n");
@@ -1722,8 +1837,8 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
     _PRINT_DEPTH_SPACES(indented, !isArgTypeConst ? depth : 0);
 
     printf(")");
-    break;
   }
+  break;
   case NT_COUNT:
   default:
     UNREACHABLE("Invalid node-type!");

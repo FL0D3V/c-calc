@@ -76,8 +76,8 @@ const bool operatorRightAssociative[OP_COUNT] = {
 };
 
 const char *operatorTypeNames[OP_COUNT] = {
-    [OP_ADD] = "add",
-    [OP_SUB] = "subtract",
+    [OP_ADD] = "plus",
+    [OP_SUB] = "minus",
     [OP_MUL] = "multiply",
     [OP_DIV] = "divide",
     [OP_POW] = "pow",
