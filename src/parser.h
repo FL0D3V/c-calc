@@ -37,7 +37,7 @@
   {                                          \
     if (indented)                            \
       for (size_t i = 0; i < (depth); ++i)   \
-        printf(" - ");                       \
+        printf("\033[32m:  \033[0m");        \
   } while (0)
 
 // Node definitions
@@ -314,10 +314,17 @@ typedef struct
   node_func_definition_args_t args;
 } node_function_definition_t;
 
+typedef struct
+{
+  string_slice_t funcName;
+  string_slice_t argName;
+} node_function_arg_definition_t;
+
 typedef union
 {
   string_slice_t varDef;
   node_function_definition_t funcDef;
+  node_function_arg_definition_t funcArgDef;
 } u_node_variable_as;
 
 typedef enum
@@ -326,16 +333,19 @@ typedef enum
   NV_CONST_VARIABLE_DEFINITION,
   // A function definition. This means it will have at least one argument, which can be used in the assined expression.
   NV_FUNCTION_DEFINITION,
+  // Defines an argument from a function. Stores the function-name and the argument name.
+  NV_FUNCTION_ARG_DEFINITION,
 
   // Count of variable names.
   NV_COUNT
 } e_node_variable_type;
 
-static_assert(NV_COUNT == 2, "Amount of variable-node-types have changed");
+static_assert(NV_COUNT == 3, "Amount of variable-node-types have changed");
 
 const char *nodeVariableTypeNames[NV_COUNT] = {
     [NV_CONST_VARIABLE_DEFINITION] = "Constant-Definition",
     [NV_FUNCTION_DEFINITION] = "Function-Definition",
+    [NV_FUNCTION_ARG_DEFINITION] = "Function-Argument-Definition",
 };
 
 typedef struct
@@ -350,6 +360,8 @@ typedef struct
   ((node_variable_t){.type = NV_CONST_VARIABLE_DEFINITION, .as.varDef = (varName), .expression = (value)})
 #define node_variable_function(varName, funcArgs, value) \
   ((node_variable_t){.type = NV_FUNCTION_DEFINITION, .as.funcDef.name = (varName), .as.funcDef.args = (funcArgs), .expression = (value)})
+#define node_variable_func_arg(func, arg) \
+  ((node_variable_t){.type = NV_FUNCTION_ARG_DEFINITION, .as.funcArgDef.funcName = (func), .as.funcArgDef.argName = (arg), .expression = NULL})
 
 typedef struct
 {
@@ -358,8 +370,24 @@ typedef struct
   size_t count;
 } node_variable_stack_t;
 
-#define vs_variable_append(a, vs, var) \
-  arena_da_append(a, vs, var)
+void vs_variable_push(arena_t *a, node_variable_stack_t *vs, node_variable_t var)
+{
+  // TODO: Check for duplicates!
+  arena_da_append(a, vs, var);
+}
+
+void vs_variable_pop_ex(node_variable_stack_t *vs, size_t count)
+{
+  ASSERT_NULL(vs);
+  vs->count -= count;
+}
+
+node_variable_t *vs_variable_pop(node_variable_stack_t *vs)
+{
+  ASSERT_NULL(vs);
+  node_variable_t *var = &vs->items[vs->count--];
+  return var;
+}
 
 #define vs_at(vs, idx) (&(vs)->items[idx])
 
@@ -368,22 +396,24 @@ typedef enum
   FVM_ALL,
   FVM_CONST,
   FVM_FUNC,
+  FVM_FUNC_ARG,
 
   FVM_COUNT
 } e_find_var_mode;
 
-static_assert(FVM_COUNT == 3, "Amount of find node var modes have changed!");
+static_assert(FVM_COUNT == 4, "Amount of find node var modes have changed!");
 
-node_variable_t *vs_find_variable_ex(node_variable_stack_t *vs, string_slice_t *name, e_find_var_mode mode)
+node_variable_t *vs_find_variable_ex(node_variable_stack_t *vs, string_slice_t *name, string_slice_t *funcName, e_find_var_mode mode)
 {
   ASSERT_NULL(vs);
   ASSERT_NULL(name);
   assert(mode < FVM_COUNT);
 
+  node_variable_t *curr = NULL;
+
   for (size_t i = 0; i < vs->count; ++i)
   {
-    node_variable_t *curr = vs_at(vs, i);
-    string_slice_t *currName = NULL;
+    curr = vs_at(vs, i);
 
     switch (mode)
     {
@@ -393,12 +423,24 @@ node_variable_t *vs_find_variable_ex(node_variable_stack_t *vs, string_slice_t *
       {
       case NV_CONST_VARIABLE_DEFINITION:
       {
-        currName = &curr->as.varDef;
+        if (ss_compare(name, &curr->as.varDef))
+          return curr;
       }
       break;
       case NV_FUNCTION_DEFINITION:
       {
-        currName = &curr->as.funcDef.name;
+        if (ss_compare(name, &curr->as.funcDef.name))
+          return curr;
+      }
+      break;
+      case NV_FUNCTION_ARG_DEFINITION:
+      {
+        if (!funcName)
+          continue;
+
+        if (ss_compare(funcName, &curr->as.funcArgDef.funcName) &&
+            ss_compare(name, &curr->as.funcArgDef.argName))
+          return curr;
       }
       break;
       case NV_COUNT:
@@ -410,46 +452,52 @@ node_variable_t *vs_find_variable_ex(node_variable_stack_t *vs, string_slice_t *
     case FVM_CONST:
     {
       if (curr->type == NV_CONST_VARIABLE_DEFINITION)
-        currName = &curr->as.varDef;
+        if (ss_compare(name, &curr->as.varDef))
+          return curr;
     }
     break;
     case FVM_FUNC:
     {
       if (curr->type == NV_FUNCTION_DEFINITION)
-        currName = &curr->as.funcDef.name;
+        if (ss_compare(name, &curr->as.funcDef.name))
+          return curr;
+    }
+    break;
+    case FVM_FUNC_ARG:
+    {
+      if (!funcName)
+        continue;
+
+      if (curr->type == NV_FUNCTION_ARG_DEFINITION)
+        if (ss_compare(funcName, &curr->as.funcArgDef.funcName) &&
+            ss_compare(name, &curr->as.funcArgDef.argName))
+          return curr;
     }
     break;
     case FVM_COUNT:
     default:
       UNREACHABLE("Invalid find-var-mode!");
     }
-
-    if (!currName)
-      continue;
-
-    // Check if the given name is in the var stack.
-    if (ss_compare(name, currName))
-      return curr;
   }
 
   return NULL;
 }
 
-#define vs_find_variable(vs, name) \
-  vs_find_variable_ex((vs), (name), FVM_ALL)
+#define vs_find_variable(vs, name, func) \
+  vs_find_variable_ex((vs), (name), (func), FVM_ALL)
 
-bool vs_variable_name_exists_ex(node_variable_stack_t *vs, string_slice_t *name, e_find_var_mode mode)
+bool vs_variable_name_exists_ex(node_variable_stack_t *vs, string_slice_t *name, string_slice_t *funcName, e_find_var_mode mode)
 {
-  node_variable_t *v = vs_find_variable_ex(vs, name, mode);
+  node_variable_t *v = vs_find_variable_ex(vs, name, funcName, mode);
   return v != NULL;
 }
 
-#define vs_variable_name_exists(vs, name) \
-  vs_variable_name_exists_ex((vs), (name), FVM_ALL)
+#define vs_variable_name_exists(vs, name, func) \
+  vs_variable_name_exists_ex((vs), (name), (func), FVM_ALL)
 
-static bool vs_check_variable_name_errors(node_variable_stack_t *vs, string_slice_t *name, size_t cursor)
+static bool vs_check_variable_name_errors(node_variable_stack_t *vs, string_slice_t *name, string_slice_t *funcName, size_t cursor)
 {
-  if (vs_variable_name_exists(vs, name))
+  if (vs_variable_name_exists(vs, name, funcName))
   {
     S_ERROR_SS(cursor, "Variable '" SS_FMT "' already exists!", name);
     return false;
@@ -540,12 +588,12 @@ static bool try_parse_const_variable(node_variable_stack_t *vs, arena_t *arena, 
   }
 
   // Checks if the variable name is already used
-  if (!vs_check_variable_name_errors(vs, &varNameTok->as.symbol, varNameTok->cursor))
+  if (!vs_check_variable_name_errors(vs, &varNameTok->as.symbol, NULL, varNameTok->cursor))
     return false;
 
   // Create and add a new variable.
   node_variable_t constantVar = node_variable_constant(varNameTok->as.symbol, value);
-  vs_variable_append(arena, vs, constantVar);
+  vs_variable_push(arena, vs, constantVar);
   return true;
 }
 
@@ -569,7 +617,7 @@ static bool func_arg_name_valid(node_variable_stack_t *vs, string_slice_t *funcN
   }
 
   // Checks if the name is in the variable stack or is a buildin constant or function.
-  if (!vs_check_variable_name_errors(vs, varName, cursor))
+  if (!vs_check_variable_name_errors(vs, varName, NULL, cursor))
     return false;
 
   return true;
@@ -697,12 +745,16 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
   }
 
   // Checks if the variable name is already used
-  if (!vs_check_variable_name_errors(vs, &varNameTok->as.symbol, varNameTok->cursor))
+  if (!vs_check_variable_name_errors(vs, &varNameTok->as.symbol, NULL, varNameTok->cursor))
     return false;
 
   // Create and add a new variable.
   node_variable_t funcVar = node_variable_function(varNameTok->as.symbol, funcArgs, expression);
-  vs_variable_append(arena, vs, funcVar);
+  vs_variable_push(arena, vs, funcVar);
+
+  for (size_t i = 0; i < funcArgs.count; ++i)
+    vs_variable_push(arena, vs, node_variable_func_arg(varNameTok->as.symbol, funcArgs.items[i]));
+
   return true;
 }
 
@@ -801,6 +853,12 @@ void print_variable_stack(node_variable_stack_t *vs, bool showValue, bool indent
       printf(")");
     }
     break;
+    case NV_FUNCTION_ARG_DEFINITION:
+    {
+      // TODO: Rethink! Argument definitions will be hidden!
+      printf(SS_FMT "::" SS_FMT "\n", SS_ARG(&variable->as.funcArgDef.funcName), SS_ARG(&variable->as.funcArgDef.argName));
+      continue;
+    }
     case NV_COUNT:
     default:
       UNREACHABLE("Invalid variable-type!");
@@ -1340,7 +1398,7 @@ static double node_constant_to_value(arena_t *arena, node_variable_stack_t *vs, 
   case CN_VARIABLE:
   {
     string_slice_t *varName = &constant->as.variableName;
-    node_variable_t *variable = vs_find_variable_ex(vs, varName, FVM_CONST);
+    node_variable_t *variable = vs_find_variable_ex(vs, varName, NULL, FVM_CONST);
     if (!variable)
     {
       *isError = true;
@@ -1724,43 +1782,48 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
     {
       string_slice_t *funcName = &funcNode->as.variableName;
 
-      node_variable_t *variable = vs_find_variable_ex(vs, funcName, FVM_FUNC);
+      // Try to get the variable by the name.
+      node_variable_t *variable = vs_find_variable_ex(vs, funcName, NULL, FVM_FUNC);
       if (!variable)
       {
         E_ERROR_SS(expr->cursor, "Variable '" SS_FMT "' not found!", funcName);
         return NULL;
       }
 
-      if (funcNode->args.count != variable->as.funcDef.args.count)
+      node_function_definition_t *varFuncDef = &variable->as.funcDef;
+
+      // Check if the argument count is equal.
+      if (funcNode->args.count != varFuncDef->args.count)
       {
-        if (variable->as.funcDef.args.count == 1)
-          E_ERROR_SS_2(expr->cursor, SS_FMT "() takes '%zu' argument!", &variable->as.funcDef.name, variable->as.funcDef.args.count);
+        if (varFuncDef->args.count == 1)
+          E_ERROR_SS_2(expr->cursor, SS_FMT "() takes '%zu' argument!", &varFuncDef->name, varFuncDef->args.count);
         else
-          E_ERROR_SS_2(expr->cursor, SS_FMT "() takes '%zu' arguments!", &variable->as.funcDef.name, variable->as.funcDef.args.count);
+          E_ERROR_SS_2(expr->cursor, SS_FMT "() takes '%zu' arguments!", &varFuncDef->name, varFuncDef->args.count);
         return NULL;
       }
 
-      for (size_t i = 0; i < funcNode->args.count; ++i)
-      {
-        // This is how the arg name can be read.
-        // string_slice_t *argName = &variable->as.funcDef.args.items[i];
-
-        node_t *arg = ast_eval_ex(arena, vs, funcNode->args.items[i]);
-        if (!arg)
-          return NULL;
-
-        double value = node_constant_to_value(arena, vs, arg, &isError);
-        if (isError)
-          return NULL;
-
-        printf("FUNC('" SS_FMT "') -> ARG-%zu = '%f'\n", SS_ARG(&variable->as.funcDef.name), i, value);
-      }
-
       // TODO: Implement!
-      // return node_constant(arena, expr->cursor, node_constant_value(log(value)));
+      //       Arguments should be added when the function gets stored in variable stack.
+      //       Each argument will get pushed with the corresponding function name.
+      //       Here the args should get loaded and the argument value should be stored in the arg for the time of evaluation. After that, the arg value can be reset!
 
-      E_ERROR(expr->cursor, "Custom function evaluation not implemented yet!");
-      return NULL;
+      // Add the argument names to the stack.
+      for (size_t i = 0; i < funcNode->args.count; ++i)
+        vs_variable_push(arena, vs, node_variable_constant(varFuncDef->args.items[i], funcNode->args.items[i]));
+
+      // Evaluate the expression inside the function with the set argument variables.
+      node_t *resultNode = ast_eval_ex(arena, vs, variable->expression);
+
+      // Pop the variables from the stack again because they are just internal.
+      vs_variable_pop_ex(vs, funcNode->args.count);
+
+      // Evaluate the constant result.
+      double result = node_constant_to_value(arena, vs, resultNode, &isError);
+      if (isError)
+        return NULL;
+
+      // Return the result node.
+      return node_constant(arena, expr->cursor, node_constant_value(result));
     }
     case FN_COUNT:
     default:
@@ -1850,7 +1913,7 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
     {
     case CN_VALUE:
     {
-      printf(DOUBLE_PRINT_FORMAT, node->as.constant.as.value);
+      printf("\033[33m" DOUBLE_PRINT_FORMAT "\033[0m", node->as.constant.as.value);
     }
     break;
     case CN_BUILDIN_CONST:
@@ -1859,18 +1922,18 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
       if (mc == MC_INVALID)
         UNREACHABLE("Invalid math-constant-type!");
 
-      printf("%s (" DOUBLE_PRINT_FORMAT ", %s)", mathConstantTypeIdentifiers[mc], mathConstantTypeValues[mc], mathConstantTypeNames[mc]);
+      printf("\033[36m%s\033[0m (\033[33m" DOUBLE_PRINT_FORMAT "\033[0m, %s)", mathConstantTypeIdentifiers[mc], mathConstantTypeValues[mc], mathConstantTypeNames[mc]);
     }
     break;
     case CN_VARIABLE:
     {
-      printf("'" SS_FMT "' =%s", SS_ARG(&node->as.constant.as.variableName), indented ? "\n" : " ");
+      node_variable_t *variable = vs_find_variable_ex(vs, &node->as.constant.as.variableName, NULL, FVM_CONST);
 
-      node_variable_t *variable = vs_find_variable_ex(vs, &node->as.constant.as.variableName, FVM_CONST);
+      printf("\033[35m'" SS_FMT "'\033[0m ->%s", SS_ARG(&node->as.constant.as.variableName), variable && indented ? "\n" : " ");
+
       if (!variable)
       {
-        _PRINT_DEPTH_SPACES(indented, depth + 1);
-        printf("[Variable not found]");
+        printf("\033[31m[Variable not found]\033[0m");
         break;
       }
 
@@ -1919,12 +1982,12 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
     break;
     case FN_VARIABLE:
     {
-      printf("'" SS_FMT "'", SS_ARG(&funcNode->as.variableName));
+      printf("\033[35m'" SS_FMT "'\033[0m", SS_ARG(&funcNode->as.variableName));
 
-      node_variable_t *variable = vs_find_variable_ex(vs, &funcNode->as.variableName, FVM_FUNC);
+      node_variable_t *variable = vs_find_variable_ex(vs, &funcNode->as.variableName, NULL, FVM_FUNC);
       if (!variable)
       {
-        printf(" - [Variable not found] (");
+        printf(" \033[31m[Function not found]\033[0m (");
         break;
       }
       else
