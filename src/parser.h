@@ -472,11 +472,15 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
 bool parse_node_variables(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer);
 void print_variable_stack(node_variable_stack_t *vs, bool showValue, bool indented);
 
-static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer);
 static node_t *try_parse_prefix_expression(arena_t *arena, lexer_t *lexer, size_t *depth);
+static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer);
 static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *depth, e_precedence precedence);
 static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *depth);
 static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *depth);
+static node_t *try_parse_primary(arena_t *arena, lexer_t *lexer, size_t *depth);
+// static node_t *try_parse_pow_op(arena_t *arena, lexer_t *lexer, size_t *depth);
+// static node_t *try_parse_point_op(arena_t *arena, lexer_t *lexer, size_t *depth);
+// static node_t *try_parse_line_op(arena_t *arena, lexer_t *lexer, size_t *depth);
 
 node_t *parser_execute(arena_t *arena, lexer_t *lexer);
 static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented, size_t depth);
@@ -814,6 +818,42 @@ void print_variable_stack(node_variable_stack_t *vs, bool showValue, bool indent
   }
 }
 
+static node_t *try_parse_primary(arena_t *arena, lexer_t *lexer, size_t *depth)
+{
+  node_t *node = NULL;
+
+  if (!node)
+    node = try_parse_paren(arena, lexer, depth);
+
+  if (!node)
+    node = try_parse_func(arena, lexer, depth);
+
+  if (!node)
+    node = try_parse_constant(arena, lexer);
+
+  if (!node)
+    node = try_parse_prefix_expression(arena, lexer, depth);
+
+  return node;
+}
+
+// TODO: FIX!
+static node_t *next_node_by_precedence(arena_t *arena, lexer_t *lexer, size_t *depth, e_precedence precedence)
+{
+  node_t *node = NULL;
+
+  if (precedence <= BP_EXPONENT)
+    node = try_parse_binop(arena, lexer, depth, precedence + 1);
+
+  if (precedence == BP_PRIMARY)
+    node = try_parse_primary(arena, lexer, depth);
+
+  if (!lex_at_end(lexer) && !node)
+    S_ERROR(lex_current_cursor(lexer), "Invalid token found!");
+
+  return node;
+}
+
 static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer)
 {
   ASSERT_NULL(arena);
@@ -897,44 +937,150 @@ static node_t *try_parse_prefix_expression(arena_t *arena, lexer_t *lexer, size_
     return NULL;
   }
 
-  node_t *child = try_parse_binop(arena, lexer, depth, BP_LINE);
+  node_t *child = try_parse_primary(arena, lexer, depth);
   if (!child)
     return NULL;
 
   return node_prefix_expression(arena, token->cursor, type, child);
 }
 
-// TODO: FIX!
-static node_t *next_node_by_precedence(arena_t *arena, lexer_t *lexer, size_t *depth, e_precedence precedence)
-{
-  node_t *node = NULL;
+// static node_t *try_parse_pow_op(arena_t *arena, lexer_t *lexer, size_t *depth)
+// {
+//   ASSERT_NULL(arena);
+//   ASSERT_NULL(lexer);
+//   ASSERT_NULL(depth);
 
-  if (precedence <= BP_EXPONENT)
-    node = try_parse_binop(arena, lexer, depth, precedence + 1);
+//   if (lex_at_end(lexer))
+//     return NULL;
 
-  if (precedence != BP_PRIMARY)
-    return node;
+//   node_t *lhs = try_parse_primary(arena, lexer, depth);
+//   if (!lhs)
+//     return NULL;
 
-  if (!node)
-    node = try_parse_paren(arena, lexer, depth);
+//   if (lex_at_end(lexer))
+//     return lhs;
 
-  if (!node)
-    node = try_parse_func(arena, lexer, depth);
+//   if (lex_current_not(lexer, TT_OPERATOR))
+//   {
+//     // The specific functions should handle that token.
+//     if (*depth != 0)
+//       return lhs;
 
-  // TODO:
-  // This wraps everything currently, should only wrap the next prime
-  // (e.g.: '-10 * (20 + 5)' should only wrap '10' with 'prefix_minus(10)').
-  if (!node)
-    node = try_parse_prefix_expression(arena, lexer, depth);
+//     S_ERROR(lex_current_cursor(lexer), "Expected an operator!");
+//     return NULL;
+//   }
 
-  if (!node)
-    node = try_parse_constant(arena, lexer);
+//   token_t *opTok = lex_current(lexer);
 
-  if (!lex_at_end(lexer) && !node)
-    S_ERROR(lex_current_cursor(lexer), "Invalid token found!");
+//   if (lex_current_not_specific_operator(lexer, OP_POW))
+//     return lhs;
 
-  return node;
-}
+//   lex_seek(lexer);
+
+//   if (lex_at_end(lexer))
+//   {
+//     S_ERROR(lex_current_cursor(lexer) - 1, "Expected an expression after an operator!");
+//     return NULL;
+//   }
+
+//   node_t *rhs = try_parse_primary(arena, lexer, depth);
+//   if (!rhs)
+//     return NULL;
+
+//   return node_binop(arena, opTok->cursor, opTok->as.op, lhs, rhs);
+// }
+
+// static node_t *try_parse_point_op(arena_t *arena, lexer_t *lexer, size_t *depth)
+// {
+//   ASSERT_NULL(arena);
+//   ASSERT_NULL(lexer);
+//   ASSERT_NULL(depth);
+
+//   if (lex_at_end(lexer))
+//     return NULL;
+
+//   node_t *lhs = try_parse_pow_op(arena, lexer, depth);
+//   if (!lhs)
+//     return NULL;
+
+//   if (lex_at_end(lexer))
+//     return lhs;
+
+//   if (lex_current_not(lexer, TT_OPERATOR))
+//   {
+//     // The specific functions should handle that token.
+//     if (*depth != 0)
+//       return lhs;
+
+//     S_ERROR(lex_current_cursor(lexer), "Expected an operator!");
+//     return NULL;
+//   }
+
+//   token_t *opTok = lex_current(lexer);
+
+//   if (lex_current_not_specific_operator(lexer, OP_MUL) || lex_current_not_specific_operator(lexer, OP_DIV))
+//     return lhs;
+
+//   lex_seek(lexer);
+
+//   if (lex_at_end(lexer))
+//   {
+//     S_ERROR(lex_current_cursor(lexer) - 1, "Expected an expression after an operator!");
+//     return NULL;
+//   }
+
+//   node_t *rhs = try_parse_pow_op(arena, lexer, depth);
+//   if (!rhs)
+//     return NULL;
+
+//   return node_binop(arena, opTok->cursor, opTok->as.op, lhs, rhs);
+// }
+
+// static node_t *try_parse_line_op(arena_t *arena, lexer_t *lexer, size_t *depth)
+// {
+//   ASSERT_NULL(arena);
+//   ASSERT_NULL(lexer);
+//   ASSERT_NULL(depth);
+
+//   if (lex_at_end(lexer))
+//     return NULL;
+
+//   node_t *lhs = try_parse_point_op(arena, lexer, depth);
+//   if (!lhs)
+//     return NULL;
+
+//   if (lex_at_end(lexer))
+//     return lhs;
+
+//   if (lex_current_not(lexer, TT_OPERATOR))
+//   {
+//     // The specific functions should handle that token.
+//     if (*depth != 0)
+//       return lhs;
+
+//     S_ERROR(lex_current_cursor(lexer), "Expected an operator!");
+//     return NULL;
+//   }
+
+//   token_t *opTok = lex_current(lexer);
+
+//   if (lex_current_not_specific_operator(lexer, OP_ADD) || lex_current_not_specific_operator(lexer, OP_SUB))
+//     return lhs;
+
+//   lex_seek(lexer);
+
+//   if (lex_at_end(lexer))
+//   {
+//     S_ERROR(lex_current_cursor(lexer) - 1, "Expected an expression after an operator!");
+//     return NULL;
+//   }
+
+//   node_t *rhs = try_parse_point_op(arena, lexer, depth);
+//   if (!rhs)
+//     return NULL;
+
+//   return node_binop(arena, opTok->cursor, opTok->as.op, lhs, rhs);
+// }
 
 // TODO: Fix right associative ('pow') parsing!
 // TODO: Maybe add optimizations like '10*1' to just '10', or '10/1' to just '10'
