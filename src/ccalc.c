@@ -838,9 +838,6 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
 
   flag_c_free(c);
 
-  // const char *input = "1 + ((test) / (2 * sqrt((PI ^ 2) + (3 ^ 2))) - 2) * (2 + 2) + atan2(5, 10) - func(10+5, PI, a)";
-  const char *input = "func(1+1, 2+2, 3+3) * test + 10 + (PI * 2)";
-
   // Tests if the variable names are checked against builtin function or
   // constant names and also if constants or functions can be defined.
   // const char *inputVariables =
@@ -856,7 +853,11 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
       "a = 2 ^ 2\n"
       "atan2(x,y,z) = test * 20 * x + 10 * y - 5 * z\n"
       "PI = test * 20\n"
-      "func(x,y,z) = 1 * x + 2 * y - 3 * z";
+      "func(x,y,z) = 1 * x + 2 * y - 3 * z\n"
+      "testFunc(s) = 10 + PI - s";
+
+  // const char *input = "1 + ((test) / (2 * sqrt((PI ^ 2) + (3 ^ 2))) - 2) * (2 + 2) + atan2(5, 10) - func(10+5, PI, a)";
+  const char *input = "(func(1+1, 2+2, 3+3) * test + 10 + (PI * 2)) + testFunc(a + (PI ^ 2))";
 
   arena_t arena = {0};
   node_variable_stack_t vs = {0};

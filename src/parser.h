@@ -503,6 +503,9 @@ bool vs_variable_name_exists_ex(node_variable_stack_t *vs, string_slice_t *name,
 
 static bool vs_check_variable_name_errors(node_variable_stack_t *vs, string_slice_t *name, string_slice_t *funcName, size_t cursor)
 {
+  ASSERT_NULL(vs);
+  ASSERT_NULL(name);
+
   if (vs_variable_name_exists(vs, name, funcName))
   {
     S_ERROR_SS(cursor, "Variable '" SS_FMT "' already exists!", name);
@@ -521,6 +524,24 @@ static bool vs_check_variable_name_errors(node_variable_stack_t *vs, string_slic
   return true;
 }
 
+string_slice_t *vs_get_variable_name(node_variable_t *variable)
+{
+  ASSERT_NULL(variable);
+
+  switch (variable->type)
+  {
+  case NV_CONST_VARIABLE_DEFINITION:
+    return &variable->as.varDef;
+  case NV_FUNCTION_DEFINITION:
+    return &variable->as.funcDef.name;
+  case NV_FUNCTION_ARG_DEFINITION:
+    return &variable->as.funcArgDef.argName;
+  case NV_COUNT:
+  default:
+    UNREACHABLE("Invalid node-variable-type!");
+  }
+}
+
 static bool try_parse_const_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer);
 static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer);
 void parse_node_variables(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer);
@@ -532,9 +553,6 @@ static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *depth, e_
 static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *depth);
 static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *depth);
 static node_t *try_parse_primary(arena_t *arena, lexer_t *lexer, size_t *depth);
-// static node_t *try_parse_pow_op(arena_t *arena, lexer_t *lexer, size_t *depth);
-// static node_t *try_parse_point_op(arena_t *arena, lexer_t *lexer, size_t *depth);
-// static node_t *try_parse_line_op(arena_t *arena, lexer_t *lexer, size_t *depth);
 
 node_t *parser_execute(arena_t *arena, lexer_t *lexer);
 static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented, size_t depth, string_slice_t *context);
@@ -841,6 +859,8 @@ void print_variable_stack(node_variable_stack_t *vs, bool showValue, bool indent
     case NV_CONST_VARIABLE_DEFINITION:
     {
       printf(SS_FMT, SS_ARG(&variable->as.varDef));
+
+      context = &variable->as.varDef;
     }
     break;
     case NV_FUNCTION_DEFINITION:
@@ -859,17 +879,20 @@ void print_variable_stack(node_variable_stack_t *vs, bool showValue, bool indent
     break;
     case NV_FUNCTION_ARG_DEFINITION:
     {
-      printf(SS_FMT "::" SS_FMT "\n", SS_ARG(&variable->as.funcArgDef.funcName), SS_ARG(&variable->as.funcArgDef.argName));
-      continue;
+      printf(SS_FMT "::" SS_FMT, SS_ARG(&variable->as.funcArgDef.funcName), SS_ARG(&variable->as.funcArgDef.argName));
     }
+    break;
     case NV_COUNT:
     default:
       UNREACHABLE("Invalid variable-type!");
       break;
     }
 
-    if (!showValue)
-      return;
+    if (!showValue || !variable->expression)
+    {
+      printf("\n\n");
+      continue;
+    }
 
     printf(" =%s", indented ? "\n" : " ");
     print_node_ex(vs, variable->expression, indented, 1, context);
@@ -1004,144 +1027,6 @@ static node_t *try_parse_prefix_expression(arena_t *arena, lexer_t *lexer, size_
 
   return node_prefix_expression(arena, token->cursor, type, child);
 }
-
-// static node_t *try_parse_pow_op(arena_t *arena, lexer_t *lexer, size_t *depth)
-// {
-//   ASSERT_NULL(arena);
-//   ASSERT_NULL(lexer);
-//   ASSERT_NULL(depth);
-
-//   if (lex_at_end(lexer))
-//     return NULL;
-
-//   node_t *lhs = try_parse_primary(arena, lexer, depth);
-//   if (!lhs)
-//     return NULL;
-
-//   if (lex_at_end(lexer))
-//     return lhs;
-
-//   if (lex_current_not(lexer, TT_OPERATOR))
-//   {
-//     // The specific functions should handle that token.
-//     if (*depth != 0)
-//       return lhs;
-
-//     S_ERROR(lex_current_cursor(lexer), "Expected an operator!");
-//     return NULL;
-//   }
-
-//   token_t *opTok = lex_current(lexer);
-
-//   if (lex_current_not_specific_operator(lexer, OP_POW))
-//     return lhs;
-
-//   lex_seek(lexer);
-
-//   if (lex_at_end(lexer))
-//   {
-//     S_ERROR(lex_current_cursor(lexer) - 1, "Expected an expression after an operator!");
-//     return NULL;
-//   }
-
-//   node_t *rhs = try_parse_primary(arena, lexer, depth);
-//   if (!rhs)
-//     return NULL;
-
-//   return node_binop(arena, opTok->cursor, opTok->as.op, lhs, rhs);
-// }
-
-// static node_t *try_parse_point_op(arena_t *arena, lexer_t *lexer, size_t *depth)
-// {
-//   ASSERT_NULL(arena);
-//   ASSERT_NULL(lexer);
-//   ASSERT_NULL(depth);
-
-//   if (lex_at_end(lexer))
-//     return NULL;
-
-//   node_t *lhs = try_parse_pow_op(arena, lexer, depth);
-//   if (!lhs)
-//     return NULL;
-
-//   if (lex_at_end(lexer))
-//     return lhs;
-
-//   if (lex_current_not(lexer, TT_OPERATOR))
-//   {
-//     // The specific functions should handle that token.
-//     if (*depth != 0)
-//       return lhs;
-
-//     S_ERROR(lex_current_cursor(lexer), "Expected an operator!");
-//     return NULL;
-//   }
-
-//   token_t *opTok = lex_current(lexer);
-
-//   if (lex_current_not_specific_operator(lexer, OP_MUL) || lex_current_not_specific_operator(lexer, OP_DIV))
-//     return lhs;
-
-//   lex_seek(lexer);
-
-//   if (lex_at_end(lexer))
-//   {
-//     S_ERROR(lex_current_cursor(lexer) - 1, "Expected an expression after an operator!");
-//     return NULL;
-//   }
-
-//   node_t *rhs = try_parse_pow_op(arena, lexer, depth);
-//   if (!rhs)
-//     return NULL;
-
-//   return node_binop(arena, opTok->cursor, opTok->as.op, lhs, rhs);
-// }
-
-// static node_t *try_parse_line_op(arena_t *arena, lexer_t *lexer, size_t *depth)
-// {
-//   ASSERT_NULL(arena);
-//   ASSERT_NULL(lexer);
-//   ASSERT_NULL(depth);
-
-//   if (lex_at_end(lexer))
-//     return NULL;
-
-//   node_t *lhs = try_parse_point_op(arena, lexer, depth);
-//   if (!lhs)
-//     return NULL;
-
-//   if (lex_at_end(lexer))
-//     return lhs;
-
-//   if (lex_current_not(lexer, TT_OPERATOR))
-//   {
-//     // The specific functions should handle that token.
-//     if (*depth != 0)
-//       return lhs;
-
-//     S_ERROR(lex_current_cursor(lexer), "Expected an operator!");
-//     return NULL;
-//   }
-
-//   token_t *opTok = lex_current(lexer);
-
-//   if (lex_current_not_specific_operator(lexer, OP_ADD) || lex_current_not_specific_operator(lexer, OP_SUB))
-//     return lhs;
-
-//   lex_seek(lexer);
-
-//   if (lex_at_end(lexer))
-//   {
-//     S_ERROR(lex_current_cursor(lexer) - 1, "Expected an expression after an operator!");
-//     return NULL;
-//   }
-
-//   node_t *rhs = try_parse_point_op(arena, lexer, depth);
-//   if (!rhs)
-//     return NULL;
-
-//   return node_binop(arena, opTok->cursor, opTok->as.op, lhs, rhs);
-// }
 
 // TODO: Fix right associative ('pow') parsing!
 // TODO: Maybe add optimizations like '10*1' to just '10', or '10/1' to just '10'
@@ -1405,8 +1290,6 @@ static double node_constant_to_value(arena_t *arena, node_variable_stack_t *vs, 
     // Check if the variable is just a constant.
     node_variable_t *variable = vs_find_variable_ex(vs, varName, NULL, FVM_CONST);
 
-    assert((variable && !context) || (!variable && context));
-
     // Check if the variable is a local function argument.
     if (!variable)
       variable = vs_find_variable_ex(vs, varName, context, FVM_FUNC_ARG);
@@ -1418,14 +1301,27 @@ static double node_constant_to_value(arena_t *arena, node_variable_stack_t *vs, 
       return 0;
     }
 
-    ast_eval_res_t res = ast_eval(arena, vs, variable->expression);
-    if (res.isError)
+    if (ss_compare(varName, context))
+    {
+      *isError = true;
+      E_ERROR_SS(node->cursor, "Recursion detected for: '" SS_FMT "'", varName);
+      return 0;
+    }
+
+    node_t *resNode = ast_eval_ex(arena, vs, variable->expression, varName);
+    if (!resNode)
     {
       *isError = true;
       return 0;
     }
 
-    result = res.value;
+    bool resError = false;
+    result = node_constant_to_value(arena, vs, resNode, context, &resError);
+    if (resError)
+    {
+      *isError = true;
+      return 0;
+    }
   }
   break;
   case CN_COUNT:
@@ -1814,11 +1710,19 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr, str
         return NULL;
       }
 
+      if (ss_compare(context, funcName))
+      {
+        E_ERROR_SS(expr->cursor, "'" SS_FMT "': Recursion detected!\n", funcName);
+        return NULL;
+      }
+
       for (size_t i = 0; i < funcNode->args.count; ++i)
       {
         node_variable_t *argVar = vs_find_variable_ex(vs, &varFuncDef->args.items[i], &varFuncDef->name, FVM_FUNC_ARG);
         vs_set_expression(argVar, funcNode->args.items[i]);
       }
+
+      // TODO: Rethink if the context should be used when not null.
 
       node_t *resultNode = ast_eval_ex(arena, vs, variable->expression, funcName);
 
@@ -1866,13 +1770,13 @@ ast_eval_res_t ast_eval(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
   if (!evaluatedNode)
     return ast_eval_res_error();
 
-  if (evaluatedNode->type != NT_CONSTANT)
-    UNREACHABLE("Evaluation failed! Return-Type not of type 'CONSTANT'.");
+  bool isError = false;
 
-  if (evaluatedNode->as.constant.type != CN_VALUE)
-    UNREACHABLE("Evaluation failed! Return-Type of constant not of type 'VALUE'.");
+  double result = node_constant_to_value(arena, vs, evaluatedNode, NULL, &isError);
+  if (isError)
+    return ast_eval_res_error();
 
-  return ast_eval_res_success(evaluatedNode->as.constant.as.value);
+  return ast_eval_res_success(result);
 }
 
 static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented, size_t depth, string_slice_t *context)
@@ -1946,8 +1850,16 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
 
       if (variable)
       {
+        if (ss_compare(context, &variable->as.varDef))
+        {
+          printf(" -> \033[31m[Recursion detected]\033[0m");
+          break;
+        }
+
         printf(" ->%s", indented ? "\n" : " ");
-        print_node_ex(vs, variable->expression, indented, depth + 1, context);
+
+        // print_node_ex(vs, variable->expression, indented, depth + 1, context);
+        print_node_ex(vs, variable->expression, indented, depth + 1, &variable->as.varDef);
       }
       else
         variable = vs_find_variable_ex(vs, &node->as.constant.as.variableName, context, FVM_FUNC_ARG);
@@ -2004,7 +1916,12 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
       if (!variable)
         printf(" \033[31m[Function Not Found]\033[0m (");
       else
-        printf("(");
+      {
+        if (ss_compare(context, &funcNode->as.variableName))
+          printf(" \033[31m[Recursion detected]\033[0m (");
+        else
+          printf("(");
+      }
     }
     break;
     case FN_COUNT:
