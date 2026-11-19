@@ -1852,7 +1852,7 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
       {
         if (ss_compare(context, &variable->as.varDef))
         {
-          printf(" -> \033[31m[Recursion detected]\033[0m");
+          printf(" -> \033[31m[Recursion Detected]\033[0m");
           break;
         }
 
@@ -1918,7 +1918,7 @@ static void print_node_ex(node_variable_stack_t *vs, node_t *node, bool indented
       else
       {
         if (ss_compare(context, &funcNode->as.variableName))
-          printf(" \033[31m[Recursion detected]\033[0m (");
+          printf(" \033[31m[Recursion Detected]\033[0m (");
         else
           printf("(");
       }
