@@ -217,7 +217,7 @@ static bool execute_math_expression(const char *input, bool verbose)
   parse_node_variables(&vs, &arena, &lexer);
   if (verbose)
   {
-    print_variable_stack(&vs, true, true);
+    print_variable_stack(&arena, &vs, true, true);
     printf("\n");
   }
   // TODO: Remove as soon as multiline parsing is implemented.
@@ -238,7 +238,7 @@ static bool execute_math_expression(const char *input, bool verbose)
   }
   if (verbose)
   {
-    print_node(&vs, rootNode, true);
+    print_node(&arena, &vs, rootNode, true);
     printf("\n");
   }
 
@@ -850,11 +850,11 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
   //     "func(x,y,z) = (test * 20 * x) + (10 * y) - (5 * z)";
   const char *inputVariables =
       "test = 2 * 2 + a\n"
-      "a = 2 ^ 2\n"
+      "a = 2 ^ 2 + func(20, 10, 5)\n"
       "atan2(x,y,z) = test * 20 * x + 10 * y - 5 * z\n"
       "PI = test * 20\n"
       "func(x,y,z) = 1 * x + 2 * y - 3 * z\n"
-      "testFunc(s) = 10 + PI - s";
+      "testFunc(s) = 10 + PI";
 
   // const char *input = "1 + ((test) / (2 * sqrt((PI ^ 2) + (3 ^ 2))) - 2) * (2 + 2) + atan2(5, 10) - func(10+5, PI, a)";
   const char *input = "(func(1+1, 2+2, 3+3) * test + 10 + (PI * 2)) + testFunc(a + (PI ^ 2))";
@@ -900,7 +900,7 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
   // Printing the variable stack.
   if (verbose)
   {
-    print_variable_stack(&vs, true, true);
+    print_variable_stack(&arena, &vs, true, true);
     printf("\n");
   }
 
@@ -940,7 +940,7 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
   }
   if (verbose)
   {
-    print_node(&vs, rootNode, true);
+    print_node(&arena, &vs, rootNode, true);
     printf("\n");
   }
 
