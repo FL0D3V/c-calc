@@ -214,7 +214,7 @@ static bool execute_math_expression(const char *input, bool verbose)
 
   // Parse the variables
   node_variable_stack_t vs = {0};
-  parse_node_variables(&vs, &arena, &lexer);
+  parse_variables(&vs, &arena, &lexer);
   if (verbose)
   {
     print_variable_stack(&arena, &vs, true, true);
@@ -229,7 +229,7 @@ static bool execute_math_expression(const char *input, bool verbose)
   }
 
   // Execute parser and generate AST
-  node_t *rootNode = parser_execute(&arena, &lexer);
+  node_t *rootNode = parse_expression(&arena, &lexer);
   if (!rootNode)
   {
     // Cleanup
@@ -854,42 +854,44 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
       "atan2(x,y,z) = test * 20 * x + 10 * y - 5 * z\n"
       "PI = test * 20\n"
       "func(x,y,z) = 1 * x + 2 * y - 3 * z\n"
-      "testFunc(s) = 10 + PI";
+      "testFunc(s) = 10 + PI\n"
+      "(func(1+1, 2+2, 3+3) * test + 10 + (PI * 2)) + testFunc(a + (PI ^ 2))";
 
   // const char *input = "1 + ((test) / (2 * sqrt((PI ^ 2) + (3 ^ 2))) - 2) * (2 + 2) + atan2(5, 10) - func(10+5, PI, a)";
-  const char *input = "(func(1+1, 2+2, 3+3) * test + 10 + (PI * 2)) + testFunc(a + (PI ^ 2))";
+  // const char *input = "(func(1+1, 2+2, 3+3) * test + 10 + (PI * 2)) + testFunc(a + (PI ^ 2))";
 
   arena_t arena = {0};
   node_variable_stack_t vs = {0};
 
-  printf("VARIABLES:\n'%s'\n\n", inputVariables);
+  printf("INPUT:\n'%s'\n\n", inputVariables);
 
-  tokenizer_t tokenizerVariables = tokenizer_execute(&arena, inputVariables);
-  if (tokenizerVariables.isError)
+  tokenizer_t tokenizer = tokenizer_execute(&arena, inputVariables);
+  if (tokenizer.isError)
   {
-    fprintf(stderr, "Tokenizing of variables failed!\n");
+    fprintf(stderr, "Tokenization failed!\n");
     arena_free(&arena);
     return false;
   }
   if (verbose)
   {
-    tokenizer_print(&tokenizerVariables);
+    tokenizer_print(&tokenizer);
     printf("\n");
   }
-  lexer_t lexerVariables = lexer_execute(&arena, &tokenizerVariables);
-  if (lexerVariables.isError)
+  lexer_t lexer = lexer_execute(&arena, &tokenizer);
+  if (lexer.isError)
   {
-    fprintf(stderr, "Lexing of variables failed!\n");
+    fprintf(stderr, "Lexing failed!\n");
     arena_free(&arena);
     return false;
   }
   if (verbose)
   {
-    lexer_print(&lexerVariables);
+    lexer_print(&lexer);
     printf("\n");
   }
 
-  parse_node_variables(&vs, &arena, &lexerVariables);
+  parse_variables(&vs, &arena, &lexer);
+
   if (vs.count == 0)
   {
     fprintf(stderr, "No variables found!\n");
@@ -905,55 +907,66 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
   }
 
   // Select special input string here!
-  printf("INPUT:\n'%s'\n\n", input);
+  // printf("INPUT:\n'%s'\n\n", input);
 
-  tokenizer_t tokenizer = tokenizer_execute(&arena, input);
-  if (tokenizer.isError)
+  // tokenizer_t inputTokenizer = tokenizer_execute(&arena, input);
+  // if (inputTokenizer.isError)
+  // {
+  //   fprintf(stderr, "INPUT: Tokenization failed!\n");
+  //   arena_free(&arena);
+  //   return false;
+  // }
+  // if (verbose)
+  // {
+  //   tokenizer_print(&inputTokenizer);
+  //   printf("\n");
+  // }
+  // lexer_t inputLexer = lexer_execute(&arena, &inputTokenizer);
+  // if (inputLexer.isError)
+  // {
+  //   fprintf(stderr, "INPUT: Lexing failed!\n");
+  //   arena_free(&arena);
+  //   return false;
+  // }
+  // if (verbose)
+  // {
+  //   lexer_print(&inputLexer);
+  //   printf("\n");
+  // }
+  // node_t *inputRootNode = parse_expression(&arena, &inputLexer);
+  // if (!inputRootNode)
+  // {
+  //   fprintf(stderr, "INPUT: Parsing failed!\n");
+  //   arena_free(&arena);
+  //   return false;
+  // }
+  parser_result_t parseRes = parse_expressions(&arena, &lexer);
+  if (parseRes.isError)
   {
-    fprintf(stderr, "Tokenizing of input failed!\n");
+    fprintf(stderr, "Parsing failed!\n");
     arena_free(&arena);
     return false;
   }
   if (verbose)
   {
-    tokenizer_print(&tokenizer);
-    printf("\n");
-  }
-  lexer_t lexer = lexer_execute(&arena, &tokenizer);
-  if (lexer.isError)
-  {
-    fprintf(stderr, "Lexing of input failed!\n");
-    arena_free(&arena);
-    return false;
-  }
-  if (verbose)
-  {
-    lexer_print(&lexer);
-    printf("\n");
-  }
-  node_t *rootNode = parser_execute(&arena, &lexer);
-  if (!rootNode)
-  {
-    fprintf(stderr, "No input found!\n");
-    arena_free(&arena);
-    return false;
-  }
-  if (verbose)
-  {
-    print_node(&arena, &vs, rootNode, true);
+    for (size_t i = 0; i < parseRes.count; ++i)
+      print_node(&arena, &vs, parseRes.items[i], true);
     printf("\n");
   }
 
-  ast_eval_res_t result = ast_eval(&arena, &vs, rootNode);
-  if (result.isError)
+  for (size_t i = 0; i < parseRes.count; ++i)
   {
-    fprintf(stderr, "Evaluation of input failed!\n");
-    arena_free(&arena);
-    return false;
-  }
+    ast_eval_res_t evalRes = ast_eval(&arena, &vs, parseRes.items[i]);
+    if (evalRes.isError)
+    {
+      fprintf(stderr, "Evaluation failed at index('%zu')!\n", i);
+      arena_free(&arena);
+      return false;
+    }
 
-  // Print result
-  printf(">>> " DOUBLE_PRINT_FORMAT "\n", result.value);
+    // Print input result
+    printf(">>> " DOUBLE_PRINT_FORMAT "\n", evalRes.value);
+  }
 
   // Cleanup
   arena_free(&arena);
