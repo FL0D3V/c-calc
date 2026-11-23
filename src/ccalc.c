@@ -192,6 +192,7 @@ static bool execute_math_expression(const char *input, bool verbose)
     arena_free(&arena);
     return false;
   }
+
   if (verbose)
   {
     tokenizer_print(&tokenizer);
@@ -206,6 +207,7 @@ static bool execute_math_expression(const char *input, bool verbose)
     arena_free(&arena);
     return false;
   }
+
   if (verbose)
   {
     lexer_print(&lexer);
@@ -214,7 +216,7 @@ static bool execute_math_expression(const char *input, bool verbose)
 
   parser_result_t parseRes = {0};
 
-  parse_expressions(&arena, &lexer, &parseRes);
+  parser_execute(&arena, &lexer, &parseRes);
 
   // Printing the variable stack.
   if (verbose)
@@ -811,6 +813,7 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
 
   const char *input =
       "test = 2 * 2 + a\n"
+      "# This is a comment!\n"
       "a = 2 ^ 2 + func(20, 10, 5)\n"
       "atan2(x,y,z) = test * 20 * x + 10 * y - 5 * z\n"
       "PI = test * 20\n"
@@ -861,7 +864,7 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
 
   parser_result_t parseRes = {0};
 
-  parse_expressions(&arena, &lexer, &parseRes);
+  parser_execute(&arena, &lexer, &parseRes);
 
   if (verbose)
   {

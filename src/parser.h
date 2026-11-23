@@ -487,8 +487,18 @@ typedef struct
   size_t count;
 } node_variable_stack_t;
 
+static inline bool vs_empty(node_variable_stack_t *vs)
+{
+  ASSERT_NULL(vs);
+
+  return vs->count == 0;
+}
+
 static inline void vs_variable_push(arena_t *a, node_variable_stack_t *vs, node_variable_t var)
 {
+  ASSERT_NULL(a);
+  ASSERT_NULL(vs);
+
   // TODO: Rethink! Check for duplicates.
   arena_da_append(a, vs, var);
 }
@@ -509,9 +519,12 @@ static inline node_variable_t *vs_variable_pop(node_variable_stack_t *vs)
 static inline node_variable_t *vs_at(node_variable_stack_t *vs, size_t index)
 {
   ASSERT_NULL(vs);
-  if (vs->count == 0)
+
+  if (vs_empty(vs))
     return NULL;
+
   assert(index < vs->count);
+
   return &(vs)->items[index];
 }
 
@@ -665,11 +678,11 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
 void print_variables(arena_t *arena, node_variable_stack_t *vs, bool showValue, bool indented);
 
 static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer);
-static node_t *try_parse_prefix_expression(arena_t *arena, lexer_t *lexer, size_t *stackSize);
-static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *stackSize);
-static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *stackSize);
-static node_t *try_parse_primary(arena_t *arena, lexer_t *lexer, size_t *stackSize);
-static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *stackSize, e_precedence precedence);
+static node_t *try_parse_prefix_expression(arena_t *arena, lexer_t *lexer, size_t *stackSize, bool *isError);
+static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *stackSize, bool *isError);
+static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *stackSize, bool *isError);
+static node_t *try_parse_primary(arena_t *arena, lexer_t *lexer, size_t *stackSize, bool *isError);
+static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *stackSize, e_precedence precedence, bool *isError);
 
 static void print_node_ex(arena_t *arena, node_variable_stack_t *vs, node_t *node, bool indented, size_t depth, vs_call_stack_t *callStack);
 void print_node(arena_t *arena, node_variable_stack_t *vs, node_t *node, bool indented);
@@ -695,10 +708,10 @@ static bool try_parse_const_variable(node_variable_stack_t *vs, arena_t *arena, 
   ASSERT_NULL(vs);
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
+  ASSERT_NULL(isError);
+  assert(lex_is_valid(lexer));
 
-  *isError = false;
-
-  if (!lex_is_valid(lexer) || !lex_at_start_of_line(lexer))
+  if (*isError || !lex_at_start_of_line(lexer))
     return false;
 
   token_t *varNameTok = lex_current(lexer);
@@ -731,10 +744,10 @@ static bool try_parse_const_variable(node_variable_stack_t *vs, arena_t *arena, 
   }
 
   size_t stackSize = 0;
-  node_t *value = try_parse_binop(arena, lexer, &stackSize, BP_LINE);
+  node_t *expression = try_parse_binop(arena, lexer, &stackSize, BP_LINE, isError);
   assert(stackSize == 0);
 
-  if (!value)
+  if (!expression || *isError)
   {
     S_ERROR(lex_current_cursor(lexer), "After a variable assignment must be a valid expression!");
     *isError = true;
@@ -749,13 +762,18 @@ static bool try_parse_const_variable(node_variable_stack_t *vs, arena_t *arena, 
   }
 
   // Create and add a new variable.
-  node_variable_t constantVar = node_variable_constant(varNameTok->as.symbol, value);
+  node_variable_t constantVar = node_variable_constant(varNameTok->as.symbol, expression);
   vs_variable_push(arena, vs, constantVar);
   return true;
 }
 
 static bool func_arg_name_valid(node_variable_stack_t *vs, string_slice_t *funcName, node_func_definition_args_t *funcArgs, string_slice_t *varName, size_t cursor)
 {
+  ASSERT_NULL(vs);
+  ASSERT_NULL(funcName);
+  ASSERT_NULL(funcArgs);
+  ASSERT_NULL(varName);
+
   // Checks if the name is the function name.
   if (ss_compare(varName, funcName))
   {
@@ -785,10 +803,10 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
   ASSERT_NULL(vs);
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
+  ASSERT_NULL(isError);
+  assert(lex_is_valid(lexer));
 
-  *isError = false;
-
-  if (!lex_is_valid(lexer) || !lex_at_start_of_line(lexer))
+  if (*isError || !lex_at_start_of_line(lexer))
     return false;
 
   token_t *varNameTok = lex_current(lexer);
@@ -913,10 +931,10 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
   }
 
   size_t stackSize = 0;
-  node_t *expression = try_parse_binop(arena, lexer, &stackSize, BP_LINE);
+  node_t *expression = try_parse_binop(arena, lexer, &stackSize, BP_LINE, isError);
   assert(stackSize == 0);
 
-  if (!expression)
+  if (!expression || *isError)
   {
     S_ERROR(lex_current_cursor(lexer), "After a variable assignment must be a valid expression");
     *isError = true;
@@ -943,11 +961,12 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
 
 void print_variables(arena_t *arena, node_variable_stack_t *vs, bool showValue, bool indented)
 {
+  ASSERT_NULL(arena);
   ASSERT_NULL(vs);
 
-  if (vs->count <= 0)
+  if (vs_empty(vs))
   {
-    printf("Variable-Stack is empty.\n");
+    printf("No variables found.\n");
     return;
   }
 
@@ -1017,38 +1036,71 @@ void print_variables(arena_t *arena, node_variable_stack_t *vs, bool showValue, 
   }
 }
 
-static node_t *try_parse_primary(arena_t *arena, lexer_t *lexer, size_t *stackSize)
+static node_t *try_parse_primary(arena_t *arena, lexer_t *lexer, size_t *stackSize, bool *isError)
 {
+  ASSERT_NULL(arena);
+  ASSERT_NULL(lexer);
+  ASSERT_NULL(stackSize);
+  ASSERT_NULL(isError);
+  assert(lex_is_valid(lexer));
+
+  if (*isError)
+    return NULL;
+
   node_t *node = NULL;
 
   if (!node)
-    node = try_parse_paren(arena, lexer, stackSize);
+    node = try_parse_paren(arena, lexer, stackSize, isError);
+
+  if (!node && *isError)
+    return NULL;
 
   if (!node)
-    node = try_parse_func(arena, lexer, stackSize);
+    node = try_parse_func(arena, lexer, stackSize, isError);
+
+  if (!node && *isError)
+    return NULL;
+
+  if (!node)
+    node = try_parse_prefix_expression(arena, lexer, stackSize, isError);
+
+  if (!node && *isError)
+    return NULL;
 
   if (!node)
     node = try_parse_constant(arena, lexer);
-
-  if (!node)
-    node = try_parse_prefix_expression(arena, lexer, stackSize);
 
   return node;
 }
 
 // TODO: FIX!
-static node_t *next_node_by_precedence(arena_t *arena, lexer_t *lexer, size_t *stackSize, e_precedence precedence)
+static node_t *next_node_by_precedence(arena_t *arena, lexer_t *lexer, size_t *stackSize, e_precedence precedence, bool *isError)
 {
+  ASSERT_NULL(arena);
+  ASSERT_NULL(lexer);
+  ASSERT_NULL(stackSize);
+  ASSERT_NULL(isError);
+  assert(lex_is_valid(lexer));
+
+  if (*isError)
+    return NULL;
+
   node_t *node = NULL;
 
-  if (precedence <= BP_EXPONENT)
-    node = try_parse_binop(arena, lexer, stackSize, precedence + 1);
+  if (!node && precedence <= BP_EXPONENT)
+    node = try_parse_binop(arena, lexer, stackSize, precedence + 1, isError);
 
-  if (precedence == BP_PRIMARY)
-    node = try_parse_primary(arena, lexer, stackSize);
+  if (!node && *isError)
+    return NULL;
 
-  if (!lex_at_end(lexer) && !node)
-    S_ERROR(lex_current_cursor(lexer), "Invalid token found!");
+  if (!node && precedence == BP_PRIMARY)
+    node = try_parse_primary(arena, lexer, stackSize, isError);
+
+  if (!node && *isError)
+    return NULL;
+
+  // if (!node && !lex_at_end(lexer))
+  //   S_ERROR(lex_current_cursor(lexer), "Invalid token found!");
 
   return node;
 }
@@ -1096,11 +1148,16 @@ static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer)
   return node_constant(arena, token->cursor, constant);
 }
 
-static node_t *try_parse_prefix_expression(arena_t *arena, lexer_t *lexer, size_t *stackSize)
+static node_t *try_parse_prefix_expression(arena_t *arena, lexer_t *lexer, size_t *stackSize, bool *isError)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
+  ASSERT_NULL(stackSize);
+  ASSERT_NULL(isError);
   assert(lex_is_valid(lexer));
+
+  if (*isError)
+    return NULL;
 
   if (lex_at_end(lexer))
     return NULL;
@@ -1121,12 +1178,14 @@ static node_t *try_parse_prefix_expression(arena_t *arena, lexer_t *lexer, size_
       UNREACHABLE("Invalid operator-type!");
 
     S_ERROR_EX(lex_current_cursor(lexer), "'%c' is an invalid prefix operator!", operatorTypeIdentifiers[token->as.op]);
+    *isError = true;
     return NULL;
   }
 
   if (!lex_can_peek(lexer))
   {
     S_ERROR(lex_current_cursor(lexer), "Expected an expression after a prefix operator!");
+    *isError = true;
     return NULL;
   }
 
@@ -1135,11 +1194,13 @@ static node_t *try_parse_prefix_expression(arena_t *arena, lexer_t *lexer, size_
   if (!lex_at_end(lexer) && lex_current_is(lexer, TT_OPERATOR))
   {
     S_ERROR(lex_current_cursor(lexer), "Nested prefix operators are not allowed!");
+    *isError = true;
     return NULL;
   }
 
-  node_t *child = try_parse_primary(arena, lexer, stackSize);
-  if (!child)
+  node_t *child = try_parse_primary(arena, lexer, stackSize, isError);
+
+  if (!child || *isError)
     return NULL;
 
   return node_prefix_expression(arena, token->cursor, type, child);
@@ -1149,18 +1210,24 @@ static node_t *try_parse_prefix_expression(arena_t *arena, lexer_t *lexer, size_
 // TODO: Maybe add optimizations like '10*1' to just '10', or '10/1' to just '10'
 //       Means that whenever a 1 occours in a point or pow precedence, remove the operator and just return
 //       the constant which isn't 1.
-static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *stackSize, e_precedence precedence)
+// TODO: Maybe implent a "isError" pointer parameter for directly returning from all parsers.
+static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *stackSize, e_precedence precedence, bool *isError)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
   ASSERT_NULL(stackSize);
+  ASSERT_NULL(isError);
   assert(lex_is_valid(lexer));
+
+  if (*isError)
+    return NULL;
 
   if (lex_at_end(lexer))
     return NULL;
 
-  node_t *lhs = next_node_by_precedence(arena, lexer, stackSize, precedence);
-  if (!lhs)
+  node_t *lhs = next_node_by_precedence(arena, lexer, stackSize, precedence, isError);
+
+  if (!lhs || *isError)
     return NULL;
 
   if (lex_at_end(lexer))
@@ -1173,6 +1240,7 @@ static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *stackSize
       return lhs;
 
     S_ERROR(lex_current_cursor(lexer), "Expected an operator!");
+    *isError = true;
     return NULL;
   }
 
@@ -1184,6 +1252,7 @@ static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *stackSize
   if (precedence < operatorPrecedence[opType])
   {
     fprintf(stderr, "ERROR(%zu): Invalid precedence for current operator! (OPERATOR: '%s', PRECEDENCE = '%d')\n", lex_current_cursor(lexer), operatorTypeNames[opType], precedence);
+    *isError = true;
     return NULL;
   }
 
@@ -1192,22 +1261,28 @@ static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *stackSize
   if (lex_at_end(lexer))
   {
     S_ERROR(lex_current_cursor(lexer) - 1, "Expected an expression after an operator!");
+    *isError = true;
     return NULL;
   }
 
-  node_t *rhs = next_node_by_precedence(arena, lexer, stackSize, precedence);
-  if (!rhs)
+  node_t *rhs = next_node_by_precedence(arena, lexer, stackSize, precedence, isError);
+
+  if (!rhs || *isError)
     return NULL;
 
   return node_binop(arena, opTok->cursor, opType, lhs, rhs);
 }
 
-static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *stackSize)
+static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *stackSize, bool *isError)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
   ASSERT_NULL(stackSize);
+  ASSERT_NULL(isError);
   assert(lex_is_valid(lexer));
+
+  if (*isError)
+    return NULL;
 
   if (lex_at_end(lexer))
     return NULL;
@@ -1220,6 +1295,7 @@ static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *stackSize
   if (!lex_can_peek(lexer))
   {
     S_ERROR(lex_current_cursor(lexer), "Expected an expression after an open paren!");
+    *isError = true;
     return NULL;
   }
 
@@ -1228,15 +1304,17 @@ static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *stackSize
   if (lex_at_end(lexer))
   {
     S_ERROR(lex_current_cursor(lexer), "Expected an expression after an open paren!");
+    *isError = true;
     return NULL;
   }
 
   ++(*stackSize);
-  node_t *child = try_parse_binop(arena, lexer, stackSize, BP_LINE);
+  node_t *child = try_parse_binop(arena, lexer, stackSize, BP_LINE, isError);
   if (!child)
   {
-    S_ERROR(lex_current_cursor(lexer), "Invalid expression!");
+    *isError = true;
     --(*stackSize);
+    S_ERROR(lex_current_cursor(lexer), "Expected a valid expression!");
     return NULL;
   }
   --(*stackSize);
@@ -1244,6 +1322,7 @@ static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *stackSize
   if (lex_at_end(lexer) || lex_current_not_specific_paren(lexer, PT_CPAREN))
   {
     S_ERROR(lex_current_cursor(lexer), "Expected a closing paren!");
+    *isError = true;
     return NULL;
   }
 
@@ -1252,12 +1331,16 @@ static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *stackSize
   return node_paren(arena, tokOParenCursor, child);
 }
 
-static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *stackSize)
+static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *stackSize, bool *isError)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
   ASSERT_NULL(stackSize);
+  ASSERT_NULL(isError);
   assert(lex_is_valid(lexer));
+
+  if (*isError)
+    return NULL;
 
   if (lex_at_end(lexer))
     return NULL;
@@ -1282,6 +1365,7 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *stackSize)
   if (!lex_can_peek(lexer))
   {
     S_ERROR(lex_current_cursor(lexer), "Expected at least one function argument!");
+    *isError = true;
     return NULL;
   }
 
@@ -1295,39 +1379,45 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *stackSize)
     if (lex_at_end(lexer))
     {
       S_ERROR(lex_current_cursor(lexer), "Expected a valid function!");
+      *isError = true;
       return NULL;
     }
 
     if (!lastTok && lex_current_is_specific_literal(lexer, CLT_COMMA))
     {
       S_ERROR(lex_current_cursor(lexer), "Expected a function argument!");
+      *isError = true;
       return NULL;
     }
 
     if (lastTok && tok_is_specific_literal(lastTok, CLT_COMMA) && lex_current_is_specific_literal(lexer, CLT_COMMA))
     {
       S_ERROR(lex_current_cursor(lexer), "Expected a function argument!");
+      *isError = true;
       return NULL;
     }
 
     if (lastTok && lex_current_is_specific_paren(lexer, PT_CPAREN) && tok_is_specific_literal(lastTok, CLT_COMMA))
     {
       S_ERROR(lex_current_cursor(lexer), "Expected a function argument!");
+      *isError = true;
       return NULL;
     }
 
     if (!lastTok && lex_current_is_specific_paren(lexer, PT_CPAREN))
     {
       S_ERROR(lex_current_cursor(lexer), "Expected a function argument!");
+      *isError = true;
       return NULL;
     }
 
     ++(*stackSize);
-    node_t *arg = try_parse_binop(arena, lexer, stackSize, BP_LINE);
+    node_t *arg = try_parse_binop(arena, lexer, stackSize, BP_LINE, isError);
     if (!arg)
     {
-      S_ERROR(lex_current_cursor(lexer), "Expected a function argument!");
+      *isError = true;
       --(*stackSize);
+      S_ERROR(lex_current_cursor(lexer), "Expected a valid expression as an argument!");
       return NULL;
     }
     --(*stackSize);
@@ -1341,6 +1431,7 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *stackSize)
   if (lex_at_end(lexer) || lex_current_not_specific_paren(lexer, PT_CPAREN))
   {
     S_ERROR(lex_current_cursor(lexer), "Expected a closing paren!");
+    *isError = true;
     return NULL;
   }
 
@@ -1357,20 +1448,26 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *stackSize)
   return node_func(arena, funcNameTok->cursor, function);
 }
 
-// TODO: Maybe implent a "isError" pointer parameter for directly returning from all parsers.
 // Example input: "10 * 5 + PI"
-static node_t *try_parse_expression_base(arena_t *arena, lexer_t *lexer)
+static node_t *try_parse_expression_base(arena_t *arena, lexer_t *lexer, bool *isError)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
+  ASSERT_NULL(isError);
   assert(lex_is_valid(lexer));
+
+  if (*isError)
+    return NULL;
 
   if (lex_at_end(lexer))
     return NULL;
 
   size_t stackSize = 0;
-  node_t *root = try_parse_binop(arena, lexer, &stackSize, BP_LINE);
+  node_t *root = try_parse_binop(arena, lexer, &stackSize, BP_LINE, isError);
   assert(stackSize == 0);
+
+  if (*isError)
+    return NULL;
 
   return root;
 }
@@ -1405,6 +1502,7 @@ static bool try_parse_expression(arena_t *arena, lexer_t *lexer, node_expression
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
   ASSERT_NULL(exprs);
+  ASSERT_NULL(isError);
   assert(lex_is_valid(lexer));
 
   if (*isError)
@@ -1432,8 +1530,9 @@ static bool try_parse_expression(arena_t *arena, lexer_t *lexer, node_expression
     lex_seek(lexer);
   }
 
-  node_t *root = try_parse_expression_base(arena, lexer);
-  if (!root)
+  node_t *root = try_parse_expression_base(arena, lexer, isError);
+
+  if (!root || *isError)
     return false;
 
   node_exprs_add(arena, exprs, root);
@@ -1459,10 +1558,11 @@ static inline bool parse_res_contains_exprs(parser_result_t *res)
   return res->exprs.count > 0;
 }
 
-void parse_expressions(arena_t *arena, lexer_t *lexer, parser_result_t *res)
+void parser_execute(arena_t *arena, lexer_t *lexer, parser_result_t *res)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
+  ASSERT_NULL(res);
 
   if (!lex_is_valid(lexer))
     return;
@@ -1490,11 +1590,10 @@ void parse_expressions(arena_t *arena, lexer_t *lexer, parser_result_t *res)
 
             if (!try_parse_expression(arena, lexer, &exprs, &isError))
             {
-              // TODO: Remove perchance?
-              if (!isError)
-                UNREACHABLE("OUT OF PARSERS!");
-              else
+              if (isError)
                 lex_seek_till_end(lexer);
+              else
+                continue;
             }
           }
           else
@@ -1524,8 +1623,12 @@ static double node_constant_to_value(arena_t *arena, node_variable_stack_t *vs, 
   ASSERT_NULL(arena);
   ASSERT_NULL(vs);
   ASSERT_NULL(node);
-
+  ASSERT_NULL(callStack);
+  ASSERT_NULL(isError);
   assert(node->type == NT_CONSTANT);
+
+  if (*isError)
+    return 0;
 
   node_const_t *constant = &node->as.constant;
 
@@ -1601,6 +1704,12 @@ static double node_constant_to_value(arena_t *arena, node_variable_stack_t *vs, 
 
 static node_t *ast_eval_binop(arena_t *arena, node_variable_stack_t *vs, size_t cursor, node_t *lhs, node_t *rhs, e_operator_type op, vs_call_stack_t *callStack)
 {
+  ASSERT_NULL(arena);
+  ASSERT_NULL(vs);
+  ASSERT_NULL(lhs);
+  ASSERT_NULL(rhs);
+  ASSERT_NULL(callStack);
+
   bool isError = false;
 
   double left = node_constant_to_value(arena, vs, lhs, callStack, &isError);
@@ -1647,6 +1756,11 @@ static node_t *ast_eval_binop(arena_t *arena, node_variable_stack_t *vs, size_t 
 
 static node_t *ast_eval_buildin_func(arena_t *arena, node_variable_stack_t *vs, size_t cursor, e_function_type ft, node_func_args_t *args, vs_call_stack_t *callStack)
 {
+  ASSERT_NULL(arena);
+  ASSERT_NULL(vs);
+  ASSERT_NULL(args);
+  ASSERT_NULL(callStack);
+
   bool isError = false;
 
   switch (ft)
@@ -1879,8 +1993,10 @@ void vs_set_func_arg_expression(node_variable_stack_t *vs, string_slice_t *funcN
   ASSERT_NULL(vs);
   ASSERT_NULL(funcName);
   ASSERT_NULL(argName);
+
   node_variable_t *argVar = vs_find_variable_ex(vs, argName, funcName, FVM_FUNC_ARG);
   assert(argVar);
+
   vs_set_expression(argVar, expression);
 }
 
@@ -1890,6 +2006,7 @@ void vs_set_func_args(node_variable_stack_t *vs, node_function_definition_t *var
   ASSERT_NULL(varFuncDef);
   ASSERT_NULL(funcArgs);
   assert(varFuncDef->args.count == funcArgs->count);
+
   for (size_t i = 0; i < funcArgs->count; ++i)
     vs_set_func_arg_expression(vs, &varFuncDef->name, &varFuncDef->args.items[i], funcArgs->items[i]);
 }
@@ -1898,6 +2015,7 @@ void vs_reset_func_args(node_variable_stack_t *vs, node_function_definition_t *v
 {
   ASSERT_NULL(vs);
   ASSERT_NULL(varFuncDef);
+
   for (size_t i = 0; i < varFuncDef->args.count; ++i)
     vs_set_func_arg_expression(vs, &varFuncDef->name, &varFuncDef->args.items[i], NULL);
 }
@@ -1907,6 +2025,7 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr, vs_
   ASSERT_NULL(arena);
   ASSERT_NULL(vs);
   ASSERT_NULL(expr);
+  ASSERT_NULL(callStack);
 
   bool isError = false;
 
@@ -2065,6 +2184,7 @@ ast_eval_res_t ast_eval(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
   bool isError = false;
 
   double result = node_constant_to_value(arena, vs, evaluatedNode, &callStack, &isError);
+
   if (isError)
     return ast_eval_res_error();
 
@@ -2078,7 +2198,7 @@ void parser_eval(arena_t *arena, parser_result_t *parser)
 
   if (parser->exprs.count == 0)
   {
-    printf("No expressions found.\n");
+    printf("No expressions found to evaluate.\n");
     return;
   }
 
@@ -2087,6 +2207,7 @@ void parser_eval(arena_t *arena, parser_result_t *parser)
   for (size_t i = 0; i < parser->exprs.count; ++i)
   {
     ast_eval_res_t evalRes = ast_eval(arena, &parser->vs, node_exprs_at(&parser->exprs, i));
+
     if (evalRes.isError)
       printf("\033[30mEXPR-%zu\033[0m >>> \033[31mERROR\033[0m\n", i + 1);
     else
@@ -2360,7 +2481,7 @@ void print_node(arena_t *arena, node_variable_stack_t *vs, node_t *node, bool in
 
   vs_call_stack_t callStack = {0};
 
-  printf("Printing node tree:\n");
+  printf("Printing expression node:\n");
   print_node_ex(arena, vs, node, indented, 0, &callStack);
 
   assert(callStack.count == 0);
@@ -2387,11 +2508,11 @@ void print_parser(arena_t *arena, parser_result_t *parser, bool indented, bool s
 
   if (!parse_res_contains_exprs(parser))
   {
-    printf("No expressions found.\n");
+    printf("No expressions found to print.\n");
     return;
   }
 
-  printf("Printing node trees (%zu):\n", parser->exprs.count);
+  printf("Printing expression nodes (%zu):\n", parser->exprs.count);
 
   vs_call_stack_t callStack = {0};
 
@@ -2457,6 +2578,15 @@ static bool handle_test_result(arena_t *arena, node_test_t *test, const char *na
 
 bool execute_test(arena_t *arena, node_variable_stack_t *vs, node_test_t *test, bool freeArena, bool verbose, bool indented)
 {
+  printf("\n");
+
+  if (verbose)
+  {
+    printf("Internal tree:\n\n");
+    print_node(arena, vs, test->expressionTree, indented);
+    printf("\n");
+  }
+
   tokenizer_t tokenizer = tokenizer_execute(arena, test->input);
   if (tokenizer.isError)
   {
@@ -2475,8 +2605,9 @@ bool execute_test(arena_t *arena, node_variable_stack_t *vs, node_test_t *test, 
     return false;
   }
 
-  node_t *generatedTree = try_parse_expression_base(arena, &lexer);
-  if (!generatedTree)
+  bool isError = false;
+  node_t *generatedTree = try_parse_expression_base(arena, &lexer, &isError);
+  if (!generatedTree || isError)
   {
     if (freeArena)
       arena_free(arena);
@@ -2486,14 +2617,7 @@ bool execute_test(arena_t *arena, node_variable_stack_t *vs, node_test_t *test, 
 
   if (verbose)
   {
-    printf("\n");
-    printf("Internal tree:\n");
-    printf("\n");
-    print_node(arena, vs, test->expressionTree, indented);
-    printf("\n");
-
-    printf("Generated tree:\n");
-    printf("\n");
+    printf("Generated tree:\n\n");
     print_node(arena, vs, generatedTree, indented);
     printf("\n");
   }

@@ -26,6 +26,8 @@
 #define L_ERROR_GIVEN_LEXER_INVALID() \
   fprintf(stderr, L_ERROR_NAME ": Can't print the lexer because an error happend!\n")
 
+#define COMMENT_LITERAL '#'
+
 typedef enum
 {
   OP_ADD,
@@ -497,6 +499,35 @@ static bool next_new_line(arena_t *arena, string_slice_t *ss, tokenizer_t *token
 void tokenizer_print(const tokenizer_t *tokenizer);
 tokenizer_t tokenizer_execute(arena_t *arena, const char *input);
 
+// Used for skipping comments
+static bool next_comment(arena_t *arena, string_slice_t *ss, tokenizer_t *tokenizer)
+{
+  ASSERT_NULL(arena);
+  ASSERT_NULL(ss);
+  ASSERT_NULL(tokenizer);
+
+  if (!ss_in_range(ss))
+    return true;
+
+  size_t length = 0;
+
+  do
+  {
+    char current = ss_get_current(ss);
+
+    if (length == 0 && current != COMMENT_LITERAL)
+      return false;
+
+    ++length;
+    ss_seek(ss);
+
+    if (c_is_new_line(current))
+      break;
+  } while (ss_in_range(ss));
+
+  return length > 0;
+}
+
 // Tokenizes a collection of characters into an identifier which are not whitespace or literals.
 static bool next_identifier(arena_t *arena, string_slice_t *ss, tokenizer_t *tokenizer)
 {
@@ -508,12 +539,11 @@ static bool next_identifier(arena_t *arena, string_slice_t *ss, tokenizer_t *tok
     return true;
 
   const char *currentPtr = ss_get_current_ptr(ss);
-  char current;
   size_t length = 0;
 
   do
   {
-    current = ss_get_current(ss);
+    char current = ss_get_current(ss);
 
     // If the current character is a space or a literal character, we stop the symbol tokenization.
     if (isspace(current) || c_is_literal(current))
@@ -587,7 +617,8 @@ tokenizer_t tokenizer_execute(arena_t *arena, const char *input)
   {
     ss_seek_spaces_ex(&ss, false);
 
-    if (next_new_line(arena, &ss, &tokenizer) ||
+    if (next_comment(arena, &ss, &tokenizer) ||
+        next_new_line(arena, &ss, &tokenizer) ||
         next_identifier(arena, &ss, &tokenizer) ||
         next_literal(arena, &ss, &tokenizer))
       continue;
