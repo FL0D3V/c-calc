@@ -38,24 +38,27 @@ void ss_init_ex(string_slice_t *slice, const char *src, size_t len)
   assert(len > 0 && "Given len too small!");
   assert(len <= strlen(src) && "Given len too big!");
 
-  slice->src = src;
-  slice->len = len;
-  slice->start_ptr = (uintptr_t)src;
-  slice->current_ptr = (uintptr_t)src;
+  *slice = (string_slice_t){
+      .src = src,
+      .len = len,
+      .start_ptr = (uintptr_t)src,
+      .current_ptr = (uintptr_t)src,
+  };
 }
 
 void ss_init(string_slice_t *slice, const char *src)
 {
   _SS_ASSERT_SLICE_NOT_NULL(slice);
   assert(src && "Given source was NULL!");
-
   size_t len = strlen(src);
   assert(len > 0 && "Given source was empty!");
 
-  slice->src = src;
-  slice->len = len;
-  slice->start_ptr = (uintptr_t)src;
-  slice->current_ptr = (uintptr_t)src;
+  *slice = (string_slice_t){
+      .src = src,
+      .len = len,
+      .start_ptr = (uintptr_t)src,
+      .current_ptr = (uintptr_t)src,
+  };
 }
 
 #define ss_get_current(slice) ss_get_current_ex((slice), __FILE__, __LINE__)

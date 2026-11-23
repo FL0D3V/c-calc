@@ -813,7 +813,7 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
 
   const char *input =
       "test = 2 * 2 + a\n"
-      "# This is a comment!\n"
+      "#      This is a comment!     \n"
       "a = 2 ^ 2 + func(20, 10, 5)\n"
       "atan2(x,y,z) = test * 20 * x + 10 * y - 5 * z\n"
       "PI = test * 20\n"

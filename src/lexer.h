@@ -16,13 +16,9 @@
 
 #define L_ERROR_NAME "LEXING-ERROR"
 #define L_ERROR_INVALID_AMOUNT_OF_COMMAS_IN_NUMBER(cursor, tok) \
-  fprintf(stderr, L_ERROR_NAME ":%zu: A number can only contain 1 decimal point ('" IN_TOK_FMT "')!\n", (cursor), IN_TOK_ARG(tok))
+  fprintf(stderr, L_ERROR_NAME ":%zu: A number can only contain 1 decimal point ('" SS_FMT "')!\n", (cursor), SS_ARG(&tok->value))
 #define L_ERROR_COMMA_AT_END(cursor, tok) \
-  fprintf(stderr, L_ERROR_NAME ":%zu: The comma in the number was at the end! ('" IN_TOK_FMT "')!\n", (cursor), IN_TOK_ARG(tok))
-#define L_ERROR_INVALID_NUMBER(cursor, tok) \
-  fprintf(stderr, L_ERROR_NAME ":%zu: Not a number ('" IN_TOK_FMT "')!\n", (cursor), IN_TOK_ARG(tok))
-#define L_ERROR_INVALID_TOKEN(cursor, tok) \
-  fprintf(stderr, L_ERROR_NAME ":%zu: '" IN_TOK_FMT "' is an invalid token!\n", (cursor), IN_TOK_ARG(tok))
+  fprintf(stderr, L_ERROR_NAME ":%zu: The comma in the number was at the end! ('" SS_FMT "')!\n", (cursor), SS_ARG(&tok->value))
 #define L_ERROR_GIVEN_LEXER_INVALID() \
   fprintf(stderr, L_ERROR_NAME ": Can't print the lexer because an error happend!\n")
 
@@ -112,9 +108,18 @@ e_operator_type cstr_to_operator_type_ex(const char *cstr, size_t len)
   return char_to_operator_type(cstr[0]);
 }
 
+e_operator_type ss_to_operator_type(string_slice_t *name)
+{
+  if (!name || name->len != 1)
+    return OP_INVALID;
+
+  return char_to_operator_type(*name->src);
+}
+
 #define c_is_operator(c) (char_to_operator_type(c) != OP_INVALID)
 #define cstr_is_operator(cstr) (cstr_to_operator_type(cstr) != OP_INVALID)
 #define cstr_is_operator_ex(cstr, len) (cstr_to_operator_type_ex(cstr, len) != OP_INVALID)
+#define ss_is_operator(ss) (ss_to_operator_type(ss) != OP_INVALID)
 
 // Reference: https://en.wikipedia.org/wiki/List_of_mathematical_constants
 typedef enum
@@ -391,9 +396,18 @@ e_paren_type cstr_to_paren_type(const char *cstr)
   return char_to_paren_type(cstr[0]);
 }
 
+e_paren_type ss_to_paren_type(string_slice_t *name)
+{
+  if (!name || name->len != 1)
+    return PT_INVALID;
+
+  return char_to_paren_type(*name->src);
+}
+
 #define c_is_paren(c) (char_to_paren_type(c) != PT_INVALID)
 #define cstr_is_paren_ex(cstr, len) (cstr_to_paren_type_ex(cstr, len) != PT_INVALID)
 #define cstr_is_paren(cstr) (cstr_to_paren_type(cstr) != PT_INVALID)
+#define ss_is_paren(ss) (ss_to_paren_type(ss) != PT_INVALID)
 
 // TODO: Rethink! Maybe add later here also !=, <=, >=, <, > or add it to symbols.
 typedef enum
@@ -444,42 +458,59 @@ e_common_literal_type cstr_to_common_literal_type(const char *cstr)
   return char_to_common_literal_type(cstr[0]);
 }
 
+e_common_literal_type ss_to_common_literal_type(string_slice_t *name)
+{
+  if (!name || name->len != 1)
+    return CLT_INVALID;
+
+  return char_to_common_literal_type(*name->src);
+}
+
 #define c_is_common_literal(c) (char_to_common_literal_type(c) != CLT_INVALID)
 #define cstr_is_common_literal_ex(cstr, len) (cstr_to_common_literal_type_ex(cstr, len) != CLT_INVALID)
 #define cstr_is_common_literal(cstr) (cstr_to_common_literal_type(cstr) != CLT_INVALID)
+#define ss_is_common_literal(cstr) (ss_to_common_literal_type(cstr) != CLT_INVALID)
 
 // Literals are all single character tokens.
 #define c_is_literal(c) (c_is_operator(c) || c_is_paren(c) || c_is_common_literal(c))
-
-// Input-Token printing macros
-#define IN_TOK_FMT "%.*s"
-#define IN_TOK_ARG(tok) (int)(tok)->length, (tok)->value
 
 typedef enum
 {
   IT_LITERAL,
   IT_ID,
   IT_NEW_LINE,
+  IT_COMMENT,
 
   IT_COUNT
 } e_in_tok_type;
 
-static_assert(IT_COUNT == 3, "Amount of input token types changed");
+static_assert(IT_COUNT == 4, "Amount of input token types changed");
 
 const char *inputTokenTypeNames[IT_COUNT] = {
     [IT_LITERAL] = "Literal",
     [IT_ID] = "Identifier",
     [IT_NEW_LINE] = "New-Line",
+    [IT_COMMENT] = "Comment",
 };
 
 typedef struct
 {
-  const char *value;
-  size_t length;
-  size_t cursor;
-
   e_in_tok_type type;
+  string_slice_t value;
+  size_t cursor;
 } input_token_t;
+
+bool in_tok_is(input_token_t *token, e_in_tok_type type)
+{
+  ASSERT_NULL(token);
+  return token->type == type;
+}
+
+bool in_tok_not(input_token_t *token, e_in_tok_type type)
+{
+  ASSERT_NULL(token);
+  return token->type != type;
+}
 
 typedef struct
 {
@@ -490,9 +521,25 @@ typedef struct
   bool isError;
 } tokenizer_t;
 
-#define tokenizer_append(a, tokenizer, val, len, curr, t) \
-  arena_da_append((a), (tokenizer), ((input_token_t){.value = (val), .length = (len), .cursor = (curr), .type = (t)}))
+void tokenizer_append(arena_t *arena, tokenizer_t *tokenizer, const char *value, size_t length, size_t cursor, e_in_tok_type type)
+{
+  ASSERT_NULL(arena);
+  ASSERT_NULL(tokenizer);
+  ASSERT_NULL(value);
 
+  string_slice_t ss = {0};
+  ss_init_ex(&ss, value, length);
+
+  input_token_t token = {
+      .type = type,
+      .value = ss,
+      .cursor = cursor,
+  };
+
+  arena_da_append(arena, tokenizer, token);
+}
+
+static bool next_comment(arena_t *arena, string_slice_t *ss, tokenizer_t *tokenizer);
 static bool next_identifier(arena_t *arena, string_slice_t *ss, tokenizer_t *tokenizer);
 static bool next_literal(arena_t *arena, string_slice_t *ss, tokenizer_t *tokenizer);
 static bool next_new_line(arena_t *arena, string_slice_t *ss, tokenizer_t *tokenizer);
@@ -505,25 +552,38 @@ static bool next_comment(arena_t *arena, string_slice_t *ss, tokenizer_t *tokeni
   ASSERT_NULL(arena);
   ASSERT_NULL(ss);
   ASSERT_NULL(tokenizer);
+  assert(ss_in_range(ss));
 
-  if (!ss_in_range(ss))
-    return true;
+  if (ss_get_current(ss) != COMMENT_LITERAL)
+    return false;
 
+  ss_seek(ss);
+
+  // Seek spaces at the start. ("#        This is a test    " -> "This is a test    ")
+  ss_seek_spaces_ex(ss, false);
+
+  // First non space character after the comment start literal
+  const char *startPtr = ss_get_current_ptr(ss);
   size_t length = 0;
 
   do
   {
-    char current = ss_get_current(ss);
-
-    if (length == 0 && current != COMMENT_LITERAL)
-      return false;
+    if (c_is_new_line(ss_get_current(ss)))
+      break;
 
     ++length;
     ss_seek(ss);
-
-    if (c_is_new_line(current))
-      break;
   } while (ss_in_range(ss));
+
+  // Remove trailing spaces. ("This is a test     " -> "This is a test")
+  while (length > 0 && isspace(*(char *)(startPtr + length - 1)))
+    --length;
+
+  if (length > 0)
+    tokenizer_append(arena, tokenizer, startPtr, length, ss_current_pos(ss) - length, IT_COMMENT);
+
+  if (ss_in_range(ss))
+    ss_seek(ss);
 
   return length > 0;
 }
@@ -534,9 +594,7 @@ static bool next_identifier(arena_t *arena, string_slice_t *ss, tokenizer_t *tok
   ASSERT_NULL(arena);
   ASSERT_NULL(ss);
   ASSERT_NULL(tokenizer);
-
-  if (!ss_in_range(ss))
-    return true;
+  assert(ss_in_range(ss));
 
   const char *currentPtr = ss_get_current_ptr(ss);
   size_t length = 0;
@@ -567,16 +625,13 @@ static bool next_literal(arena_t *arena, string_slice_t *ss, tokenizer_t *tokeni
   ASSERT_NULL(arena);
   ASSERT_NULL(ss);
   ASSERT_NULL(tokenizer);
+  assert(ss_in_range(ss));
 
-  if (!ss_in_range(ss))
-    return true;
-
-  const char *currentPtr = ss_get_current_ptr(ss);
-  bool isLiteral = c_is_literal(*currentPtr);
+  bool isLiteral = c_is_literal(ss_get_current(ss));
 
   if (isLiteral)
   {
-    tokenizer_append(arena, tokenizer, currentPtr, 1, ss_current_pos(ss), IT_LITERAL);
+    tokenizer_append(arena, tokenizer, ss_get_current_ptr(ss), 1, ss_current_pos(ss), IT_LITERAL);
     ss_seek(ss);
   }
 
@@ -585,15 +640,19 @@ static bool next_literal(arena_t *arena, string_slice_t *ss, tokenizer_t *tokeni
 
 static bool next_new_line(arena_t *arena, string_slice_t *ss, tokenizer_t *tokenizer)
 {
-  if (!ss_in_range(ss))
-    return true;
+  ASSERT_NULL(arena);
+  ASSERT_NULL(ss);
+  ASSERT_NULL(tokenizer);
+  assert(ss_in_range(ss));
 
   bool isNL = c_is_new_line(ss_get_current(ss));
+
   if (isNL)
   {
     tokenizer_append(arena, tokenizer, ss_get_current_ptr(ss), 1, ss_current_pos(ss), IT_NEW_LINE);
     ss_seek(ss);
   }
+
   return isNL;
 }
 
@@ -616,6 +675,9 @@ tokenizer_t tokenizer_execute(arena_t *arena, const char *input)
   while (ss_in_range(&ss))
   {
     ss_seek_spaces_ex(&ss, false);
+
+    if (!ss_in_range(&ss))
+      break;
 
     if (next_comment(arena, &ss, &tokenizer) ||
         next_new_line(arena, &ss, &tokenizer) ||
@@ -647,9 +709,25 @@ void tokenizer_print(const tokenizer_t *tokenizer)
   for (size_t i = 0; i < tokenizer->count; ++i)
   {
     input_token_t *currTok = &tokenizer->items[i];
-    printf("%s", inputTokenTypeNames[currTok->type]);
-    if (!cstr_is_new_line_ex(currTok->value, currTok->length))
-      printf("('" IN_TOK_FMT "'), len=%zu", IN_TOK_ARG(currTok), currTok->length);
+
+    switch (currTok->type)
+    {
+    case IT_LITERAL:
+    case IT_ID:
+    case IT_COMMENT:
+    {
+      printf("%s('" SS_FMT "'), len=%zu", inputTokenTypeNames[currTok->type], SS_ARG(&currTok->value), currTok->value.len);
+    }
+    break;
+    case IT_NEW_LINE:
+    {
+      printf("%s", inputTokenTypeNames[currTok->type]);
+    }
+    break;
+    case IT_COUNT:
+    default:
+      UNREACHABLE("Invalid input-token-type!");
+    }
     printf("\n");
   }
 }
@@ -1049,17 +1127,23 @@ lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
   {
     currentToken = &tokenizer->items[i];
 
+    if (in_tok_is(currentToken, IT_COMMENT))
+    {
+      // TODO: Rethink! Ignore comments for now.
+      continue;
+    }
+
     // Check for new line
-    if (cstr_is_new_line_ex(currentToken->value, currentToken->length))
+    if (in_tok_is(currentToken, IT_NEW_LINE))
     {
       add_eol_token(arena, &lexer, currentToken->cursor);
       continue;
     }
 
     // Operator needs to be checked at first because else the double conversion fails on number parsing.
-    if (cstr_is_operator_ex(currentToken->value, currentToken->length))
+    if (ss_is_operator(&currentToken->value))
     {
-      e_operator_type op = cstr_to_operator_type_ex(currentToken->value, currentToken->length);
+      e_operator_type op = ss_to_operator_type(&currentToken->value);
       if (op == OP_INVALID)
         UNREACHABLE("Invalid operator-type!");
       add_operator_token(arena, &lexer, op, currentToken->cursor);
@@ -1067,9 +1151,9 @@ lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
     }
 
     // Check if the token is a paren like '(', ')', ...
-    if (cstr_is_paren_ex(currentToken->value, currentToken->length))
+    if (ss_is_paren(&currentToken->value))
     {
-      e_paren_type pt = cstr_to_paren_type_ex(currentToken->value, currentToken->length);
+      e_paren_type pt = ss_to_paren_type(&currentToken->value);
 
       if (pt == PT_INVALID)
         UNREACHABLE("Invalid paren-type!");
@@ -1079,9 +1163,9 @@ lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
     }
 
     // Check if token is a common literal
-    if (cstr_is_common_literal_ex(currentToken->value, currentToken->length))
+    if (ss_is_common_literal(&currentToken->value))
     {
-      e_common_literal_type clt = cstr_to_common_literal_type_ex(currentToken->value, currentToken->length);
+      e_common_literal_type clt = ss_to_common_literal_type(&currentToken->value);
 
       if (clt == CLT_INVALID)
         UNREACHABLE("Invalid common-literal-type!");
@@ -1091,7 +1175,7 @@ lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
     }
 
     // Number checking
-    num_check_t numCheck = cstr_check_number_ex(currentToken->value, currentToken->length, false);
+    num_check_t numCheck = cstr_check_number_ex(currentToken->value.src, currentToken->value.len, false);
     size_t errCursor = currentToken->cursor + numCheck.cursor;
     switch (numCheck.ret)
     {
@@ -1125,9 +1209,7 @@ lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
     }
 
     // Just a symbol like variable names, math constants, function names, ...
-    string_slice_t symbol = {0};
-    ss_init_ex(&symbol, currentToken->value, currentToken->length);
-    add_symbol_token(arena, &lexer, symbol, currentToken->cursor);
+    add_symbol_token(arena, &lexer, currentToken->value, currentToken->cursor);
   }
 
   // Add the eof token at the end
