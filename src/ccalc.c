@@ -219,9 +219,7 @@ static bool execute_math_expression(const char *input, bool verbose)
   // Printing the variable stack.
   if (verbose)
   {
-    print_variables(&arena, &parseRes.vs, true, true);
-    printf("\n");
-    print_nodes(&arena, &parseRes, true);
+    print_parser(&arena, &parseRes, true, true);
     printf("\n");
   }
 
@@ -818,12 +816,20 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
       "PI = test * 20\n"
       "func(x,y,z) = 1 * x + 2 * y - 3 * z\n"
       "testFunc(s) = 10 + PI\n"
-      "(func(1+1, 2+2, 3+3) * test + 10 + (PI * 2)) + testFunc(a + (PI ^ 2))\n"
-      "1 + ((test) / (2 * sqrt((PI ^ 2) + (3 ^ 2))) - 2) * (2 + 2) + atan2(5, 10) - func(10+5, PI, 4)";
+      "= (func(1+1, 2+2, 3+3) * test + 10 + (PI * 2)) + testFunc(a + (PI ^ 2))\n"
+      "= 1 + ((test) / (2 * sqrt((PI ^ 2) + (3 ^ 2))) - 2) * (2 + 2) + atan2(5, 10) - func(10+5, PI, a)\n"
+      "= 10 + 20 * PI";
 
   arena_t arena = {0};
 
-  printf("INPUT:\n'%s'\n\n", input);
+  if (verbose)
+  {
+    printf("Given input:\n");
+    printf("##################\n");
+    printf("%s\n", input);
+    printf("##################\n");
+    printf("\n");
+  }
 
   tokenizer_t tokenizer = tokenizer_execute(&arena, input);
   if (tokenizer.isError)
@@ -832,11 +838,13 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
     arena_free(&arena);
     return false;
   }
+
   if (verbose)
   {
     tokenizer_print(&tokenizer);
     printf("\n");
   }
+
   lexer_t lexer = lexer_execute(&arena, &tokenizer);
   if (lexer.isError)
   {
@@ -844,6 +852,7 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
     arena_free(&arena);
     return false;
   }
+
   if (verbose)
   {
     lexer_print(&lexer);
@@ -854,29 +863,9 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
 
   parse_expressions(&arena, &lexer, &parseRes);
 
-  if (!parse_res_contains_vars(&parseRes))
-  {
-    fprintf(stderr, "No variables found!\n");
-    arena_free(&arena);
-    return false;
-  }
-
-  // Printing the variable stack.
   if (verbose)
   {
-    print_variables(&arena, &parseRes.vs, true, true);
-    printf("\n");
-  }
-
-  if (!parse_res_contains_exprs(&parseRes))
-  {
-    fprintf(stderr, "No expressions found to calculate!\n");
-    arena_free(&arena);
-    return false;
-  }
-  if (verbose)
-  {
-    print_nodes(&arena, &parseRes, true);
+    print_parser(&arena, &parseRes, true, true);
     printf("\n");
   }
 

@@ -306,12 +306,25 @@ typedef struct
   size_t count;
 } node_func_definition_args_t;
 
-#define node_func_args_empty(args) ((args)->count == 0)
+static inline bool node_func_args_empty(node_func_definition_args_t *args)
+{
+  ASSERT_NULL(args);
+  return args->count == 0;
+}
 
-#define node_func_args_at(args, idx) (&(args)->items[(idx)])
+static inline string_slice_t *node_func_args_at(node_func_definition_args_t *args, size_t index)
+{
+  ASSERT_NULL(args);
+  assert(index < args->count);
+  return &args->items[index];
+}
 
-#define node_func_definition_args_append(a, funcArgs, arg) \
-  arena_da_append(a, funcArgs, arg)
+static inline void node_func_definition_args_append(arena_t *arena, node_func_definition_args_t *funcArgs, string_slice_t arg)
+{
+  ASSERT_NULL(arena);
+  ASSERT_NULL(funcArgs);
+  arena_da_append(arena, funcArgs, arg);
+}
 
 typedef struct
 {
@@ -370,7 +383,7 @@ typedef struct
 #define node_variable_func_arg(func, arg) \
   ((node_variable_t){.type = NV_FUNCTION_ARG_DEFINITION, .as.funcArgDef.funcName = (func), .as.funcArgDef.argName = (arg), .expression = NULL})
 
-void vs_set_expression(node_variable_t *var, node_t *root)
+static inline void vs_set_expression(node_variable_t *var, node_t *root)
 {
   ASSERT_NULL(var);
   var->expression = root;
@@ -383,14 +396,15 @@ typedef struct
   size_t capacity;
 } vs_call_stack_t;
 
-bool vs_call_stack_name_exists(vs_call_stack_t *stack, string_slice_t *name);
-string_slice_t *vs_call_stack_at(vs_call_stack_t *stack, size_t index);
-string_slice_t *vs_call_stack_current(vs_call_stack_t *stack);
-void vs_call_stack_pop(vs_call_stack_t *stack);
-void vs_call_stack_push(arena_t *arena, vs_call_stack_t *stack, string_slice_t *name);
-void print_vs_call_stack(vs_call_stack_t *stack);
+static inline bool vs_call_stack_name_exists(vs_call_stack_t *stack, string_slice_t *name);
+static inline string_slice_t *vs_call_stack_at(vs_call_stack_t *stack, size_t index);
+static inline string_slice_t *vs_call_stack_current(vs_call_stack_t *stack);
+static inline bool vs_call_stack_can_pop(vs_call_stack_t *stack);
+static inline void vs_call_stack_pop(vs_call_stack_t *stack);
+static inline void vs_call_stack_push(arena_t *arena, vs_call_stack_t *stack, string_slice_t *name);
+static inline void print_vs_call_stack(vs_call_stack_t *stack);
 
-void vs_call_stack_push(arena_t *arena, vs_call_stack_t *stack, string_slice_t *name)
+static inline void vs_call_stack_push(arena_t *arena, vs_call_stack_t *stack, string_slice_t *name)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(stack);
@@ -399,14 +413,20 @@ void vs_call_stack_push(arena_t *arena, vs_call_stack_t *stack, string_slice_t *
   arena_da_append(arena, stack, name);
 }
 
-void vs_call_stack_pop(vs_call_stack_t *stack)
+static inline bool vs_call_stack_can_pop(vs_call_stack_t *stack)
 {
   ASSERT_NULL(stack);
+  return stack->count != 0;
+}
 
+static inline void vs_call_stack_pop(vs_call_stack_t *stack)
+{
+  ASSERT_NULL(stack);
+  assert(vs_call_stack_can_pop(stack));
   stack->count--;
 }
 
-string_slice_t *vs_call_stack_current(vs_call_stack_t *stack)
+static inline string_slice_t *vs_call_stack_current(vs_call_stack_t *stack)
 {
   ASSERT_NULL(stack);
 
@@ -416,7 +436,7 @@ string_slice_t *vs_call_stack_current(vs_call_stack_t *stack)
   return stack->items[stack->count - 1];
 }
 
-string_slice_t *vs_call_stack_at(vs_call_stack_t *stack, size_t index)
+static inline string_slice_t *vs_call_stack_at(vs_call_stack_t *stack, size_t index)
 {
   ASSERT_NULL(stack);
   if (stack->count == 0)
@@ -426,7 +446,7 @@ string_slice_t *vs_call_stack_at(vs_call_stack_t *stack, size_t index)
   return stack->items[index];
 }
 
-bool vs_call_stack_name_exists(vs_call_stack_t *stack, string_slice_t *name)
+static bool vs_call_stack_name_exists(vs_call_stack_t *stack, string_slice_t *name)
 {
   ASSERT_NULL(stack);
 
@@ -441,7 +461,7 @@ bool vs_call_stack_name_exists(vs_call_stack_t *stack, string_slice_t *name)
   return false;
 }
 
-void print_vs_call_stack(vs_call_stack_t *stack)
+static void print_vs_call_stack(vs_call_stack_t *stack)
 {
   ASSERT_NULL(stack);
 
@@ -467,26 +487,33 @@ typedef struct
   size_t count;
 } node_variable_stack_t;
 
-void vs_variable_push(arena_t *a, node_variable_stack_t *vs, node_variable_t var)
+static inline void vs_variable_push(arena_t *a, node_variable_stack_t *vs, node_variable_t var)
 {
   // TODO: Rethink! Check for duplicates.
   arena_da_append(a, vs, var);
 }
 
-void vs_variable_pop_ex(node_variable_stack_t *vs, size_t count)
+static inline void vs_variable_pop_ex(node_variable_stack_t *vs, size_t count)
 {
   ASSERT_NULL(vs);
   vs->count -= count;
 }
 
-node_variable_t *vs_variable_pop(node_variable_stack_t *vs)
+static inline node_variable_t *vs_variable_pop(node_variable_stack_t *vs)
 {
   ASSERT_NULL(vs);
   node_variable_t *var = &vs->items[vs->count--];
   return var;
 }
 
-#define vs_at(vs, idx) (&(vs)->items[idx])
+static inline node_variable_t *vs_at(node_variable_stack_t *vs, size_t index)
+{
+  ASSERT_NULL(vs);
+  if (vs->count == 0)
+    return NULL;
+  assert(index < vs->count);
+  return &(vs)->items[index];
+}
 
 typedef enum
 {
@@ -500,7 +527,7 @@ typedef enum
 
 static_assert(FVM_COUNT == 4, "Amount of find node var modes have changed!");
 
-node_variable_t *vs_find_variable_ex(node_variable_stack_t *vs, string_slice_t *name, string_slice_t *funcName, e_find_var_mode mode)
+static node_variable_t *vs_find_variable_ex(node_variable_stack_t *vs, string_slice_t *name, string_slice_t *funcName, e_find_var_mode mode)
 {
   ASSERT_NULL(vs);
   ASSERT_NULL(name);
@@ -592,7 +619,7 @@ bool vs_variable_name_exists_ex(node_variable_stack_t *vs, string_slice_t *name,
 #define vs_variable_name_exists(vs, name, func) \
   vs_variable_name_exists_ex((vs), (name), (func), FVM_ALL)
 
-static bool vs_check_variable_name_errors(node_variable_stack_t *vs, string_slice_t *name, string_slice_t *funcName, size_t cursor)
+static inline bool vs_check_variable_name_errors(node_variable_stack_t *vs, string_slice_t *name, string_slice_t *funcName, size_t cursor)
 {
   ASSERT_NULL(vs);
   ASSERT_NULL(name);
@@ -615,7 +642,7 @@ static bool vs_check_variable_name_errors(node_variable_stack_t *vs, string_slic
   return true;
 }
 
-string_slice_t *vs_get_variable_name(node_variable_t *variable)
+static inline string_slice_t *vs_get_variable_name(node_variable_t *variable)
 {
   ASSERT_NULL(variable);
 
@@ -633,8 +660,8 @@ string_slice_t *vs_get_variable_name(node_variable_t *variable)
   }
 }
 
-static bool try_parse_const_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer);
-static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer);
+static bool try_parse_const_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer, bool *isError);
+static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer, bool *isError);
 void print_variables(arena_t *arena, node_variable_stack_t *vs, bool showValue, bool indented);
 
 static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer);
@@ -644,7 +671,6 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *stackSize)
 static node_t *try_parse_primary(arena_t *arena, lexer_t *lexer, size_t *stackSize);
 static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *stackSize, e_precedence precedence);
 
-static node_t *parse_expression(arena_t *arena, lexer_t *lexer);
 static void print_node_ex(arena_t *arena, node_variable_stack_t *vs, node_t *node, bool indented, size_t depth, vs_call_stack_t *callStack);
 void print_node(arena_t *arena, node_variable_stack_t *vs, node_t *node, bool indented);
 void print_node_simple(arena_t *arena, node_t *node, bool indented);
@@ -664,11 +690,13 @@ typedef struct
 
 ast_eval_res_t ast_eval(arena_t *arena, node_variable_stack_t *vs, node_t *expr);
 
-static bool try_parse_const_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer)
+static bool try_parse_const_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer, bool *isError)
 {
   ASSERT_NULL(vs);
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
+
+  *isError = false;
 
   if (!lex_is_valid(lexer) || !lex_at_start_of_line(lexer))
     return false;
@@ -689,21 +717,36 @@ static bool try_parse_const_variable(node_variable_stack_t *vs, arena_t *arena, 
   if (!lex_can_peek(lexer))
   {
     S_ERROR(lex_current_cursor(lexer), "After a variable assignment must be an expression!");
+    *isError = true;
     return false;
   }
 
   lex_seek(lexer);
 
-  node_t *value = parse_expression(arena, lexer);
+  if (lex_at_end(lexer))
+  {
+    S_ERROR(lex_current_cursor(lexer), "Expected a valid expression!");
+    *isError = true;
+    return false;
+  }
+
+  size_t stackSize = 0;
+  node_t *value = try_parse_binop(arena, lexer, &stackSize, BP_LINE);
+  assert(stackSize == 0);
+
   if (!value)
   {
     S_ERROR(lex_current_cursor(lexer), "After a variable assignment must be a valid expression!");
+    *isError = true;
     return false;
   }
 
   // Checks if the variable name is already used
   if (!vs_check_variable_name_errors(vs, &varNameTok->as.symbol, NULL, varNameTok->cursor))
+  {
+    *isError = true;
     return false;
+  }
 
   // Create and add a new variable.
   node_variable_t constantVar = node_variable_constant(varNameTok->as.symbol, value);
@@ -737,11 +780,13 @@ static bool func_arg_name_valid(node_variable_stack_t *vs, string_slice_t *funcN
   return true;
 }
 
-static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer)
+static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer, bool *isError)
 {
   ASSERT_NULL(vs);
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
+
+  *isError = false;
 
   if (!lex_is_valid(lexer) || !lex_at_start_of_line(lexer))
     return false;
@@ -762,6 +807,7 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
   if (!lex_can_peek(lexer))
   {
     S_ERROR(lex_current_cursor(lexer), "Expected at least one function argument name!");
+    *isError = true;
     return false;
   }
 
@@ -775,12 +821,14 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
     if (!lastTok && lex_current_is_specific_literal(lexer, CLT_COMMA))
     {
       S_ERROR(lex_current_cursor(lexer), "Expected a name!");
+      *isError = true;
       return false;
     }
 
     if (lastTok && tok_is_specific_literal(lastTok, CLT_COMMA) && lex_current_is_specific_literal(lexer, CLT_COMMA))
     {
       S_ERROR(lex_current_cursor(lexer), "Expected a name!");
+      *isError = true;
       return false;
     }
 
@@ -808,6 +856,7 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
     else
     {
       S_ERROR(lex_current_cursor(lexer), "Unexpected token!");
+      *isError = true;
       return false;
     }
 
@@ -817,24 +866,28 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
   if (lastTok && tok_is_specific_literal(lastTok, CLT_COMMA))
   {
     S_ERROR(lex_current_cursor(lexer), "Expected a name!");
+    *isError = true;
     return false;
   }
 
   if (lex_at_end(lexer) || lex_current_not_specific_paren(lexer, PT_CPAREN))
   {
     S_ERROR(lex_current_cursor(lexer), "Expected a closing paren, then an assignment and then an expression!");
+    *isError = true;
     return false;
   }
 
   if (node_func_args_empty(&funcArgs))
   {
     S_ERROR(lex_current_cursor(lexer), "Expected at least one function argument!");
+    *isError = true;
     return false;
   }
 
   if (!lex_can_peek(lexer))
   {
     S_ERROR(lex_current_cursor(lexer), "Invalid function definition! Expected at least an assignment and then an expression.");
+    *isError = true;
     return false;
   }
 
@@ -846,21 +899,36 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
   if (!lex_can_peek(lexer))
   {
     S_ERROR(lex_current_cursor(lexer), "After a variable assignment must be an expression!");
+    *isError = true;
     return false;
   }
 
   lex_seek(lexer);
 
-  node_t *expression = parse_expression(arena, lexer);
+  if (lex_at_end(lexer))
+  {
+    S_ERROR(lex_current_cursor(lexer), "Expected a valid expression!");
+    *isError = true;
+    return false;
+  }
+
+  size_t stackSize = 0;
+  node_t *expression = try_parse_binop(arena, lexer, &stackSize, BP_LINE);
+  assert(stackSize == 0);
+
   if (!expression)
   {
     S_ERROR(lex_current_cursor(lexer), "After a variable assignment must be a valid expression");
+    *isError = true;
     return false;
   }
 
   // Checks if the variable name is already used
   if (!vs_check_variable_name_errors(vs, &varNameTok->as.symbol, NULL, varNameTok->cursor))
+  {
+    *isError = true;
     return false;
+  }
 
   // Create and add the function variable.
   node_variable_t funcVar = node_variable_function(varNameTok->as.symbol, funcArgs, expression);
@@ -938,7 +1006,8 @@ void print_variables(arena_t *arena, node_variable_stack_t *vs, bool showValue, 
 
     printf(" ->%s", indented ? "\n" : " ");
     print_node_ex(arena, vs, variable->expression, indented, 1, &callStack);
-    vs_call_stack_pop(&callStack);
+    if (vs_call_stack_can_pop(&callStack))
+      vs_call_stack_pop(&callStack);
 
     assert(callStack.count == 0);
 
@@ -988,6 +1057,7 @@ static node_t *try_parse_constant(arena_t *arena, lexer_t *lexer)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
+  assert(lex_is_valid(lexer));
 
   if (lex_at_end(lexer))
     return NULL;
@@ -1030,6 +1100,7 @@ static node_t *try_parse_prefix_expression(arena_t *arena, lexer_t *lexer, size_
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
+  assert(lex_is_valid(lexer));
 
   if (lex_at_end(lexer))
     return NULL;
@@ -1083,6 +1154,7 @@ static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *stackSize
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
   ASSERT_NULL(stackSize);
+  assert(lex_is_valid(lexer));
 
   if (lex_at_end(lexer))
     return NULL;
@@ -1135,6 +1207,7 @@ static node_t *try_parse_paren(arena_t *arena, lexer_t *lexer, size_t *stackSize
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
   ASSERT_NULL(stackSize);
+  assert(lex_is_valid(lexer));
 
   if (lex_at_end(lexer))
     return NULL;
@@ -1184,6 +1257,7 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *stackSize)
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
   ASSERT_NULL(stackSize);
+  assert(lex_is_valid(lexer));
 
   if (lex_at_end(lexer))
     return NULL;
@@ -1227,19 +1301,19 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *stackSize)
     if (!lastTok && lex_current_is_specific_literal(lexer, CLT_COMMA))
     {
       S_ERROR(lex_current_cursor(lexer), "Expected a function argument!");
-      return false;
+      return NULL;
     }
 
     if (lastTok && tok_is_specific_literal(lastTok, CLT_COMMA) && lex_current_is_specific_literal(lexer, CLT_COMMA))
     {
       S_ERROR(lex_current_cursor(lexer), "Expected a function argument!");
-      return false;
+      return NULL;
     }
 
     if (lastTok && lex_current_is_specific_paren(lexer, PT_CPAREN) && tok_is_specific_literal(lastTok, CLT_COMMA))
     {
       S_ERROR(lex_current_cursor(lexer), "Expected a function argument!");
-      return false;
+      return NULL;
     }
 
     if (!lastTok && lex_current_is_specific_paren(lexer, PT_CPAREN))
@@ -1270,12 +1344,11 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *stackSize)
     return NULL;
   }
 
-  node_func_t function = {0};
-
   // Checks if the symbol is a valid function name.
-  e_function_type ft = ss_to_function_type(&funcNameTok->as.symbol);
-  if (ft != FT_INVALID)
-    function = node_func_buildin(ft, argsList);
+  node_func_t function = {0};
+  e_function_type funcType = ss_to_function_type(&funcNameTok->as.symbol);
+  if (funcType != FT_INVALID)
+    function = node_func_buildin(funcType, argsList);
   else
     function = node_func_variable(funcNameTok->as.symbol, argsList);
 
@@ -1284,18 +1357,20 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *stackSize)
   return node_func(arena, funcNameTok->cursor, function);
 }
 
-static node_t *parse_expression(arena_t *arena, lexer_t *lexer)
+// TODO: Maybe implent a "isError" pointer parameter for directly returning from all parsers.
+// Example input: "10 * 5 + PI"
+static node_t *try_parse_expression_base(arena_t *arena, lexer_t *lexer)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
+  assert(lex_is_valid(lexer));
 
-  if (!lex_is_valid(lexer) || lex_at_end(lexer))
+  if (lex_at_end(lexer))
     return NULL;
 
   size_t stackSize = 0;
   node_t *root = try_parse_binop(arena, lexer, &stackSize, BP_LINE);
-  if (stackSize != 0)
-    UNREACHABLE("Invalid stack-size!");
+  assert(stackSize == 0);
 
   return root;
 }
@@ -1307,7 +1382,7 @@ typedef struct
   size_t capacity;
 } node_expressions_list_t;
 
-node_t *node_exprs_at(node_expressions_list_t *exprs, size_t index)
+static inline node_t *node_exprs_at(node_expressions_list_t *exprs, size_t index)
 {
   ASSERT_NULL(exprs);
   assert(index < exprs->count);
@@ -1315,7 +1390,7 @@ node_t *node_exprs_at(node_expressions_list_t *exprs, size_t index)
   return exprs->items[index];
 }
 
-static void node_exprs_add(arena_t *arena, node_expressions_list_t *result, node_t *node)
+static inline void node_exprs_add(arena_t *arena, node_expressions_list_t *result, node_t *node)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(result);
@@ -1324,19 +1399,61 @@ static void node_exprs_add(arena_t *arena, node_expressions_list_t *result, node
   arena_da_append(arena, result, node);
 }
 
+// Example input: "= 10 * 5 + PI"
+static bool try_parse_expression(arena_t *arena, lexer_t *lexer, node_expressions_list_t *exprs, bool *isError)
+{
+  ASSERT_NULL(arena);
+  ASSERT_NULL(lexer);
+  ASSERT_NULL(exprs);
+  assert(lex_is_valid(lexer));
+
+  if (*isError)
+    return false;
+
+  if (lex_at_end(lexer))
+    return false;
+
+  if (lex_at_start_of_line(lexer))
+  {
+    if (!lex_current_is_specific_literal(lexer, CLT_EQUALS))
+    {
+      S_ERROR(lex_current_cursor(lexer), "First token must be an equals sign!");
+      *isError = true;
+      return false;
+    }
+
+    if (!lex_can_peek(lexer))
+    {
+      S_ERROR(lex_current_cursor(lexer), "Expected an expression after the equals sign!");
+      *isError = true;
+      return false;
+    }
+
+    lex_seek(lexer);
+  }
+
+  node_t *root = try_parse_expression_base(arena, lexer);
+  if (!root)
+    return false;
+
+  node_exprs_add(arena, exprs, root);
+
+  return true;
+}
+
 typedef struct
 {
   node_variable_stack_t vs;
   node_expressions_list_t exprs;
 } parser_result_t;
 
-bool parse_res_contains_vars(parser_result_t *res)
+static inline bool parse_res_contains_vars(parser_result_t *res)
 {
   ASSERT_NULL(res);
   return res->vs.count > 0;
 }
 
-bool parse_res_contains_exprs(parser_result_t *res)
+static inline bool parse_res_contains_exprs(parser_result_t *res)
 {
   ASSERT_NULL(res);
   return res->exprs.count > 0;
@@ -1357,23 +1474,35 @@ void parse_expressions(arena_t *arena, lexer_t *lexer, parser_result_t *res)
 
   while (!lex_at_eof(lexer))
   {
-    if (lex_contains_in_current_line(lexer, _contains_equals))
+    bool isError = false;
+
+    if (!try_parse_const_variable(&vs, arena, lexer, &isError))
     {
-      if (!try_parse_const_variable(&vs, arena, lexer))
+      if (!isError)
       {
         lex_reset_to_start_of_line(lexer);
-        if (!try_parse_func_variable(&vs, arena, lexer))
-          lex_seek_till_end(lexer);
-      }
-    }
-    else
-    {
-      node_t *lineRes = parse_expression(arena, lexer);
-      if (lineRes)
-        node_exprs_add(arena, &exprs, lineRes);
 
-      // if (!lex_at_end(lexer))
-      //   lex_seek_till_end(lexer);
+        if (!try_parse_func_variable(&vs, arena, lexer, &isError))
+        {
+          if (!isError)
+          {
+            lex_reset_to_start_of_line(lexer);
+
+            if (!try_parse_expression(arena, lexer, &exprs, &isError))
+            {
+              // TODO: Remove perchance?
+              if (!isError)
+                UNREACHABLE("OUT OF PARSERS!");
+              else
+                lex_seek_till_end(lexer);
+            }
+          }
+          else
+            lex_seek_till_end(lexer);
+        }
+      }
+      else
+        lex_seek_till_end(lexer);
     }
 
     // Seek to the next line if possible.
@@ -1413,7 +1542,7 @@ static double node_constant_to_value(arena_t *arena, node_variable_stack_t *vs, 
   {
     e_math_constant_type mc = constant->as.buildinConstant;
     if (mc == MC_INVALID)
-      UNREACHABLE("Invalid math constant type!");
+      UNREACHABLE("Invalid math-constant-type!");
 
     result = mathConstantTypeValues[mc];
   }
@@ -1745,6 +1874,34 @@ static node_t *ast_eval_buildin_func(arena_t *arena, node_variable_stack_t *vs, 
   }
 }
 
+void vs_set_func_arg_expression(node_variable_stack_t *vs, string_slice_t *funcName, string_slice_t *argName, node_t *expression)
+{
+  ASSERT_NULL(vs);
+  ASSERT_NULL(funcName);
+  ASSERT_NULL(argName);
+  node_variable_t *argVar = vs_find_variable_ex(vs, argName, funcName, FVM_FUNC_ARG);
+  assert(argVar);
+  vs_set_expression(argVar, expression);
+}
+
+void vs_set_func_args(node_variable_stack_t *vs, node_function_definition_t *varFuncDef, node_func_args_t *funcArgs)
+{
+  ASSERT_NULL(vs);
+  ASSERT_NULL(varFuncDef);
+  ASSERT_NULL(funcArgs);
+  assert(varFuncDef->args.count == funcArgs->count);
+  for (size_t i = 0; i < funcArgs->count; ++i)
+    vs_set_func_arg_expression(vs, &varFuncDef->name, &varFuncDef->args.items[i], funcArgs->items[i]);
+}
+
+void vs_reset_func_args(node_variable_stack_t *vs, node_function_definition_t *varFuncDef)
+{
+  ASSERT_NULL(vs);
+  ASSERT_NULL(varFuncDef);
+  for (size_t i = 0; i < varFuncDef->args.count; ++i)
+    vs_set_func_arg_expression(vs, &varFuncDef->name, &varFuncDef->args.items[i], NULL);
+}
+
 node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr, vs_call_stack_t *callStack)
 {
   ASSERT_NULL(arena);
@@ -1854,21 +2011,13 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr, vs_
         return NULL;
       }
 
-      for (size_t i = 0; i < funcNode->args.count; ++i)
-      {
-        node_variable_t *argVar = vs_find_variable_ex(vs, &varFuncDef->args.items[i], &varFuncDef->name, FVM_FUNC_ARG);
-        vs_set_expression(argVar, funcNode->args.items[i]);
-      }
+      vs_set_func_args(vs, varFuncDef, &funcNode->args);
 
       vs_call_stack_push(arena, callStack, funcName);
       node_t *resultNode = ast_eval_ex(arena, vs, variable->expression, callStack);
       vs_call_stack_pop(callStack);
 
-      for (size_t i = 0; i < funcNode->args.count; ++i)
-      {
-        node_variable_t *argVar = vs_find_variable_ex(vs, &varFuncDef->args.items[i], &varFuncDef->name, FVM_FUNC_ARG);
-        vs_set_expression(argVar, NULL);
-      }
+      vs_reset_func_args(vs, varFuncDef);
 
       if (!resultNode)
         return NULL;
@@ -1927,16 +2076,18 @@ void parser_eval(arena_t *arena, parser_result_t *parser)
   ASSERT_NULL(arena);
   ASSERT_NULL(parser);
 
+  printf("Results:\n");
+
   for (size_t i = 0; i < parser->exprs.count; ++i)
   {
     ast_eval_res_t evalRes = ast_eval(arena, &parser->vs, node_exprs_at(&parser->exprs, i));
     if (evalRes.isError)
     {
-      fprintf(stderr, "ERROR: Evaluation for expression '%zu' failed!\n", i + 1);
+      printf("\033[30mEXPR-%zu\033[0m >>> ERROR\n", i + 1);
       continue;
     }
 
-    printf("Expr-%zu >>> " DOUBLE_PRINT_FORMAT "\n", i + 1, evalRes.value);
+    printf("\033[30mEXPR-%zu\033[0m >>> " DOUBLE_PRINT_FORMAT "\n", i + 1, evalRes.value);
   }
 }
 
@@ -2223,10 +2374,13 @@ void print_node_simple(arena_t *arena, node_t *node, bool indented)
   print_node(arena, &vs, node, indented);
 }
 
-void print_nodes(arena_t *arena, parser_result_t *parser, bool indented)
+void print_parser(arena_t *arena, parser_result_t *parser, bool indented, bool showVariableValues)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(parser);
+
+  print_variables(arena, &parser->vs, showVariableValues, indented);
+  printf("\n");
 
   if (!parse_res_contains_exprs(parser))
   {
@@ -2234,16 +2388,17 @@ void print_nodes(arena_t *arena, parser_result_t *parser, bool indented)
     return;
   }
 
-  printf("Printing node trees:\n");
+  printf("Printing node trees (%zu):\n", parser->exprs.count);
 
   vs_call_stack_t callStack = {0};
 
   for (size_t i = 0; i < parser->exprs.count; ++i)
   {
-    print_node_ex(arena, &parser->vs, node_exprs_at(&parser->exprs, i), indented, 0, &callStack);
+    printf("\033[30mEXPR-%zu\033[0m ->%s", i + 1, indented ? "\n" : " ");
+    print_node_ex(arena, &parser->vs, node_exprs_at(&parser->exprs, i), indented, 1, &callStack);
     printf("\n");
 
-    if (i < parser->exprs.count - 1)
+    if (indented && i < parser->exprs.count - 1)
       printf("\n");
 
     assert(callStack.count == 0);
@@ -2317,7 +2472,7 @@ bool execute_test(arena_t *arena, node_variable_stack_t *vs, node_test_t *test, 
     return false;
   }
 
-  node_t *generatedTree = parse_expression(arena, &lexer);
+  node_t *generatedTree = try_parse_expression_base(arena, &lexer);
   if (!generatedTree)
   {
     if (freeArena)
