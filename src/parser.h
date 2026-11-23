@@ -2076,18 +2076,21 @@ void parser_eval(arena_t *arena, parser_result_t *parser)
   ASSERT_NULL(arena);
   ASSERT_NULL(parser);
 
+  if (parser->exprs.count == 0)
+  {
+    printf("No expressions found.\n");
+    return;
+  }
+
   printf("Results:\n");
 
   for (size_t i = 0; i < parser->exprs.count; ++i)
   {
     ast_eval_res_t evalRes = ast_eval(arena, &parser->vs, node_exprs_at(&parser->exprs, i));
     if (evalRes.isError)
-    {
-      printf("\033[30mEXPR-%zu\033[0m >>> ERROR\n", i + 1);
-      continue;
-    }
-
-    printf("\033[30mEXPR-%zu\033[0m >>> " DOUBLE_PRINT_FORMAT "\n", i + 1, evalRes.value);
+      printf("\033[30mEXPR-%zu\033[0m >>> \033[31mERROR\033[0m\n", i + 1);
+    else
+      printf("\033[30mEXPR-%zu\033[0m >>> " DOUBLE_PRINT_FORMAT "\n", i + 1, evalRes.value);
   }
 }
 

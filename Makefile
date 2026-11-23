@@ -9,7 +9,7 @@ SRC_DIR := src
 OBJ_DIR	:= obj
 BIN_DIR	:= bin
 
-TEST_INPUT := "  100.53 + sqrt(3.5 - EN) + cos(44.23 *   6.4^2) /   8.3 + ln(10) - PI + ln(5^EC)"
+TEST_INPUT := "=  100.53 + sqrt(3.5 - EN) + cos(44.23 *   6.4^2) /   8.3 + ln(10) - PI + ln(5^EC)"
 # TEST_INPUT := "100.53 + sqrt(3.5 - 0.5) + cos(44.23 * 6.4 ^ 2) / 8.3 + ln(10) - 3 + ln(5 ^ 1.2)"
 
 EXE := $(BIN_DIR)/$(TARGET)
