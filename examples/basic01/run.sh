@@ -1,5 +1,5 @@
 #!/bin/bash
 
-input="-f input.eval"
+input="input.eval"
 
-./bin/ccalc input $input
+./bin/ccalc -f $input

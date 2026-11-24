@@ -9,8 +9,8 @@ SRC_DIR := src
 OBJ_DIR	:= obj
 BIN_DIR	:= bin
 
-TEST_INPUT := "=  100.53 + sqrt(3.5 - EN) + cos(44.23 *   6.4^2) /   8.3 + ln(10) - PI + ln(5^EC)"
-# TEST_INPUT := "100.53 + sqrt(3.5 - 0.5) + cos(44.23 * 6.4 ^ 2) / 8.3 + ln(10) - 3 + ln(5 ^ 1.2)"
+TEST_INPUT := "=  100.53 + sqrt(3.5 - EN) + cos(44.23 *   6.4 ^ 2) /   8.3 + ln(10) - PI + ln(5 ^ EC)"
+TEST_FILE_INPUT := "./examples/basic01/input.eval"
 
 EXE := $(BIN_DIR)/$(TARGET)
 SRC := $(wildcard $(SRC_DIR)/*.c)
@@ -54,6 +54,12 @@ check4: $(EXE)
 check5: $(EXE)
 	valgrind -s --leak-check=full --track-origins=yes --show-leak-kinds=all $^ system-test -v
 
+check6: $(EXE)
+	valgrind -s --leak-check=full --track-origins=yes --show-leak-kinds=all $^ input -f $(TEST_FILE_INPUT)
+
+check7: $(EXE)
+	valgrind -s --leak-check=full --track-origins=yes --show-leak-kinds=all $^ input -v -f $(TEST_FILE_INPUT)
+
 test1: $(EXE)
 	$^ test -v
 	
@@ -66,6 +72,6 @@ clean:
 run: $(EXE)
 	./$(EXE) input -v -i $(TEST_INPUT)
 
-.PHONY: all check1 check2 check3 test1 test2 clean remake remakeDebug remakeRelease debug release run
+.PHONY: all check1 check2 check3 check4 check5 check6 check7 test1 test2 clean remake remakeDebug remakeRelease debug release run
 
 -include $(OBJ:.o=.d)

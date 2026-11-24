@@ -180,15 +180,24 @@ static void print_detail_info(const char *arg)
     fprintf(stderr, "ERROR: Unknown value '%s'! Only buildin functions or constants are supported.\n", arg);
 }
 
-static bool execute_math_expression(const char *input, bool verbose)
+static bool execute_math_expression(string_slice_t *input, bool verbose)
 {
   arena_t arena = {0};
 
-  // Execute tokenizer
-  tokenizer_t tokenizer = tokenizer_execute(&arena, input);
+  // TODO: Rethink!
+  // if (verbose)
+  // {
+  //   printf("Given input:\n");
+  //   printf("##################\n");
+  //   printf("%s\n", input);
+  //   printf("##################\n");
+  //   printf("\n");
+  // }
+
+  tokenizer_t tokenizer = tokenizer_execute_ss(&arena, input);
   if (tokenizer.isError)
   {
-    // Cleanup
+    fprintf(stderr, "Tokenization failed!\n");
     arena_free(&arena);
     return false;
   }
@@ -199,11 +208,10 @@ static bool execute_math_expression(const char *input, bool verbose)
     printf("\n");
   }
 
-  // Execute lexer
   lexer_t lexer = lexer_execute(&arena, &tokenizer);
   if (lexer.isError)
   {
-    // Cleanup
+    fprintf(stderr, "Lexing failed!\n");
     arena_free(&arena);
     return false;
   }
@@ -214,18 +222,15 @@ static bool execute_math_expression(const char *input, bool verbose)
     printf("\n");
   }
 
-  parser_result_t parseRes = {0};
+  parser_t parser = parser_execute(&arena, &lexer);
 
-  parser_execute(&arena, &lexer, &parseRes);
-
-  // Printing the variable stack.
   if (verbose)
   {
-    print_parser(&arena, &parseRes, true, true);
+    print_parser(&arena, &parser, true, true);
     printf("\n");
   }
 
-  parser_eval(&arena, &parseRes);
+  parser_eval(&arena, &parser);
 
   // Cleanup
   arena_free(&arena);
@@ -242,6 +247,7 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
   char **detailHelpArg = flag_c_str(c, "d", NULL, "Get detail informations about buildin functions and constants");
   flag_c_bool_var(c, &verbose, "v", false, "Execute the given expression with verbose logging");
   char **mathExpression = flag_c_str(c, "i", NULL, "Input expression to evaluate");
+  char **fileName = flag_c_str(c, "f", NULL, "Read in a math file");
 
   if (!flag_c_parse(c, argc, argv))
   {
@@ -297,7 +303,8 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
   }
 
   // The math expression has the third highest priority and will be executed third.
-  const char *input = *mathExpression;
+  char *input = *mathExpression;
+  bool evalResult = false;
 
   if (argc > 0 && !input)
     input = flag_shift_args(&argc, &argv);
@@ -318,7 +325,7 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
     argc = flag_c_rest_argc(c);
     argv = flag_c_rest_argv(c);
 
-    if (*mathExpression && input)
+    if (input && *mathExpression)
     {
       print_command_usage(stderr, self, programName, c);
       fprintf(stderr, "ERROR: Invalid arguments!\n");
@@ -332,26 +339,84 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
       input = *mathExpression;
   }
 
-  if (!input)
+  if (input && *fileName)
   {
     print_command_usage(stderr, self, programName, c);
-    fprintf(stderr, "ERROR: No math expression provided!\n");
+    fprintf(stderr, "ERROR: Invalid arguments!\n");
 
     // Cleanup
     flag_c_free(c);
     return false;
   }
 
-  // TODO: Rethink!
-  // Set the currently available features. This function gets executed in the cli command.
-  change_global_program_mode(GPM_SINGLE_CLI_EXPRESSION_ARG);
+  if (input && !*fileName)
+  {
+    // Set the currently available features.
+    change_global_program_mode(GPM_SINGLE_CLI_EXPRESSION_ARG);
 
-  // Finally execute the math expression.
-  bool result = execute_math_expression(input, verbose);
+    string_slice_t ss = {0};
+    ss_init(&ss, input);
+
+    // Finally execute the math expression.
+    evalResult = execute_math_expression(&ss, verbose);
+  }
+
+  if (!input && !*fileName)
+  {
+    print_command_usage(stderr, self, programName, c);
+    fprintf(stderr, "ERROR: No input provided!\n");
+
+    // Cleanup
+    flag_c_free(c);
+    return false;
+  }
+
+  if (*fileName && !input)
+  {
+    size_t fileSize = 0;
+    e_read_file_err_codes err = FILE_OK;
+
+    input = read_file(*fileName, &err, &fileSize);
+
+    if (!input)
+    {
+      switch (err)
+      {
+      case FILE_OK:
+        UNREACHABLE("File-State can't be ok when the return value was NULL!");
+      case FILE_NOT_EXIST:
+        fprintf(stderr, "FILE-ERROR(%s): File not found!\n", *fileName);
+        break;
+      case FILE_TOO_LARGE:
+        fprintf(stderr, "FILE-ERROR(%s): File too big!\n", *fileName);
+        break;
+      case FILE_READ_ERROR:
+        fprintf(stderr, "FILE-ERROR(%s): Error while reading file!\n", *fileName);
+        break;
+      default:
+        UNREACHABLE("Invalid read-file-error-code!");
+      }
+
+      // Cleanup
+      flag_c_free(c);
+      return false;
+    }
+
+    // Set the currently available features.
+    change_global_program_mode(GPM_EXPRESSION_FILE);
+
+    string_slice_t ss = {0};
+    ss_init_ex(&ss, input, fileSize);
+
+    // Finally execute the math expression.
+    evalResult = execute_math_expression(&ss, verbose);
+
+    free(input);
+  }
 
   // Cleanup
   flag_c_free(c);
-  return result;
+  return evalResult;
 }
 
 static bool version_run(command_t *self, const char *programName, int argc, char **argv)
@@ -814,11 +879,14 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
   const char *input =
       "test = 2 * 2 + a\n"
       "#      This is a comment!     \n"
+      "# Another comment.\n"
       "a = 2 ^ 2 + func(20, 10, 5)\n"
       "atan2(x,y,z) = test * 20 * x + 10 * y - 5 * z\n"
       "PI = test * 20\n"
       "func(x,y,z) = 1 * x + 2 * y - 3 * z\n"
+      "# A test function.\n"
       "testFunc(s) = 10 + PI\n"
+      "# Below are all expressions which should get evaluated.\n"
       "= (func(1+1, 2+2, 3+3) * test + 10 + (PI * 2)) + testFunc(a + (PI ^ 2))\n"
       "= 1 + ((test) / (2 * sqrt((PI ^ 2) + (3 ^ 2))) - 2) * (2 + 2) + atan2(5, 10) - func(10+5, PI, a)\n"
       "= 10 + 20 * PI";
@@ -834,7 +902,7 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
     printf("\n");
   }
 
-  tokenizer_t tokenizer = tokenizer_execute(&arena, input);
+  tokenizer_t tokenizer = tokenizer_execute_cstr(&arena, input);
   if (tokenizer.isError)
   {
     fprintf(stderr, "Tokenization failed!\n");
@@ -862,17 +930,15 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
     printf("\n");
   }
 
-  parser_result_t parseRes = {0};
-
-  parser_execute(&arena, &lexer, &parseRes);
+  parser_t parser = parser_execute(&arena, &lexer);
 
   if (verbose)
   {
-    print_parser(&arena, &parseRes, true, true);
+    print_parser(&arena, &parser, true, true);
     printf("\n");
   }
 
-  parser_eval(&arena, &parseRes);
+  parser_eval(&arena, &parser);
 
   // Cleanup
   arena_free(&arena);

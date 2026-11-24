@@ -1206,11 +1206,10 @@ static node_t *try_parse_prefix_expression(arena_t *arena, lexer_t *lexer, size_
   return node_prefix_expression(arena, token->cursor, type, child);
 }
 
-// TODO: Fix right associative ('pow') parsing!
+// TODO: Fix right associative ('pow') and precedence parsing!
 // TODO: Maybe add optimizations like '10*1' to just '10', or '10/1' to just '10'
 //       Means that whenever a 1 occours in a point or pow precedence, remove the operator and just return
 //       the constant which isn't 1.
-// TODO: Maybe implent a "isError" pointer parameter for directly returning from all parsers.
 static node_t *try_parse_binop(arena_t *arena, lexer_t *lexer, size_t *stackSize, e_precedence precedence, bool *isError)
 {
   ASSERT_NULL(arena);
@@ -1544,28 +1543,27 @@ typedef struct
 {
   node_variable_stack_t vs;
   node_expressions_list_t exprs;
-} parser_result_t;
+} parser_t;
 
-static inline bool parse_res_contains_vars(parser_result_t *res)
+static inline bool parser_contains_variables(parser_t *parser)
 {
-  ASSERT_NULL(res);
-  return res->vs.count > 0;
+  ASSERT_NULL(parser);
+
+  return parser->vs.count > 0;
 }
 
-static inline bool parse_res_contains_exprs(parser_result_t *res)
+static inline bool parser_contains_expressions(parser_t *parser)
 {
-  ASSERT_NULL(res);
-  return res->exprs.count > 0;
+  ASSERT_NULL(parser);
+
+  return parser->exprs.count > 0;
 }
 
-void parser_execute(arena_t *arena, lexer_t *lexer, parser_result_t *res)
+parser_t parser_execute(arena_t *arena, lexer_t *lexer)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
-  ASSERT_NULL(res);
-
-  if (!lex_is_valid(lexer))
-    return;
+  assert(lex_is_valid(lexer));
 
   node_variable_stack_t vs = {0};
   node_expressions_list_t exprs = {0};
@@ -1590,10 +1588,8 @@ void parser_execute(arena_t *arena, lexer_t *lexer, parser_result_t *res)
 
             if (!try_parse_expression(arena, lexer, &exprs, &isError))
             {
-              if (isError)
-                lex_seek_till_end(lexer);
-              else
-                continue;
+              // INFO: New-Lines can be here
+              lex_seek_till_end(lexer);
             }
           }
           else
@@ -1611,8 +1607,7 @@ void parser_execute(arena_t *arena, lexer_t *lexer, parser_result_t *res)
 
   assert(lex_at_eof(lexer));
 
-  // Set the result.
-  *res = (parser_result_t){
+  return (parser_t){
       .vs = vs,
       .exprs = exprs,
   };
@@ -2191,7 +2186,7 @@ ast_eval_res_t ast_eval(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
   return ast_eval_res_success(result);
 }
 
-void parser_eval(arena_t *arena, parser_result_t *parser)
+void parser_eval(arena_t *arena, parser_t *parser)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(parser);
@@ -2498,7 +2493,7 @@ void print_node_simple(arena_t *arena, node_t *node, bool indented)
   print_node(arena, &vs, node, indented);
 }
 
-void print_parser(arena_t *arena, parser_result_t *parser, bool indented, bool showVariableValues)
+void print_parser(arena_t *arena, parser_t *parser, bool indented, bool showVariableValues)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(parser);
@@ -2506,7 +2501,7 @@ void print_parser(arena_t *arena, parser_result_t *parser, bool indented, bool s
   print_variables(arena, &parser->vs, showVariableValues, indented);
   printf("\n");
 
-  if (!parse_res_contains_exprs(parser))
+  if (!parser_contains_expressions(parser))
   {
     printf("No expressions found to print.\n");
     return;
@@ -2587,7 +2582,7 @@ bool execute_test(arena_t *arena, node_variable_stack_t *vs, node_test_t *test, 
     printf("\n");
   }
 
-  tokenizer_t tokenizer = tokenizer_execute(arena, test->input);
+  tokenizer_t tokenizer = tokenizer_execute_cstr(arena, test->input);
   if (tokenizer.isError)
   {
     if (freeArena)

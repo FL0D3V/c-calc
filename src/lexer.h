@@ -543,8 +543,11 @@ static bool next_comment(arena_t *arena, string_slice_t *ss, tokenizer_t *tokeni
 static bool next_identifier(arena_t *arena, string_slice_t *ss, tokenizer_t *tokenizer);
 static bool next_literal(arena_t *arena, string_slice_t *ss, tokenizer_t *tokenizer);
 static bool next_new_line(arena_t *arena, string_slice_t *ss, tokenizer_t *tokenizer);
+
+static void tokenizer_execute_base(arena_t *arena, tokenizer_t *tokenizer, string_slice_t *ss);
+tokenizer_t tokenizer_execute_ss(arena_t *arena, string_slice_t *ss);
+tokenizer_t tokenizer_execute_cstr(arena_t *arena, const char *input);
 void tokenizer_print(const tokenizer_t *tokenizer);
-tokenizer_t tokenizer_execute(arena_t *arena, const char *input);
 
 // Used for skipping comments
 static bool next_comment(arena_t *arena, string_slice_t *ss, tokenizer_t *tokenizer)
@@ -656,9 +659,55 @@ static bool next_new_line(arena_t *arena, string_slice_t *ss, tokenizer_t *token
   return isNL;
 }
 
-tokenizer_t tokenizer_execute(arena_t *arena, const char *input)
+static void tokenizer_execute_base(arena_t *arena, tokenizer_t *tokenizer, string_slice_t *ss)
 {
   ASSERT_NULL(arena);
+  ASSERT_NULL(tokenizer);
+  ASSERT_NULL(ss);
+
+  while (ss_in_range(ss))
+  {
+    ss_seek_spaces_ex(ss, false);
+
+    if (!ss_in_range(ss))
+      break;
+
+    if (next_comment(arena, ss, tokenizer) ||
+        next_new_line(arena, ss, tokenizer) ||
+        next_identifier(arena, ss, tokenizer) ||
+        next_literal(arena, ss, tokenizer))
+      continue;
+
+    // Error
+    T_ERROR_TOKENIZATION_FAILED();
+    tokenizer->isError = true;
+    break;
+  }
+}
+
+tokenizer_t tokenizer_execute_ss(arena_t *arena, string_slice_t *ss)
+{
+  ASSERT_NULL(arena);
+  ASSERT_NULL(ss);
+
+  tokenizer_t tokenizer = {0};
+
+  if (!ss->src || ss->len == 0)
+  {
+    T_ERROR_NO_INPUT_GIVEN();
+    tokenizer.isError = true;
+    return tokenizer;
+  }
+
+  tokenizer_execute_base(arena, &tokenizer, ss);
+
+  return tokenizer;
+}
+
+tokenizer_t tokenizer_execute_cstr(arena_t *arena, const char *input)
+{
+  ASSERT_NULL(arena);
+  ASSERT_NULL(input);
 
   tokenizer_t tokenizer = {0};
 
@@ -672,24 +721,7 @@ tokenizer_t tokenizer_execute(arena_t *arena, const char *input)
   string_slice_t ss = {0};
   ss_init(&ss, input);
 
-  while (ss_in_range(&ss))
-  {
-    ss_seek_spaces_ex(&ss, false);
-
-    if (!ss_in_range(&ss))
-      break;
-
-    if (next_comment(arena, &ss, &tokenizer) ||
-        next_new_line(arena, &ss, &tokenizer) ||
-        next_identifier(arena, &ss, &tokenizer) ||
-        next_literal(arena, &ss, &tokenizer))
-      continue;
-
-    // Error
-    T_ERROR_TOKENIZATION_FAILED();
-    tokenizer.isError = true;
-    break;
-  }
+  tokenizer_execute_base(arena, &tokenizer, &ss);
 
   return tokenizer;
 }

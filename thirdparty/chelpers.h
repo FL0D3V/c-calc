@@ -209,4 +209,63 @@ num_check_t cstr_check_number(const char *cstr, bool includeNumberProOps)
   return cstr_check_number_ex(cstr, strlen(cstr), includeNumberProOps);
 }
 
+typedef enum
+{
+  FILE_OK,
+  FILE_NOT_EXIST,
+  FILE_TOO_LARGE,
+  FILE_READ_ERROR,
+} e_read_file_err_codes;
+
+char *read_file(const char *fileName, e_read_file_err_codes *error, size_t *fileSize)
+{
+  assert(fileName);
+  assert(error);
+  assert(fileSize);
+
+  char *buffer;
+  size_t length;
+  FILE *f = fopen(fileName, "rb");
+  size_t read_length;
+
+  if (!f)
+  {
+    *error = FILE_NOT_EXIST;
+    return NULL;
+  }
+
+  fseek(f, 0, SEEK_END);
+  length = ftell(f);
+  fseek(f, 0, SEEK_SET);
+
+  // 1 GiB; best not to load a whole large file in one string
+  if (length > 1073741824)
+  {
+    *error = FILE_TOO_LARGE;
+    return NULL;
+  }
+
+  buffer = (char *)malloc(length + 1);
+
+  if (length)
+  {
+    read_length = fread(buffer, 1, length, f);
+
+    if (length != read_length)
+    {
+      free(buffer);
+      *error = FILE_READ_ERROR;
+      return NULL;
+    }
+  }
+
+  fclose(f);
+
+  buffer[length] = '\0';
+  *error = FILE_OK;
+  *fileSize = length;
+
+  return buffer;
+}
+
 #endif // !_C_HELPERS_H_

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-input="-f testFile.eval"
-linker="-l testLinkerFile.link"
+input="testFile.eval"
+linker="testLinkerFile.link"
 
-./bin/ccalc input $input $linker
+./bin/ccalc input -f $input -l $linker
