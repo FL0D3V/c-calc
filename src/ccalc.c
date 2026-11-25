@@ -328,10 +328,8 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
 
   arena_t arena = {0};
   node_variable_stack_t vs = {0};
-  char *linkerFile = NULL;
-  char *exprFile = NULL;
-  string_slice_t inputString;
-  bool evalResult = false;
+  string_slice_t linkerInput = {0};
+  string_slice_t inputString = {0};
 
   char *input = *mathExpression;
 
@@ -346,7 +344,6 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
     {
       print_command_usage(stderr, self, programName, c);
       flag_c_print_error(c, stderr);
-
       return_defer();
     }
 
@@ -357,7 +354,6 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
     {
       print_command_usage(stderr, self, programName, c);
       fprintf(stderr, "ERROR: Invalid arguments!\n");
-
       return_defer();
     }
 
@@ -369,7 +365,6 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
   {
     print_command_usage(stderr, self, programName, c);
     fprintf(stderr, "ERROR: Invalid arguments!\n");
-
     return_defer();
   }
 
@@ -377,72 +372,56 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
   {
     print_command_usage(stderr, self, programName, c);
     fprintf(stderr, "ERROR: No input provided!\n");
-
     return_defer();
-  }
-
-  if (*linkerFileName)
-  {
-    size_t fileSize = 0;
-    e_read_file_err_codes err = FILE_OK;
-
-    linkerFile = read_file(*linkerFileName, &err, &fileSize);
-    if (!linkerFile)
-    {
-      print_read_file_err_code(*linkerFileName, err);
-      return_defer();
-    }
-
-    // Set the currently available features.
-    change_global_program_mode(GPM_LINKER_FILE);
-
-    string_slice_t linkerInput = {0};
-    ss_init_ex(&linkerInput, linkerFile, fileSize);
-
-    load_linker_file(&arena, &linkerInput, &vs, verbose);
   }
 
   if (input && !*exprFileName)
   {
     // Set the currently available features.
     change_global_program_mode(GPM_SINGLE_CLI_EXPRESSION_ARG);
-
     ss_init(&inputString, input);
   }
 
   if (*exprFileName && !input)
   {
-    size_t fileSize = 0;
-    e_read_file_err_codes err = FILE_OK;
-
-    exprFile = read_file(*exprFileName, &err, &fileSize);
-    if (!exprFile)
+    string_view_t exprFileView = {0};
+    e_read_file_err_codes err = arena_read_file(&arena, *exprFileName, &exprFileView);
+    if (err != 0)
     {
-      print_read_file_err_code(*exprFileName, err);
+      print_read_file_error(*exprFileName, err);
       return_defer();
     }
 
     // Set the currently available features.
     change_global_program_mode(GPM_EXPRESSION_FILE);
+    ss_init_ex(&inputString, exprFileView.value, exprFileView.length);
+  }
 
-    ss_init_ex(&inputString, exprFile, fileSize);
+  if (*linkerFileName)
+  {
+    string_view_t linkerFileView = {0};
+    e_read_file_err_codes err = arena_read_file(&arena, *linkerFileName, &linkerFileView);
+    if (err != 0)
+    {
+      print_read_file_error(*linkerFileName, err);
+      return_defer();
+    }
+
+    // Set the currently available features.
+    change_global_program_mode(GPM_LINKER_FILE);
+    ss_init_ex(&linkerInput, linkerFileView.value, linkerFileView.length);
+
+    // Load the linker file into the variable stack.
+    load_linker_file(&arena, &linkerInput, &vs, verbose);
   }
 
   // Finally execute the math expression.
-  evalResult = execute_math_expression(&arena, &inputString, &vs, verbose);
+  bool evalResult = execute_math_expression(&arena, &inputString, &vs, verbose);
 
-  // Cleanup
 defer:
   change_global_program_mode(GPM_SINGLE_CLI_EXPRESSION_ARG);
 
   arena_free(&arena);
-
-  if (linkerFile)
-    free(linkerFile);
-
-  if (exprFile)
-    free(exprFile);
-
   flag_c_free(c);
   return evalResult;
 }

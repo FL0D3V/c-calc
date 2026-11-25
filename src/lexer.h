@@ -664,13 +664,14 @@ static void tokenizer_execute_base(arena_t *arena, tokenizer_t *tokenizer, strin
 
   while (ss_in_range(ss))
   {
-    ss_seek_spaces_ex(ss, false);
+    // ss_seek_spaces_ex(ss, false);
+    ss_seek_extra_new_lines(ss);
 
     if (!ss_in_range(ss))
       break;
 
-    if (next_comment(arena, ss, tokenizer) ||
-        next_new_line(arena, ss, tokenizer) ||
+    if (next_new_line(arena, ss, tokenizer) ||
+        next_comment(arena, ss, tokenizer) ||
         next_identifier(arena, ss, tokenizer) ||
         next_literal(arena, ss, tokenizer))
       continue;
@@ -1156,11 +1157,9 @@ lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
   {
     currentToken = &tokenizer->items[i];
 
+    // TODO: Rethink! Ignore comments for now.
     if (in_tok_is(currentToken, IT_COMMENT))
-    {
-      // TODO: Rethink! Ignore comments for now.
       continue;
-    }
 
     // Check for new line
     if (in_tok_is(currentToken, IT_NEW_LINE))

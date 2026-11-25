@@ -5,41 +5,6 @@
 
 // TODO: Rethink!
 /*
- Will be used for the parsing of expressions in different modes.
- The mode depends on the usage of the program, because f.e. variables or function definitions can't be used when
- executing a single expression directly in the program arguments. Thats because the program exits directly after evaluating
- the given expression and does not store state in this mode. But when the full cli mode is used where the program was started
- without any extra arguments except f.e. 'verbose' for executing and handling the expressions, it will stay open and multiple
- lines can be entered where some lines could be assignments or func definitions and some are expressions which use them. So in
- full cli mode it stores the previously entered data. Also the full cli mode is used when starting the program with a file
- where all this is pre written in multiple lines and the program just prints the final value of the evaluated expression.
-
- Also rethink if a linker should be implemented when implementing files, so often used functions can be pre written
- in one or multiple files, which only contain variable- and function-definitions for easy reusability.
- This would make it possible to use more complex and custom variables and functions in f.e single-mode where only the fewest features
- are active. The variables can also be used because they would work exactly the same way as the pre defined math-constants. Same with
- functions, because they also work the same way like the pre defined functions.
- The linking could be used with a specific cli command like '-l <FILE>' or '--link <FILE>' and could allow multiple calls for linking
- one or many different files.
- The linker than loads everything in memory and pre parses all definitions, so that the user input can be combined like it would be just
- a single file.
-
- Evaluation-File Example:
- """
- var1 = 10 + sqrt(10 ^ EN)
-
- func1(x1, x2) = var1 * x1 ^ ln(x2 ^ 2)
-
- = func1(10, -4 * PI) - ln(20)
- """
-
- Linker-File Example:
- """
- var1 = 100 / sqrt(20 ^ 2 - 5)
-
- funcTest(arg1, arg2) = arg1 + 20 / ln(arg2)
- """
-
  Retink if '\' should be implemented for easily splitting a single lines into multiple for larger expressions.
  New lines can also only be used in the full cli mode.
  New-Line Example:

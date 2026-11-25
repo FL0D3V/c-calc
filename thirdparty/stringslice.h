@@ -34,9 +34,8 @@ typedef struct
 void ss_init_ex(string_slice_t *slice, const char *src, size_t len)
 {
   _SS_ASSERT_SLICE_NOT_NULL(slice);
-  assert(src && "Given source was NULL!");
-  assert(len > 0 && "Given len too small!");
-  assert(len <= strlen(src) && "Given len too big!");
+  assert(src && "'src' was NULL!");
+  assert(len > 0 && "'len' must be greater than 0!");
 
   *slice = (string_slice_t){
       .src = src,
@@ -49,9 +48,9 @@ void ss_init_ex(string_slice_t *slice, const char *src, size_t len)
 void ss_init(string_slice_t *slice, const char *src)
 {
   _SS_ASSERT_SLICE_NOT_NULL(slice);
-  assert(src && "Given source was NULL!");
+  assert(src && "'src' was NULL!");
   size_t len = strlen(src);
-  assert(len > 0 && "Given source was empty!");
+  assert(len > 0 && "Length of 'src' was 0!");
 
   *slice = (string_slice_t){
       .src = src,
@@ -127,12 +126,31 @@ char ss_seek(string_slice_t *slice)
   return *((char *)(++slice->current_ptr));
 }
 
+// Used for going one character back again.
+char ss_revert_seek(string_slice_t *slice)
+{
+  _SS_ASSERT_IF_NOT_VALID(slice);
+  return *((char *)(--slice->current_ptr));
+}
+
+bool ss_is_space(string_slice_t *slice)
+{
+  _SS_ASSERT_IF_NOT_VALID(slice);
+  return _SS_IS_IN_RANGE(slice) && isspace(ss_get_current(slice));
+}
+
+bool ss_is_new_line(string_slice_t *slice)
+{
+  _SS_ASSERT_IF_NOT_VALID(slice);
+  return _SS_IS_IN_RANGE(slice) && ss_get_current(slice) == '\n';
+}
+
 // Returns the amount of spaces that were seeked over.
 size_t ss_seek_spaces_ex(string_slice_t *slice, bool seekNewLines)
 {
   _SS_ASSERT_IF_NOT_VALID(slice);
   size_t count = 0;
-  while (_SS_IS_IN_RANGE(slice) && isspace(ss_get_current(slice)))
+  while (ss_is_space(slice))
   {
     if (!seekNewLines && ss_get_current(slice) == '\n')
       break;
@@ -147,12 +165,34 @@ size_t ss_seek_spaces(string_slice_t *slice)
 {
   _SS_ASSERT_IF_NOT_VALID(slice);
   size_t count = 0;
-  while (_SS_IS_IN_RANGE(slice) && isspace(ss_get_current(slice)))
+  while (ss_is_space(slice))
   {
     ss_seek(slice);
     count++;
   }
   return count;
+}
+
+// Used to filter out all spaces and extra new-lines.
+// This function will remove excessive new-lines and leave just the first.
+void ss_seek_extra_new_lines(string_slice_t *slice)
+{
+  ss_seek_spaces_ex(slice, false);
+
+  if (!ss_in_range(slice))
+    return;
+
+  if (ss_is_new_line(slice))
+  {
+    do
+    {
+      ss_seek(slice);
+      ss_seek_spaces_ex(slice, false);
+    } while (ss_in_range(slice) && ss_is_new_line(slice));
+
+    if (ss_in_range(slice))
+      ss_revert_seek(slice);
+  }
 }
 
 bool ss_compare(string_slice_t *val1, string_slice_t *val2)

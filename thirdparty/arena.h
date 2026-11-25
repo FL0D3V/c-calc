@@ -139,4 +139,90 @@ void arena_free(arena_t *arena)
   arena->end = NULL;
 }
 
+typedef enum
+{
+  FILE_OK,
+  FILE_NOT_EXIST,
+  FILE_TOO_LARGE,
+  FILE_READ_ERROR,
+} e_read_file_err_codes;
+
+typedef struct
+{
+  const char *value;
+  size_t length;
+} string_view_t;
+
+e_read_file_err_codes arena_read_file(arena_t *arena, const char *fileName, string_view_t *output)
+{
+  assert(arena);
+  assert(fileName);
+  assert(output);
+
+  bool isNullTerminated = false;
+
+  FILE *f = fopen(fileName, "rb");
+
+  if (!f)
+    return FILE_NOT_EXIST;
+
+  if (fseek(f, 0, SEEK_END) != 0)
+    return FILE_READ_ERROR;
+
+  size_t length = ftell(f);
+
+  // 1 GiB; best not to load a whole large file in one string
+  if (length > 1073741824)
+    return FILE_TOO_LARGE;
+
+  if (fgetc(f) == EOF)
+    isNullTerminated = true;
+
+  if (fseek(f, 0, SEEK_SET) != 0)
+    return FILE_READ_ERROR;
+
+  char *buffer = (char *)arena_alloc(arena, isNullTerminated ? length : length + 1);
+
+  if (length)
+  {
+    size_t read_length = fread(buffer, 1, length, f);
+
+    if (length != read_length)
+      return FILE_READ_ERROR;
+  }
+
+  fclose(f);
+
+  if (!isNullTerminated)
+    buffer[length] = '\0';
+
+  *output = (string_view_t){
+      .value = buffer,
+      .length = isNullTerminated ? length : length + 1,
+  };
+
+  return FILE_OK;
+}
+
+void print_read_file_error(const char *fileName, e_read_file_err_codes errorCode)
+{
+  switch (errorCode)
+  {
+  case FILE_OK:
+    fprintf(stdout, "FILE(%s): File ok!\n", fileName);
+    break;
+  case FILE_NOT_EXIST:
+    fprintf(stderr, "FILE-ERROR(%s): File not found!\n", fileName);
+    break;
+  case FILE_TOO_LARGE:
+    fprintf(stderr, "FILE-ERROR(%s): File too big!\n", fileName);
+    break;
+  case FILE_READ_ERROR:
+    fprintf(stderr, "FILE-ERROR(%s): Error while reading file!\n", fileName);
+    break;
+  default:
+    UNREACHABLE("Invalid read-file-error-code!");
+  }
+}
+
 #endif // ARENA_IMPLEMENTATION
