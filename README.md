@@ -2,23 +2,28 @@
 
 A simple linux terminal calculator written in C which can parse a given mathematical expression and evaluate it.
 
+<br>
+
 ## Math rules
 
 ### Order of operations
 
 ![PEMDAS](https://static.qumath.in/static/website/old-cdn-static/gurpreet-numbers-seo-03-1614774781.png)
 
+<br>
 
 ## Whats supported?
 
-**Supported operators:** **+**, **-**, **\***, **/**, **^**
-| **Operator** | **Precedence** | **Description** |
-|--|--|
-| **+** | 0 | Addition |
-| **-** | 0 | Substraction |
-| **\*** | 1 | Multiplication |
-| **/** | 1 | Division |
-| **^** | 2 | Power |
+**Supported operators:**
+| **Operator** | **Precedence** | **Right-Associative** | **Description** |
+|--|--|--|--|
+| **+**  | 0 | No  | Addition |
+| **-**  | 0 | No  | Substraction |
+| **\*** | 1 | No  | Multiplication |
+| **/**  | 1 | No  | Division |
+| **^**  | 2 | Yes | Power |
+
+<br>
 
 **Supported functions:**
 | **Usage** | **Description** |
@@ -38,6 +43,8 @@ A simple linux terminal calculator written in C which can parse a given mathemat
 | **ln(x)** | Returns the natural logarithm (base-e logarithm) of x. |
 | **log10(x)** | Returns the common logarithm (base-10 logarithm) of x. |
 
+<br>
+
 **Implemented constants:**
 | **Usage** | **Description** |
 |--|--|
@@ -49,6 +56,7 @@ A simple linux terminal calculator written in C which can parse a given mathemat
 | **OC** | Omega constant |
 | **GC** | Gauss's constant |
 
+<br>
 
 ## Variable Definitions
 
@@ -61,6 +69,7 @@ test(x, y) = 10 + x * cos(PI * y)
 ```
 A function definition.
 
+<br>
 
 ## Verbose execution example
 
@@ -194,6 +203,7 @@ add(
 >>> 101.61941
 ```
 
+<br>
 
 ## build
 
