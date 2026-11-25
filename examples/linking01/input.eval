@@ -5,4 +5,4 @@ func1(x, y) = var1 * x - ln(20 / y)
 # To be evaluated
 = -5 * 24 + func1(20, 30)
 = 35 + 5 * func1(10 + sqrt(20), PI)
-= testLinkFunc(var1, testLinkVar + var1 / EN)
+= testLinkFunc(var1, testLinkVar + var1 / EN) + 20 * PI

@@ -4,9 +4,9 @@ test = 2 * 5 + a
 # Another comment.
 a = 2 ^ 2 + func(20, 10, 5)
 
-atan2(x,y,z) = test * 20 * x + 10 * y - 5 * z
-
-PI = test * 20
+# Used for checking if the program checks var-names against already existing internal constants and functions.
+#atan2(x,y,z) = test * 20 * x + 10 * y - 5 * z
+#PI = test * 20
 
 func(x,y,z) = 1 * x + 2 * y - 3 * z
 
@@ -14,6 +14,12 @@ func(x,y,z) = 1 * x + 2 * y - 3 * z
 testFunc(s) = 10 + PI
 
 # Below are all expressions which should get evaluated.
+
 = (func(1+1, 2+2, 3+3) * test + 10 + (PI * 2)) + testFunc(a + (PI ^ 2))
-= 1 + ((test) / (2 * sqrt((PI ^ 2) + (3 ^ 2))) - 2) * (2 + 2) + atan2(5, 10) - func(10+5, PI, a)
+
+# This expression checks if the program catches recursive var calls.
+#= 1 + ((test) / (2 * sqrt((PI ^ 2) + (3 ^ 2))) - 2) * (2 + 2) + atan2(5, 10) - func(10+5, PI, a)
+
 = 10 + 20 * PI
+= 10 + 20 * 5 # This is a test
+= 4 * 3 - EC

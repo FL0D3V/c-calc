@@ -585,9 +585,6 @@ static bool next_comment(arena_t *arena, string_slice_t *ss, tokenizer_t *tokeni
   if (length > 0)
     tokenizer_append(arena, tokenizer, startPtr, length, ss_current_pos(ss) - length, IT_COMMENT);
 
-  if (ss_in_range(ss))
-    ss_seek(ss);
-
   return length > 0;
 }
 
@@ -1173,20 +1170,20 @@ lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
     }
 
     // Operator needs to be checked at first because else the double conversion fails on number parsing.
-    if (ss_is_operator(&currentToken->value))
+    if (in_tok_is(currentToken, IT_LITERAL) && ss_is_operator(&currentToken->value))
     {
       e_operator_type op = ss_to_operator_type(&currentToken->value);
       if (op == OP_INVALID)
         UNREACHABLE("Invalid operator-type!");
+
       add_operator_token(arena, &lexer, op, currentToken->cursor);
       continue;
     }
 
     // Check if the token is a paren like '(', ')', ...
-    if (ss_is_paren(&currentToken->value))
+    if (in_tok_is(currentToken, IT_LITERAL) && ss_is_paren(&currentToken->value))
     {
       e_paren_type pt = ss_to_paren_type(&currentToken->value);
-
       if (pt == PT_INVALID)
         UNREACHABLE("Invalid paren-type!");
 
@@ -1195,16 +1192,18 @@ lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
     }
 
     // Check if token is a common literal
-    if (ss_is_common_literal(&currentToken->value))
+    if (in_tok_is(currentToken, IT_LITERAL) && ss_is_common_literal(&currentToken->value))
     {
       e_common_literal_type clt = ss_to_common_literal_type(&currentToken->value);
-
       if (clt == CLT_INVALID)
         UNREACHABLE("Invalid common-literal-type!");
 
       add_literal_token(arena, &lexer, clt, currentToken->cursor);
       continue;
     }
+
+    if (in_tok_not(currentToken, IT_ID))
+      UNREACHABLE("Tokenizer invalid!");
 
     // Number checking
     num_check_t numCheck = cstr_check_number_ex(currentToken->value.src, currentToken->value.len, false);
@@ -1246,7 +1245,7 @@ lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
 
   // Add the eof token at the end
   size_t endCursor = 0;
-  if (currentToken != NULL)
+  if (!currentToken)
     endCursor = currentToken->cursor + 1;
 
   add_eof_token(arena, &lexer, endCursor);

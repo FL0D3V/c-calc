@@ -268,4 +268,24 @@ char *read_file(const char *fileName, e_read_file_err_codes *error, size_t *file
   return buffer;
 }
 
+void print_read_file_err_code(const char *fileName, e_read_file_err_codes errorCode)
+{
+  switch (errorCode)
+  {
+  case FILE_OK:
+    UNREACHABLE("File-State can't be ok when the return value was NULL!");
+  case FILE_NOT_EXIST:
+    fprintf(stderr, "FILE-ERROR(%s): File not found!\n", fileName);
+    break;
+  case FILE_TOO_LARGE:
+    fprintf(stderr, "FILE-ERROR(%s): File too big!\n", fileName);
+    break;
+  case FILE_READ_ERROR:
+    fprintf(stderr, "FILE-ERROR(%s): Error while reading file!\n", fileName);
+    break;
+  default:
+    UNREACHABLE("Invalid read-file-error-code!");
+  }
+}
+
 #endif // !_C_HELPERS_H_

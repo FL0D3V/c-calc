@@ -60,6 +60,12 @@ check6: $(EXE)
 check7: $(EXE)
 	valgrind -s --leak-check=full --track-origins=yes --show-leak-kinds=all $^ input -v -f $(TEST_FILE_INPUT)
 
+check8: $(EXE)
+	valgrind -s --leak-check=full --track-origins=yes --show-leak-kinds=all $^ input -f ./examples/linking01/input.eval -l ./examples/linking01/lib.link
+
+check9: $(EXE)
+	valgrind -s --leak-check=full --track-origins=yes --show-leak-kinds=all $^ input -v -f ./examples/linking01/input.eval -l ./examples/linking01/lib.link
+
 test1: $(EXE)
 	$^ test -v
 	
@@ -72,6 +78,6 @@ clean:
 run: $(EXE)
 	./$(EXE) input -v -i $(TEST_INPUT)
 
-.PHONY: all check1 check2 check3 check4 check5 check6 check7 test1 test2 clean remake remakeDebug remakeRelease debug release run
+.PHONY: all check1 check2 check3 check4 check5 check6 check7 check8 check9 test1 test2 clean remake remakeDebug remakeRelease debug release run
 
 -include $(OBJ:.o=.d)

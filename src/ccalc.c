@@ -180,25 +180,50 @@ static void print_detail_info(const char *arg)
     fprintf(stderr, "ERROR: Unknown value '%s'! Only buildin functions or constants are supported.\n", arg);
 }
 
-static bool execute_math_expression(string_slice_t *input, bool verbose)
+static void load_linker_file(arena_t *arena, string_slice_t *input, node_variable_stack_t *vs, bool verbose)
 {
-  arena_t arena = {0};
+  ASSERT_NULL(arena);
+  ASSERT_NULL(input);
+  ASSERT_NULL(vs);
 
-  // TODO: Rethink!
-  // if (verbose)
-  // {
-  //   printf("Given input:\n");
-  //   printf("##################\n");
-  //   printf("%s\n", input);
-  //   printf("##################\n");
-  //   printf("\n");
-  // }
-
-  tokenizer_t tokenizer = tokenizer_execute_ss(&arena, input);
+  tokenizer_t tokenizer = tokenizer_execute_ss(arena, input);
   if (tokenizer.isError)
   {
-    fprintf(stderr, "Tokenization failed!\n");
-    arena_free(&arena);
+    fprintf(stderr, "ERROR: Tokenization failed!\n");
+    return;
+  }
+  if (verbose)
+  {
+    tokenizer_print(&tokenizer);
+    printf("\n");
+  }
+
+  lexer_t lexer = lexer_execute(arena, &tokenizer);
+  if (lexer.isError)
+  {
+    fprintf(stderr, "ERROR: Lexing failed!\n");
+    return;
+  }
+  if (verbose)
+  {
+    lexer_print(&lexer);
+    printf("\n");
+  }
+
+  parser_execute_ex(arena, &lexer, vs);
+}
+
+static bool execute_math_expression(arena_t *arena, string_slice_t *input, node_variable_stack_t *vs, bool verbose)
+{
+  ASSERT_NULL(arena);
+  ASSERT_NULL(input);
+  ASSERT_NULL(vs);
+
+  tokenizer_t tokenizer = tokenizer_execute_ss(arena, input);
+  if (tokenizer.isError)
+  {
+    fprintf(stderr, "ERROR: Tokenization failed!\n");
+    arena_free(arena);
     return false;
   }
 
@@ -208,11 +233,11 @@ static bool execute_math_expression(string_slice_t *input, bool verbose)
     printf("\n");
   }
 
-  lexer_t lexer = lexer_execute(&arena, &tokenizer);
+  lexer_t lexer = lexer_execute(arena, &tokenizer);
   if (lexer.isError)
   {
-    fprintf(stderr, "Lexing failed!\n");
-    arena_free(&arena);
+    fprintf(stderr, "ERROR: Lexing failed!\n");
+    arena_free(arena);
     return false;
   }
 
@@ -222,18 +247,16 @@ static bool execute_math_expression(string_slice_t *input, bool verbose)
     printf("\n");
   }
 
-  parser_t parser = parser_execute(&arena, &lexer);
+  parser_t parser = parser_execute_ex(arena, &lexer, vs);
 
   if (verbose)
   {
-    print_parser(&arena, &parser, true, true);
+    print_parser(arena, &parser, true, true);
     printf("\n");
   }
 
-  parser_eval(&arena, &parser);
+  parser_eval(arena, &parser);
 
-  // Cleanup
-  arena_free(&arena);
   return true;
 }
 
@@ -247,7 +270,8 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
   char **detailHelpArg = flag_c_str(c, "d", NULL, "Get detail informations about buildin functions and constants");
   flag_c_bool_var(c, &verbose, "v", false, "Execute the given expression with verbose logging");
   char **mathExpression = flag_c_str(c, "i", NULL, "Input expression to evaluate");
-  char **fileName = flag_c_str(c, "f", NULL, "Read in a math file");
+  char **exprFileName = flag_c_str(c, "f", NULL, "Read all expressions from that file and evaluate the expressions");
+  char **linkerFileName = flag_c_str(c, "l", NULL, "Used for linking to external variables");
 
   if (!flag_c_parse(c, argc, argv))
   {
@@ -262,7 +286,7 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
   argc = flag_c_rest_argc(c);
   argv = flag_c_rest_argv(c);
 
-  // The help flag has the highest priority and will be executed first.
+  // Used for printing a help menu.
   if (help)
   {
     if (argc != 0)
@@ -282,7 +306,7 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
     return true;
   }
 
-  // The detail help flag has the second highest priority and will be executed second.
+  // Used for getting detailed informations about buildin functions or constants.
   if (*detailHelpArg)
   {
     if (argc != 0)
@@ -302,10 +326,16 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
     return true;
   }
 
-  // The math expression has the third highest priority and will be executed third.
-  char *input = *mathExpression;
+  arena_t arena = {0};
+  node_variable_stack_t vs = {0};
+  char *linkerFile = NULL;
+  char *exprFile = NULL;
+  string_slice_t inputString;
   bool evalResult = false;
 
+  char *input = *mathExpression;
+
+  // Handle math expressions and files.
   if (argc > 0 && !input)
     input = flag_shift_args(&argc, &argv);
 
@@ -317,9 +347,7 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
       print_command_usage(stderr, self, programName, c);
       flag_c_print_error(c, stderr);
 
-      // Cleanup
-      flag_c_free(c);
-      return false;
+      return_defer();
     }
 
     argc = flag_c_rest_argc(c);
@@ -330,91 +358,91 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
       print_command_usage(stderr, self, programName, c);
       fprintf(stderr, "ERROR: Invalid arguments!\n");
 
-      // Cleanup
-      flag_c_free(c);
-      return false;
+      return_defer();
     }
 
     if (*mathExpression)
       input = *mathExpression;
   }
 
-  if (input && *fileName)
+  if (input && *exprFileName)
   {
     print_command_usage(stderr, self, programName, c);
     fprintf(stderr, "ERROR: Invalid arguments!\n");
 
-    // Cleanup
-    flag_c_free(c);
-    return false;
+    return_defer();
   }
 
-  if (input && !*fileName)
-  {
-    // Set the currently available features.
-    change_global_program_mode(GPM_SINGLE_CLI_EXPRESSION_ARG);
-
-    string_slice_t ss = {0};
-    ss_init(&ss, input);
-
-    // Finally execute the math expression.
-    evalResult = execute_math_expression(&ss, verbose);
-  }
-
-  if (!input && !*fileName)
+  if (!input && !*exprFileName)
   {
     print_command_usage(stderr, self, programName, c);
     fprintf(stderr, "ERROR: No input provided!\n");
 
-    // Cleanup
-    flag_c_free(c);
-    return false;
+    return_defer();
   }
 
-  if (*fileName && !input)
+  if (*linkerFileName)
   {
     size_t fileSize = 0;
     e_read_file_err_codes err = FILE_OK;
 
-    input = read_file(*fileName, &err, &fileSize);
-
-    if (!input)
+    linkerFile = read_file(*linkerFileName, &err, &fileSize);
+    if (!linkerFile)
     {
-      switch (err)
-      {
-      case FILE_OK:
-        UNREACHABLE("File-State can't be ok when the return value was NULL!");
-      case FILE_NOT_EXIST:
-        fprintf(stderr, "FILE-ERROR(%s): File not found!\n", *fileName);
-        break;
-      case FILE_TOO_LARGE:
-        fprintf(stderr, "FILE-ERROR(%s): File too big!\n", *fileName);
-        break;
-      case FILE_READ_ERROR:
-        fprintf(stderr, "FILE-ERROR(%s): Error while reading file!\n", *fileName);
-        break;
-      default:
-        UNREACHABLE("Invalid read-file-error-code!");
-      }
+      print_read_file_err_code(*linkerFileName, err);
+      return_defer();
+    }
 
-      // Cleanup
-      flag_c_free(c);
-      return false;
+    // Set the currently available features.
+    change_global_program_mode(GPM_LINKER_FILE);
+
+    string_slice_t linkerInput = {0};
+    ss_init_ex(&linkerInput, linkerFile, fileSize);
+
+    load_linker_file(&arena, &linkerInput, &vs, verbose);
+  }
+
+  if (input && !*exprFileName)
+  {
+    // Set the currently available features.
+    change_global_program_mode(GPM_SINGLE_CLI_EXPRESSION_ARG);
+
+    ss_init(&inputString, input);
+  }
+
+  if (*exprFileName && !input)
+  {
+    size_t fileSize = 0;
+    e_read_file_err_codes err = FILE_OK;
+
+    exprFile = read_file(*exprFileName, &err, &fileSize);
+    if (!exprFile)
+    {
+      print_read_file_err_code(*exprFileName, err);
+      return_defer();
     }
 
     // Set the currently available features.
     change_global_program_mode(GPM_EXPRESSION_FILE);
 
-    string_slice_t ss = {0};
-    ss_init_ex(&ss, input, fileSize);
-
-    // Finally execute the math expression.
-    evalResult = execute_math_expression(&ss, verbose);
-
-    free(input);
+    ss_init_ex(&inputString, exprFile, fileSize);
   }
 
+  // Finally execute the math expression.
+  evalResult = execute_math_expression(&arena, &inputString, &vs, verbose);
+
   // Cleanup
+defer:
+  change_global_program_mode(GPM_SINGLE_CLI_EXPRESSION_ARG);
+
+  arena_free(&arena);
+
+  if (linkerFile)
+    free(linkerFile);
+
+  if (exprFile)
+    free(exprFile);
+
   flag_c_free(c);
   return evalResult;
 }

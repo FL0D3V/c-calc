@@ -133,7 +133,7 @@ typedef enum
 {
   CF_EXPRESSION_EVALUATION_ALLOWED = (1u << 0),
   CF_COMMENTS_ALLOWED = (1u << 1),
-  CF_NEW_LINES_ALLOWED = (1u << 2),
+  CF_SPLIT_INTO_MULTI_LINES_ALLOWED = (1u << 2),
   CF_VARIABLE_DEFINITIONS_ALLOWED = (1u << 3),
   CF_FUNCTION_DEFINITIONS_ALLOWED = (1u << 4),
 } e_config_flags;
@@ -143,7 +143,7 @@ typedef enum
 {
   SPMC_EXPR_EVAL_ALLOWED,
   SPMC_COMMENTS_ALLOWED,
-  SPMC_NEW_LINES_ALLOWED,
+  SPMC_SPLIT_INTO_MULTI_LINES_ALLOWED,
   SPMC_VAR_DEF_ALLOWED,
   SPMC_FUNC_DEF_ALLOWED,
 
@@ -164,7 +164,7 @@ static inline e_config_flags specific_prog_mode_conf_to_config_flag(e_specific_p
 static const char *specificProgramModeConfigNames[SPMC_COUNT] = {
     [SPMC_EXPR_EVAL_ALLOWED] = "Expression-Evaluation",
     [SPMC_COMMENTS_ALLOWED] = "Comments",
-    [SPMC_NEW_LINES_ALLOWED] = "New-Lines",
+    [SPMC_SPLIT_INTO_MULTI_LINES_ALLOWED] = "Expression-Line-Splitting",
     [SPMC_VAR_DEF_ALLOWED] = "Variable-Definitions",
     [SPMC_FUNC_DEF_ALLOWED] = "Function-Definitions",
 };
@@ -172,23 +172,23 @@ static const char *specificProgramModeConfigNames[SPMC_COUNT] = {
 static const char *specificProgramModeConfigDescriptions[SPMC_COUNT] = {
     [SPMC_EXPR_EVAL_ALLOWED] =
         "  Are expressions allowed to be evaluated.\n"
-        "  In a standard file the final expression which should get evaluated\n"
-        "  which uses all custom variables or functions is written in the last\n"
-        "  line like '= EXPRESSION'. This is f.e. not allowed in linker files.\n"
+        "  The expression which should get evaluated uses f.e. all variables\n"
+        "  or functions and is written like '= EXPRESSION'.\n"
+        "  Evaluation is f.e. not allowed in linker files.\n"
         "  Expressions can also be written in the simple mode when starting with\n"
         "  an expression argument or in the full cli mode. But in these the\n"
         "  expression gets written without '=' at the start because it gets\n"
         "  evaluated directly. The standard file uses that to know what expression\n"
-        "  should get evaluated. A standard file can have one or multiple evaluation\n"
+        "  should get evaluated. A math-file can have one or multiple evaluation\n"
         "  definitions to support multiple evaluations from the same file at once.",
 
     [SPMC_COMMENTS_ALLOWED] =
         "  Are comments in the input allowed.\n"
-        "  Comments are defined with '//' and get used like\n"
-        "  '... // YOUR COMMENT GOES HERE'. When defining a comment everything\n"
+        "  Comments are defined with '#' and get used like\n"
+        "  '# YOUR COMMENT GOES HERE'. When defining a comment everything\n"
         "  after the definition till the end of the line will get ignored.",
 
-    [SPMC_NEW_LINES_ALLOWED] =
+    [SPMC_SPLIT_INTO_MULTI_LINES_ALLOWED] =
         "  Is it allowed to split a single expression line into multiple to make\n"
         "  it more readable when the expression gets too long. A single line can\n"
         "  be split with '\\' at the end. This must be placed on every line of the\n"
@@ -214,7 +214,7 @@ static const char *specificProgramModeConfigDescriptions[SPMC_COUNT] = {
 };
 
 // The specific configurations for each program mode.
-e_config_flags globalProgramModeConfigurations[GPM_COUNT] =
+const e_config_flags globalProgramModeConfigurations[GPM_COUNT] =
     {
         [GPM_SINGLE_CLI_EXPRESSION_ARG] =
             (e_config_flags)(CF_EXPRESSION_EVALUATION_ALLOWED),
@@ -227,13 +227,13 @@ e_config_flags globalProgramModeConfigurations[GPM_COUNT] =
         [GPM_EXPRESSION_FILE] =
             (e_config_flags)(CF_EXPRESSION_EVALUATION_ALLOWED |
                              CF_COMMENTS_ALLOWED |
-                             CF_NEW_LINES_ALLOWED |
+                             CF_SPLIT_INTO_MULTI_LINES_ALLOWED |
                              CF_VARIABLE_DEFINITIONS_ALLOWED |
                              CF_FUNCTION_DEFINITIONS_ALLOWED),
 
         [GPM_LINKER_FILE] =
             (e_config_flags)(CF_COMMENTS_ALLOWED |
-                             CF_NEW_LINES_ALLOWED |
+                             CF_SPLIT_INTO_MULTI_LINES_ALLOWED |
                              CF_VARIABLE_DEFINITIONS_ALLOWED |
                              CF_FUNCTION_DEFINITIONS_ALLOWED),
 };

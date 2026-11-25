@@ -6,7 +6,6 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <assert.h>
 
 typedef struct region region_t;
 
@@ -57,6 +56,7 @@ void arena_free(arena_t *arena);
 #ifdef ARENA_IMPLEMENTATION
 
 #include <stdlib.h>
+#include <assert.h>
 
 region_t *region_alloc(size_t capacity)
 {

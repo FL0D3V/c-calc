@@ -1496,7 +1496,7 @@ static inline void node_exprs_add(arena_t *arena, node_expressions_list_t *resul
 }
 
 // Example input: "= 10 * 5 + PI"
-static bool try_parse_expression(arena_t *arena, lexer_t *lexer, node_expressions_list_t *exprs, bool *isError)
+static bool try_parse_expression(node_expressions_list_t *exprs, arena_t *arena, lexer_t *lexer, bool *isError)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
@@ -1559,13 +1559,13 @@ static inline bool parser_contains_expressions(parser_t *parser)
   return parser->exprs.count > 0;
 }
 
-parser_t parser_execute(arena_t *arena, lexer_t *lexer)
+parser_t parser_execute_ex(arena_t *arena, lexer_t *lexer, node_variable_stack_t *vs)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
+  ASSERT_NULL(vs);
   assert(lex_is_valid(lexer));
 
-  node_variable_stack_t vs = {0};
   node_expressions_list_t exprs = {0};
 
   lex_reset_pos(lexer);
@@ -1574,21 +1574,21 @@ parser_t parser_execute(arena_t *arena, lexer_t *lexer)
   {
     bool isError = false;
 
-    if (!try_parse_const_variable(&vs, arena, lexer, &isError))
+    if (!try_parse_const_variable(vs, arena, lexer, &isError))
     {
       if (!isError)
       {
         lex_reset_to_start_of_line(lexer);
 
-        if (!try_parse_func_variable(&vs, arena, lexer, &isError))
+        if (!try_parse_func_variable(vs, arena, lexer, &isError))
         {
           if (!isError)
           {
             lex_reset_to_start_of_line(lexer);
 
-            if (!try_parse_expression(arena, lexer, &exprs, &isError))
+            if (!try_parse_expression(&exprs, arena, lexer, &isError))
             {
-              // INFO: New-Lines can be here
+              // Unhandled tokens or new-lines will be handled here.
               lex_seek_till_end(lexer);
             }
           }
@@ -1608,9 +1608,20 @@ parser_t parser_execute(arena_t *arena, lexer_t *lexer)
   assert(lex_at_eof(lexer));
 
   return (parser_t){
-      .vs = vs,
+      .vs = *vs,
       .exprs = exprs,
   };
+}
+
+parser_t parser_execute(arena_t *arena, lexer_t *lexer)
+{
+  ASSERT_NULL(arena);
+  ASSERT_NULL(lexer);
+  assert(lex_is_valid(lexer));
+
+  node_variable_stack_t vs = {0};
+
+  return parser_execute_ex(arena, lexer, &vs);
 }
 
 static double node_constant_to_value(arena_t *arena, node_variable_stack_t *vs, node_t *node, vs_call_stack_t *callStack, bool *isError)
@@ -2168,18 +2179,14 @@ ast_eval_res_t ast_eval(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
   ASSERT_NULL(expr);
 
   vs_call_stack_t callStack = {0};
-
   node_t *evaluatedNode = ast_eval_ex(arena, vs, expr, &callStack);
-
   assert(callStack.count == 0);
 
   if (!evaluatedNode)
     return ast_eval_res_error();
 
   bool isError = false;
-
   double result = node_constant_to_value(arena, vs, evaluatedNode, &callStack, &isError);
-
   if (isError)
     return ast_eval_res_error();
 
