@@ -120,7 +120,18 @@ bool compare_doubles(double a, double b, int decimal_places)
   return fabs(a - b) < epsilon;
 }
 
-// The 'ret' value variations
+static bool cstr_to_number_base(const char *cstr, size_t length, double *result)
+{
+  assert(cstr);
+  assert(result);
+
+  char *endptr;
+  *result = strtod(cstr, &endptr);
+  if (!endptr || endptr == cstr || (size_t)(endptr - cstr) != length)
+    return false;
+  return true;
+}
+
 typedef enum
 {
   // Input was NULL or empty. Cursor will be set to 0.
@@ -136,56 +147,52 @@ typedef enum
 
   // Count of return values.
   NCR_COUNT
-} num_check_ret_t;
+} e_num_res_error_codes;
 
 static_assert(NCR_COUNT == 5, "Amount of number-check-return-values have changed");
 
-bool cstr_to_number(const char *cstr, size_t length, double *result)
-{
-  char *endptr;
-  *result = strtod(cstr, &endptr);
-  if (!endptr || endptr == cstr || (size_t)(endptr - cstr) != length)
-    return false;
-  return true;
-}
-
 typedef struct
 {
-  num_check_ret_t ret;
-  int cursor;
   double result;
-} num_check_t;
+  int cursor;
+  e_num_res_error_codes errorCode;
+} number_res_t;
 
-#define _NUM_CHECK_NULL() ((num_check_t){.ret = NCR_NULL_OR_EMPTY})
-#define _NUM_CHECK_SUCCESS(cur, num) ((num_check_t){.ret = NCR_VALID, .cursor = (cur), .result = (num)})
-#define _NUM_CHECK_TOO_MANY_COMMA(cur) ((num_check_t){.ret = NCR_TOO_MANY_COMMAS, .cursor = (cur)})
-#define _NUM_CHECK_COMMA_AT_END(cur) ((num_check_t){.ret = NCR_COMMA_AT_END, .cursor = (cur)})
-#define _NUM_CHECK_INVALID(cur) ((num_check_t){.ret = NCR_NOT_A_NUMBER, .cursor = (cur)})
+#define _NUM_RES_NULL() ((number_res_t){.errorCode = NCR_NULL_OR_EMPTY})
+#define _NUM_RES_SUCCESS(cur, num) ((number_res_t){.errorCode = NCR_VALID, .cursor = (cur), .result = (num)})
+#define _NUM_RES_TOO_MANY_COMMA(cur) ((number_res_t){.errorCode = NCR_TOO_MANY_COMMAS, .cursor = (cur)})
+#define _NUM_RES_COMMA_AT_END(cur) ((number_res_t){.errorCode = NCR_COMMA_AT_END, .cursor = (cur)})
+#define _NUM_RES_INVALID(cur) ((number_res_t){.errorCode = NCR_NOT_A_NUMBER, .cursor = (cur)})
 
-num_check_t cstr_check_number_ex(const char *cstr, size_t len, bool includeNumberProOps)
+number_res_t cstr_to_number_ex(const char *cstr, size_t len, bool handlePrefixOperator)
 {
   if (!cstr || len == 0)
-    return _NUM_CHECK_NULL();
+    return _NUM_RES_NULL();
 
+  bool prefixMinusFound;
   bool decimalSeperatorFound = false;
 
   char *current = (char *)cstr;
 
   for (size_t i = 0; i < len; ++i)
   {
-    if (includeNumberProOps && i == 0 && (*current == '-' || *current == '+'))
+    if (handlePrefixOperator && i == 0 && (*current == '-' || *current == '+'))
+    {
+      if (*current == '-')
+        prefixMinusFound = true;
       continue;
+    }
 
     if (!c_is_number(*current))
-      return _NUM_CHECK_INVALID(i);
+      return _NUM_RES_INVALID(i);
 
     if (c_is_decimal_seperator(*current))
     {
       if (decimalSeperatorFound)
-        return _NUM_CHECK_TOO_MANY_COMMA(i);
+        return _NUM_RES_TOO_MANY_COMMA(i);
 
       if (i == len - 1)
-        return _NUM_CHECK_COMMA_AT_END(i);
+        return _NUM_RES_COMMA_AT_END(i);
 
       decimalSeperatorFound = true;
     }
@@ -195,18 +202,21 @@ num_check_t cstr_check_number_ex(const char *cstr, size_t len, bool includeNumbe
 
   double number = 0.0;
 
-  if (!cstr_to_number(cstr, len, &number))
+  if (!cstr_to_number_base(cstr, len, &number))
     UNREACHABLE("Error while converting a string to a number!");
 
-  return _NUM_CHECK_SUCCESS(len, number);
+  if (handlePrefixOperator && prefixMinusFound)
+    number = 0 - number;
+
+  return _NUM_RES_SUCCESS(len, number);
 }
 
-num_check_t cstr_check_number(const char *cstr, bool includeNumberProOps)
+number_res_t cstr_to_number(const char *cstr, bool handlePrefixOperator)
 {
   if (!cstr)
-    return _NUM_CHECK_NULL();
+    return _NUM_RES_NULL();
 
-  return cstr_check_number_ex(cstr, strlen(cstr), includeNumberProOps);
+  return cstr_to_number_ex(cstr, strlen(cstr), handlePrefixOperator);
 }
 
 #endif // !_C_HELPERS_H_

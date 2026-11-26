@@ -476,9 +476,9 @@ e_common_literal_type ss_to_common_literal_type(string_slice_t *name)
 
 typedef enum
 {
+  IT_NEW_LINE,
   IT_LITERAL,
   IT_ID,
-  IT_NEW_LINE,
   IT_COMMENT,
 
   IT_COUNT
@@ -521,6 +521,14 @@ typedef struct
   bool isError;
 } tokenizer_t;
 
+input_token_t *tokenizer_at(tokenizer_t *tokenizer, size_t index)
+{
+  ASSERT_NULL(tokenizer);
+  assert(index < tokenizer->count);
+
+  return &tokenizer->items[index];
+}
+
 void tokenizer_append(arena_t *arena, tokenizer_t *tokenizer, const char *value, size_t length, size_t cursor, e_in_tok_type type)
 {
   ASSERT_NULL(arena);
@@ -548,6 +556,24 @@ static void tokenizer_execute_base(arena_t *arena, tokenizer_t *tokenizer, strin
 tokenizer_t tokenizer_execute_ss(arena_t *arena, string_slice_t *ss);
 tokenizer_t tokenizer_execute_cstr(arena_t *arena, const char *input);
 void tokenizer_print(const tokenizer_t *tokenizer);
+
+static bool next_new_line(arena_t *arena, string_slice_t *ss, tokenizer_t *tokenizer)
+{
+  ASSERT_NULL(arena);
+  ASSERT_NULL(ss);
+  ASSERT_NULL(tokenizer);
+  assert(ss_in_range(ss));
+
+  bool isNL = c_is_new_line(ss_get_current(ss));
+
+  if (isNL)
+  {
+    tokenizer_append(arena, tokenizer, ss_get_current_ptr(ss), 1, ss_current_pos(ss), IT_NEW_LINE);
+    ss_seek(ss);
+  }
+
+  return isNL;
+}
 
 // Used for skipping comments
 static bool next_comment(arena_t *arena, string_slice_t *ss, tokenizer_t *tokenizer)
@@ -638,24 +664,6 @@ static bool next_literal(arena_t *arena, string_slice_t *ss, tokenizer_t *tokeni
   return isLiteral;
 }
 
-static bool next_new_line(arena_t *arena, string_slice_t *ss, tokenizer_t *tokenizer)
-{
-  ASSERT_NULL(arena);
-  ASSERT_NULL(ss);
-  ASSERT_NULL(tokenizer);
-  assert(ss_in_range(ss));
-
-  bool isNL = c_is_new_line(ss_get_current(ss));
-
-  if (isNL)
-  {
-    tokenizer_append(arena, tokenizer, ss_get_current_ptr(ss), 1, ss_current_pos(ss), IT_NEW_LINE);
-    ss_seek(ss);
-  }
-
-  return isNL;
-}
-
 static void tokenizer_execute_base(arena_t *arena, tokenizer_t *tokenizer, string_slice_t *ss)
 {
   ASSERT_NULL(arena);
@@ -664,7 +672,7 @@ static void tokenizer_execute_base(arena_t *arena, tokenizer_t *tokenizer, strin
 
   while (ss_in_range(ss))
   {
-    // ss_seek_spaces_ex(ss, false);
+    // Filters excessive new-line's (only one new-line in a row)
     ss_seek_extra_new_lines(ss);
 
     if (!ss_in_range(ss))
@@ -1152,97 +1160,106 @@ lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
 
   lexer_t lexer = {0};
   input_token_t *currentToken = NULL;
+  input_token_t *lastToken = NULL;
 
   for (size_t i = 0; i < tokenizer->count; ++i)
   {
-    currentToken = &tokenizer->items[i];
+    currentToken = tokenizer_at(tokenizer, i);
 
-    // TODO: Rethink! Ignore comments for now.
-    if (in_tok_is(currentToken, IT_COMMENT))
-      continue;
-
-    // Check for new line
-    if (in_tok_is(currentToken, IT_NEW_LINE))
+    switch (currentToken->type)
     {
-      add_eol_token(arena, &lexer, currentToken->cursor);
-      continue;
+    case IT_NEW_LINE:
+    {
+      // Filter escessive new-lines out.
+      if (lastToken && in_tok_not(lastToken, IT_NEW_LINE) && in_tok_not(lastToken, IT_COMMENT))
+        add_eol_token(arena, &lexer, currentToken->cursor);
     }
-
-    // Operator needs to be checked at first because else the double conversion fails on number parsing.
-    if (in_tok_is(currentToken, IT_LITERAL) && ss_is_operator(&currentToken->value))
+    break;
+    case IT_COMMENT:
     {
-      e_operator_type op = ss_to_operator_type(&currentToken->value);
-      if (op == OP_INVALID)
-        UNREACHABLE("Invalid operator-type!");
-
-      add_operator_token(arena, &lexer, op, currentToken->cursor);
-      continue;
+      // Ignore comments for now.
     }
-
-    // Check if the token is a paren like '(', ')', ...
-    if (in_tok_is(currentToken, IT_LITERAL) && ss_is_paren(&currentToken->value))
+    break;
+    case IT_LITERAL:
     {
-      e_paren_type pt = ss_to_paren_type(&currentToken->value);
-      if (pt == PT_INVALID)
-        UNREACHABLE("Invalid paren-type!");
+      if (ss_is_operator(&currentToken->value))
+      {
+        e_operator_type op = ss_to_operator_type(&currentToken->value);
+        if (op == OP_INVALID)
+          UNREACHABLE("Invalid operator-type!");
 
-      add_paren_token(arena, &lexer, pt, currentToken->cursor);
-      continue;
+        add_operator_token(arena, &lexer, op, currentToken->cursor);
+      }
+      else if (ss_is_paren(&currentToken->value))
+      {
+        e_paren_type pt = ss_to_paren_type(&currentToken->value);
+        if (pt == PT_INVALID)
+          UNREACHABLE("Invalid paren-type!");
+
+        add_paren_token(arena, &lexer, pt, currentToken->cursor);
+      }
+      else if (ss_is_common_literal(&currentToken->value))
+      {
+        e_common_literal_type clt = ss_to_common_literal_type(&currentToken->value);
+        if (clt == CLT_INVALID)
+          UNREACHABLE("Invalid common-literal-type!");
+
+        add_literal_token(arena, &lexer, clt, currentToken->cursor);
+      }
+      else
+        UNREACHABLE("Invalid literal value!");
     }
-
-    // Check if token is a common literal
-    if (in_tok_is(currentToken, IT_LITERAL) && ss_is_common_literal(&currentToken->value))
+    break;
+    case IT_ID:
     {
-      e_common_literal_type clt = ss_to_common_literal_type(&currentToken->value);
-      if (clt == CLT_INVALID)
-        UNREACHABLE("Invalid common-literal-type!");
-
-      add_literal_token(arena, &lexer, clt, currentToken->cursor);
-      continue;
-    }
-
-    if (in_tok_not(currentToken, IT_ID))
-      UNREACHABLE("Tokenizer invalid!");
-
-    // Number checking
-    num_check_t numCheck = cstr_check_number_ex(currentToken->value.src, currentToken->value.len, false);
-    size_t errCursor = currentToken->cursor + numCheck.cursor;
-    switch (numCheck.ret)
-    {
-    case NCR_NULL_OR_EMPTY:
-      UNREACHABLE("Number-Token was NULL!");
+      number_res_t numRes = cstr_to_number_ex(currentToken->value.src, currentToken->value.len, false);
+      size_t errCursor = currentToken->cursor + numRes.cursor;
+      switch (numRes.errorCode)
+      {
+      case NCR_VALID:
+      {
+        // Number found.
+        add_number_token(arena, &lexer, numRes.result, currentToken->cursor);
+      }
       break;
-    case NCR_VALID:
-    {
-      add_number_token(arena, &lexer, numCheck.result, currentToken->cursor);
-      continue;
-    }
-    case NCR_TOO_MANY_COMMAS:
-    {
-      L_ERROR_INVALID_AMOUNT_OF_COMMAS_IN_NUMBER(errCursor, currentToken);
-      lexer.isError = true;
-      continue;
-    }
-    case NCR_COMMA_AT_END:
-    {
-      L_ERROR_COMMA_AT_END(errCursor, currentToken);
-      lexer.isError = true;
-      continue;
-    }
-    case NCR_NOT_A_NUMBER:
-      // Continue checking because its not a number but a symbol, ...
+      case NCR_NOT_A_NUMBER:
+      {
+        // Just a symbol like variable-names, math-constants, function-names, ...
+        add_symbol_token(arena, &lexer, currentToken->value, currentToken->cursor);
+      }
       break;
-    case NCR_COUNT:
+      case NCR_NULL_OR_EMPTY:
+      {
+        UNREACHABLE("Number-Token was NULL!");
+      }
+      break;
+      case NCR_TOO_MANY_COMMAS:
+      {
+        L_ERROR_INVALID_AMOUNT_OF_COMMAS_IN_NUMBER(errCursor, currentToken);
+        lexer.isError = true;
+      }
+      break;
+      case NCR_COMMA_AT_END:
+      {
+        L_ERROR_COMMA_AT_END(errCursor, currentToken);
+        lexer.isError = true;
+      }
+      break;
+      case NCR_COUNT:
+      default:
+        UNREACHABLE("Invalid number-check return value!");
+      }
+    }
+    break;
+    case IT_COUNT:
     default:
-      UNREACHABLE("Invalid number check return value!");
-      break;
+      UNREACHABLE("Invalid in-tok-type!");
     }
 
-    // Just a symbol like variable names, math constants, function names, ...
-    add_symbol_token(arena, &lexer, currentToken->value, currentToken->cursor);
+    lastToken = currentToken;
   }
 
-  // Add the eof token at the end
+  // Add the eof token at the end. If the tokenizer is empty, it will be the only token.
   size_t endCursor = 0;
   if (!currentToken)
     endCursor = currentToken->cursor + 1;

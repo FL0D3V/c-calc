@@ -211,6 +211,12 @@ static void load_linker_file(arena_t *arena, string_slice_t *input, node_variabl
   }
 
   parser_execute_ex(arena, &lexer, vs);
+
+  if (verbose)
+  {
+    print_variables(arena, vs, true, true);
+    printf("\n");
+  }
 }
 
 static bool execute_math_expression(arena_t *arena, string_slice_t *input, node_variable_stack_t *vs, bool verbose)
@@ -272,6 +278,11 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
   char **mathExpression = flag_c_str(c, "i", NULL, "Input expression to evaluate");
   char **exprFileName = flag_c_str(c, "f", NULL, "Read all expressions from that file and evaluate the expressions");
   char **linkerFileName = flag_c_str(c, "l", NULL, "Used for linking to external variables");
+
+  // TODO:
+  // Implement full CLI-Mode. Here the program stays open and awaits a new line after each enter and it evaluates
+  // the line directly and prints its result below the current line.
+  // To exit this mode, "exit" could be typed.
 
   if (!flag_c_parse(c, argc, argv))
   {
