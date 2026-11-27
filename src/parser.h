@@ -552,33 +552,6 @@ static void print_vs_call_stack(vs_call_stack_t *stack)
   }
 }
 
-static node_variable_t *vs_find_variable_func_arg(node_variable_stack_t *vs, string_slice_t *name, vs_call_stack_t *callStack)
-{
-  ASSERT_NULL(vs);
-  ASSERT_NULL(name);
-  ASSERT_NULL(callStack);
-
-  node_variable_t *curr = NULL;
-
-  for (size_t csi = 0; csi < callStack->count; ++csi)
-  {
-    string_slice_t *currItem = vs_call_stack_at(callStack, csi);
-
-    for (size_t vsi = 0; vsi < vs->count; ++vsi)
-    {
-      curr = vs_at(vs, vsi);
-
-      if (curr->type != NV_FUNCTION_ARG_DEFINITION)
-        continue;
-
-      if (ss_compare(currItem, &curr->as.funcArgDef.funcName))
-        return curr;
-    }
-  }
-
-  return NULL;
-}
-
 static node_variable_t *vs_find_variable_ex(node_variable_stack_t *vs, string_slice_t *name, string_slice_t *funcName, e_find_var_mode mode)
 {
   ASSERT_NULL(vs);
@@ -742,6 +715,40 @@ void vs_reset_func_args(node_variable_stack_t *vs, node_function_definition_t *v
 
   for (size_t i = 0; i < varFuncDef->args.count; ++i)
     vs_set_func_arg_expression(vs, &varFuncDef->name, &varFuncDef->args.items[i], NULL);
+}
+
+static node_variable_t *vs_find_variable_func_arg(node_variable_stack_t *vs, string_slice_t *name, vs_call_stack_t *callStack)
+{
+  ASSERT_NULL(vs);
+  ASSERT_NULL(name);
+  ASSERT_NULL(callStack);
+
+  // printf("\n#### FIND-VAR-BY-FUNC-ARG = '" SS_FMT "'\n", SS_ARG(name));
+
+  for (size_t csi = 0; csi < callStack->count; ++csi)
+  {
+    string_slice_t *currentCallStackItem = vs_call_stack_at(callStack, csi);
+
+    // printf("    > CURR-CALL-STACK-ITEM = '" SS_FMT "'\n", SS_ARG(currentCallStackItem));
+
+    for (size_t vsi = 0; vsi < vs->count; ++vsi)
+    {
+      node_variable_t *currentVariable = vs_at(vs, vsi);
+
+      if (currentVariable->type != NV_FUNCTION_ARG_DEFINITION)
+        continue;
+
+      if (ss_compare(currentCallStackItem, &currentVariable->as.funcArgDef.funcName) &&
+          ss_compare(name, &currentVariable->as.funcArgDef.argName))
+      {
+        // printf("    > VAR-FUNC = '" SS_FMT "::" SS_FMT "'\n", SS_ARG(&currentVariable->as.funcArgDef.funcName), SS_ARG(&currentVariable->as.funcArgDef.argName));
+
+        return currentVariable;
+      }
+    }
+  }
+
+  return NULL;
 }
 
 static bool try_parse_const_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer, bool *isError);
