@@ -408,7 +408,6 @@ static inline void vs_variable_push(arena_t *a, node_variable_stack_t *vs, node_
   ASSERT_NULL(a);
   ASSERT_NULL(vs);
 
-  // TODO: Rethink! Check for duplicates.
   arena_da_append(a, vs, var);
 }
 
@@ -789,7 +788,9 @@ static bool try_parse_const_variable(node_variable_stack_t *vs, arena_t *arena, 
   ASSERT_NULL(isError);
   assert(lex_is_valid(lexer));
 
-  if (*isError || !lex_at_start_of_line(lexer))
+  if (*isError ||
+      !lex_at_start_of_line(lexer) ||
+      !lex_contains_in_current_line(lexer, _contains_equals))
     return false;
 
   token_t *varNameTok = lex_current(lexer);
@@ -884,7 +885,9 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
   ASSERT_NULL(isError);
   assert(lex_is_valid(lexer));
 
-  if (*isError || !lex_at_start_of_line(lexer))
+  if (*isError ||
+      !lex_at_start_of_line(lexer) ||
+      !lex_contains_in_current_line(lexer, _contains_equals))
     return false;
 
   token_t *varNameTok = lex_current(lexer);
@@ -950,13 +953,7 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
     else if (lex_current_is_specific_paren(lexer, PT_CPAREN))
       break;
     else
-    {
-      // TODO: Rethink!
-      // Probably not a function var defintion, but a function call.
-      // S_ERROR(lex_current_cursor(lexer), "Unexpected token!");
-      // *isError = true;
       return false;
-    }
 
     lastTok = lex_current(lexer);
   } while (!lex_at_end(lexer));
@@ -1178,9 +1175,6 @@ static node_t *next_node_by_precedence(arena_t *arena, lexer_t *lexer, size_t *s
 
   if (!node && *isError)
     return NULL;
-
-  // if (!node && !lex_at_end(lexer))
-  //   S_ERROR(lex_current_cursor(lexer), "Invalid token found!");
 
   return node;
 }
@@ -1564,25 +1558,23 @@ node_t *try_parse_expression_with_equals(arena_t *arena, lexer_t *lexer, bool *i
   if (lex_at_end(lexer))
     return false;
 
-  // TODO: Rethink! Maybe throw error when not at the start of the line.
-  if (lex_at_start_of_line(lexer))
+  assert(lex_at_start_of_line(lexer));
+
+  if (!lex_current_is_specific_literal(lexer, CLT_EQUALS))
   {
-    if (!lex_current_is_specific_literal(lexer, CLT_EQUALS))
-    {
-      S_ERROR(lex_current_cursor(lexer), "First token must be an equals sign!");
-      *isError = true;
-      return false;
-    }
-
-    if (!lex_can_peek(lexer))
-    {
-      S_ERROR(lex_current_cursor(lexer), "Expected an expression after the equals sign!");
-      *isError = true;
-      return false;
-    }
-
-    lex_seek(lexer);
+    S_ERROR(lex_current_cursor(lexer), "First token must be an equals sign!");
+    *isError = true;
+    return false;
   }
+
+  if (!lex_can_peek(lexer))
+  {
+    S_ERROR(lex_current_cursor(lexer), "Expected an expression after the equals sign!");
+    *isError = true;
+    return false;
+  }
+
+  lex_seek(lexer);
 
   node_t *root = try_parse_expression_without_equals(arena, lexer, isError);
 
@@ -1772,11 +1764,7 @@ static double node_constant_to_value(arena_t *arena, node_variable_stack_t *vs, 
 
     // Check if the variable is a local function argument.
     if (!variable)
-    {
-      // TODO: This could be the failing recursion problem.
-      // variable = vs_find_variable_ex(vs, varName, vs_call_stack_current(callStack), FVM_FUNC_ARG);
       variable = vs_find_variable_func_arg(vs, varName, callStack);
-    }
 
     if (!variable)
     {
@@ -2098,6 +2086,58 @@ static node_t *ast_eval_buildin_func(arena_t *arena, node_variable_stack_t *vs, 
       return NULL;
     return node_constant(arena, cursor, node_constant_value(log10(value)));
   }
+  case FT_MIN:
+  {
+    if (args->count != 2)
+    {
+      E_ERROR_EX(cursor, "%s() takes two arguments!", functionTypeIdentifiers[ft]);
+      return NULL;
+    }
+    node_t *arg1 = ast_eval_ex(arena, vs, args->items[0], callStack);
+    if (!arg1)
+      return NULL;
+    node_t *arg2 = ast_eval_ex(arena, vs, args->items[1], callStack);
+    if (!arg2)
+      return NULL;
+    double value1 = node_constant_to_value(arena, vs, arg1, callStack, &isError);
+    if (isError)
+      return NULL;
+    double value2 = node_constant_to_value(arena, vs, arg2, callStack, &isError);
+    if (isError)
+      return NULL;
+    double res = 0;
+    if (value1 < value2)
+      res = value1;
+    else
+      res = value2;
+    return node_constant(arena, cursor, node_constant_value(res));
+  }
+  case FT_MAX:
+  {
+    if (args->count != 2)
+    {
+      E_ERROR_EX(cursor, "%s() takes two arguments!", functionTypeIdentifiers[ft]);
+      return NULL;
+    }
+    node_t *arg1 = ast_eval_ex(arena, vs, args->items[0], callStack);
+    if (!arg1)
+      return NULL;
+    node_t *arg2 = ast_eval_ex(arena, vs, args->items[1], callStack);
+    if (!arg2)
+      return NULL;
+    double value1 = node_constant_to_value(arena, vs, arg1, callStack, &isError);
+    if (isError)
+      return NULL;
+    double value2 = node_constant_to_value(arena, vs, arg2, callStack, &isError);
+    if (isError)
+      return NULL;
+    double res = 0;
+    if (value1 > value2)
+      res = value1;
+    else
+      res = value2;
+    return node_constant(arena, cursor, node_constant_value(res));
+  }
   case FT_COUNT:
   case FT_INVALID:
   default:
@@ -2209,7 +2249,6 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr, vs_
         return NULL;
       }
 
-      // TODO: FIX! Recursion detection does currently sometimes not work correctly when evaluating.
       if (vs_call_stack_name_exists(callStack, funcName))
       {
         E_ERROR_SS(expr->cursor, "Recursion in '" SS_FMT "' detected!", funcName);

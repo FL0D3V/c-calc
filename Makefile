@@ -72,12 +72,15 @@ test1: $(EXE)
 test2: $(EXE)
 	$^ system-test -v
 
+cli: $(EXE)
+	$^ cli
+
 clean:
 	@$(RM) -rv $(BIN_DIR) $(OBJ_DIR)
 
 run: $(EXE)
 	./$(EXE) input -v -i $(TEST_INPUT)
 
-.PHONY: all check1 check2 check3 check4 check5 check6 check7 check8 check9 test1 test2 clean remake remakeDebug remakeRelease debug release run
+.PHONY: all check1 check2 check3 check4 check5 check6 check7 check8 check9 test1 test2 cli clean remake remakeDebug remakeRelease debug release run
 
 -include $(OBJ:.o=.d)

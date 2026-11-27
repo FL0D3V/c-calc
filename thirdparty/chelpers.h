@@ -151,6 +151,7 @@ typedef enum
 
 static_assert(NCR_COUNT == 5, "Amount of number-check-return-values have changed");
 
+// TODO: Maybe implement a union with an int and double value. Could be used if some functions must use interger values.
 typedef struct
 {
   double result;

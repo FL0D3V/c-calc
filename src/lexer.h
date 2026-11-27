@@ -233,11 +233,14 @@ typedef enum
   FT_LN,
   FT_LOG10,
 
+  FT_MIN,
+  FT_MAX,
+
   FT_COUNT,
   FT_INVALID
 } e_function_type;
 
-static_assert(FT_COUNT == 14, "Amount of function-types have changed");
+static_assert(FT_COUNT == 16, "Amount of function-types have changed");
 
 const char *functionTypeIdentifiers[FT_COUNT] = {
     // Other
@@ -259,6 +262,9 @@ const char *functionTypeIdentifiers[FT_COUNT] = {
     // Log
     [FT_LN] = "ln",
     [FT_LOG10] = "log10",
+    // Checks
+    [FT_MIN] = "min",
+    [FT_MAX] = "max",
 };
 
 const char *functionTypeNames[FT_COUNT] = {
@@ -281,6 +287,9 @@ const char *functionTypeNames[FT_COUNT] = {
     // Log
     [FT_LN] = "Natural-Logarithm",
     [FT_LOG10] = "Logarithm",
+    // Checks
+    [FT_MIN] = "Minimum",
+    [FT_MAX] = "Maximum",
 };
 
 const char *functionTypeDescriptions[FT_COUNT] = {
@@ -304,6 +313,9 @@ const char *functionTypeDescriptions[FT_COUNT] = {
     // Log
     [FT_LN] = "Returns the natural logarithm (base-e logarithm) of x.",
     [FT_LOG10] = "Returns the common logarithm (base-10 logarithm) of x.",
+    // Checks
+    [FT_MIN] = "Returns the smallest value of the two.",
+    [FT_MAX] = "Returns the highest value of the two.",
 };
 
 e_function_type cstr_to_function_type_ex(const char *cstr, size_t len)

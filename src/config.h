@@ -70,18 +70,6 @@ static const char *globalProgramModeDescriptions[GPM_COUNT] = {
         "  before executing a given expression so the user can use the\n"
         "  definitions in the linked files in it."};
 
-// TODO: Rethink if needed.
-// It defaults to the single expression mode used when entering an expression as an cli argument.
-// This variable is normally not needed outside of this context because the only thing the programn
-// needs to know are the currently available features for a specific context.
-// ---
-// It could be set multiple times while running depending on the given arguments when starting.
-// Like when starting with an cli arg expression and with a linked file:
-// 1. Checks that linked files are given as args and an expression in the cli args.
-// 2. Sets this flag to linked file and handle everything needed for the given file.
-// 3. Linked data is in memory.
-// 4. This flag gets set to single cli expression which is needed for the cli expression argument.
-// 5. Handle the given expression expression in that mode and evaluate it.
 static e_global_program_mode _globalProgramMode = GPM_SINGLE_CLI_EXPRESSION_ARG;
 
 // Used for changing the program mode.
