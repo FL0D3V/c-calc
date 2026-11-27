@@ -1099,7 +1099,7 @@ void print_variables(arena_t *arena, node_variable_stack_t *vs, bool showValue, 
 
     if (!showValue || !variable->expression)
     {
-      printf("\n\n");
+      printf("\n");
       continue;
     }
 

@@ -1071,13 +1071,13 @@ static bool cli_run(command_t *self, const char *programName, int argc, char **a
 
     if (strncmp(currentLine, "showex", 6) == 0)
     {
-      print_variables(&arena, &vs, true, true);
+      print_variables(&arena, &vs, true, false);
       continue;
     }
 
     if (strncmp(currentLine, "show", 4) == 0)
     {
-      print_variables(&arena, &vs, false, true);
+      print_variables(&arena, &vs, false, false);
       continue;
     }
 

@@ -4,6 +4,8 @@ y1(t) = cos(3 * t)
 r1(t) = x1(t) * 5 + y1(t) * 2
 
 = r1(5)
+
+# Test if the calculation is correct with a direct execution of the while formular with t=5
 = (sin(3 * 5) * 5) + (cos(3 * 5) * 2)
 
 # Test with different argument names
