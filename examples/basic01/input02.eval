@@ -1,0 +1,14 @@
+# Test with the same argument names
+x1(t) = sin(3 * t)
+y1(t) = cos(3 * t)
+r1(t) = x1(t) * 5 + y1(t) * 2
+
+= r1(5)
+= (sin(3 * 5) * 5) + (cos(3 * 5) * 2)
+
+# Test with different argument names
+x2(a) = sin(3 * a)
+y2(b) = cos(3 * b)
+r2(c) = x2(c) * 5 + y2(c) * 2
+
+= r2(5)

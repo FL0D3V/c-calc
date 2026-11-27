@@ -1,0 +1,31 @@
+# Used for checking if the program checks var-names against already existing internal constants and functions.
+#atan2(x,y,z) = test * 20 * x + 10 * y - 5 * z
+#PI = test * 20
+
+#      This is a comment!     
+test = 2 * 5 + a
+
+# Another comment.
+a = (2 ^ 3) + func(20, 10, 5)
+
+func(x,y,z) = (1 * x) + (2 * y) - (3 * z)
+
+# A test function.
+testFunc(s) = 10 + PI
+
+
+= (func(1+1, 2+2, 3+3) * test + 10 + (PI * 2)) + testFunc(a + (PI ^ 2))
+
+= 10 + 20 * PI
+= 10 + 20 * 5 # This is a test
+= 4 * 3 - EC
+
+# This expression checks if the program catches recursive var calls.
+= 10 - func(10, PI, a + 10)
+
+recursiveCheck(x, y) = 2 * x - y
+
+c = 100 - recursiveCheck(4, 3)
+
+= 10 + recursiveCheck(5, 2)
+= 10 - recursiveCheck(10 + c, 2)

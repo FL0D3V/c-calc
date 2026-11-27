@@ -1171,15 +1171,15 @@ lexer_t lexer_execute(arena_t *arena, tokenizer_t *tokenizer)
     case IT_NEW_LINE:
     {
       // Filter escessive new-lines out.
-      if (lastToken && in_tok_not(lastToken, IT_NEW_LINE) && in_tok_not(lastToken, IT_COMMENT))
+      if (lastToken && in_tok_not(lastToken, IT_NEW_LINE))
         add_eol_token(arena, &lexer, currentToken->cursor);
     }
     break;
     case IT_COMMENT:
     {
       // Ignore comments for now.
+      continue;
     }
-    break;
     case IT_LITERAL:
     {
       if (ss_is_operator(&currentToken->value))

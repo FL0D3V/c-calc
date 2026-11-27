@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <versioning.h>
 #include <arena.h>
 #define ARENA_IMPLEMENTATION
@@ -40,6 +41,7 @@ static bool help_run(command_t *self, const char *programName, int argc, char **
 static bool version_run(command_t *self, const char *programName, int argc, char **argv);
 static bool test_run(command_t *self, const char *programName, int argc, char **argv);
 static bool system_test_run(command_t *self, const char *programName, int argc, char **argv);
+static bool cli_run(command_t *self, const char *programName, int argc, char **argv);
 
 command_t commands[] = {
     {
@@ -73,6 +75,13 @@ command_t commands[] = {
         .short_description =
             "Tests all systems.",
         .run = system_test_run,
+    },
+    {
+        .name = "cli",
+        .signature = "[OPTIONS]",
+        .short_description =
+            "Enters into CLI mode where you can enter multiple lines one by one and each gets evalutated directly. Variables can also be created and directly used.",
+        .run = cli_run,
     },
 };
 
@@ -210,7 +219,7 @@ static void load_linker_file(arena_t *arena, string_slice_t *input, node_variabl
     printf("\n");
   }
 
-  parser_execute_ex(arena, &lexer, vs);
+  parser_execute_ex(arena, &lexer, vs, false);
 
   if (verbose)
   {
@@ -253,7 +262,7 @@ static bool execute_math_expression(arena_t *arena, string_slice_t *input, node_
     printf("\n");
   }
 
-  parser_t parser = parser_execute_ex(arena, &lexer, vs);
+  parser_t parser = parser_execute_ex(arena, &lexer, vs, true);
 
   if (verbose)
   {
@@ -262,6 +271,21 @@ static bool execute_math_expression(arena_t *arena, string_slice_t *input, node_
   }
 
   parser_eval(arena, &parser);
+
+  return true;
+}
+
+static bool load_file_into_string_slice(arena_t *arena, const char *fileName, string_slice_t *out)
+{
+  string_view_t linkerFileView = {0};
+  e_read_file_err_codes err = arena_read_file(arena, fileName, &linkerFileView);
+  if (err != 0)
+  {
+    print_read_file_error(fileName, err);
+    return false;
+  }
+
+  ss_init_ex(out, linkerFileView.value, linkerFileView.length);
 
   return true;
 }
@@ -278,11 +302,6 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
   char **mathExpression = flag_c_str(c, "i", NULL, "Input expression to evaluate");
   char **exprFileName = flag_c_str(c, "f", NULL, "Read all expressions from that file and evaluate the expressions");
   char **linkerFileName = flag_c_str(c, "l", NULL, "Used for linking to external variables");
-
-  // TODO:
-  // Implement full CLI-Mode. Here the program stays open and awaits a new line after each enter and it evaluates
-  // the line directly and prints its result below the current line.
-  // To exit this mode, "exit" could be typed.
 
   if (!flag_c_parse(c, argc, argv))
   {
@@ -339,17 +358,15 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
 
   arena_t arena = {0};
   node_variable_stack_t vs = {0};
-  string_slice_t linkerInput = {0};
   string_slice_t inputString = {0};
 
   char *input = *mathExpression;
 
-  // Handle math expressions and files.
-  if (argc > 0 && !input)
-    input = flag_shift_args(&argc, &argv);
-
   if (argc > 0)
   {
+    if (!input)
+      input = flag_shift_args(&argc, &argv);
+
     // Try to parse the remaining arguments to check for invalid flags or options.
     if (!flag_c_parse(c, argc, argv))
     {
@@ -386,44 +403,34 @@ static bool math_run(command_t *self, const char *programName, int argc, char **
     return_defer();
   }
 
-  if (input && !*exprFileName)
-  {
-    // Set the currently available features.
-    change_global_program_mode(GPM_SINGLE_CLI_EXPRESSION_ARG);
-    ss_init(&inputString, input);
-  }
-
-  if (*exprFileName && !input)
-  {
-    string_view_t exprFileView = {0};
-    e_read_file_err_codes err = arena_read_file(&arena, *exprFileName, &exprFileView);
-    if (err != 0)
-    {
-      print_read_file_error(*exprFileName, err);
-      return_defer();
-    }
-
-    // Set the currently available features.
-    change_global_program_mode(GPM_EXPRESSION_FILE);
-    ss_init_ex(&inputString, exprFileView.value, exprFileView.length);
-  }
-
+  // Check if the linker should loads all variables from a given linker file.
   if (*linkerFileName)
   {
-    string_view_t linkerFileView = {0};
-    e_read_file_err_codes err = arena_read_file(&arena, *linkerFileName, &linkerFileView);
-    if (err != 0)
-    {
-      print_read_file_error(*linkerFileName, err);
+    string_slice_t linkerInput = {0};
+
+    if (!load_file_into_string_slice(&arena, *linkerFileName, &linkerInput))
       return_defer();
-    }
 
-    // Set the currently available features.
     change_global_program_mode(GPM_LINKER_FILE);
-    ss_init_ex(&linkerInput, linkerFileView.value, linkerFileView.length);
-
-    // Load the linker file into the variable stack.
     load_linker_file(&arena, &linkerInput, &vs, verbose);
+
+    printf("LINKER(%s): File loaded!\n", *linkerFileName);
+  }
+
+  // Just simple single line cli mode.
+  if (input && !*exprFileName)
+  {
+    ss_init(&inputString, input);
+    change_global_program_mode(GPM_SINGLE_CLI_EXPRESSION_ARG);
+  }
+
+  // An expression file is the input.
+  if (!input && *exprFileName)
+  {
+    if (!load_file_into_string_slice(&arena, *exprFileName, &inputString))
+      return_defer();
+
+    change_global_program_mode(GPM_EXPRESSION_FILE);
   }
 
   // Finally execute the math expression.
@@ -560,9 +567,8 @@ static bool help_run(command_t *self, const char *programName, int argc, char **
       printf("    %-*s   %s\n", max_width, mathConstantTypeIdentifiers[i], mathConstantTypeNames[i]);
     printf("\n");
 
-    // TODO: Implement later when cli mode is implemented!
-    // print_global_program_config_help();
-    // printf("\n");
+    print_global_program_config_help();
+    printf("\n");
 
     printf("Full documentation <" FULL_DOCUMENTATION_LINK ">\n");
     return true;
@@ -948,7 +954,7 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
     printf("\n");
   }
 
-  parser_t parser = parser_execute(&arena, &lexer);
+  parser_t parser = parser_execute(&arena, &lexer, true);
 
   if (verbose)
   {
@@ -960,6 +966,153 @@ static bool system_test_run(command_t *self, const char *programName, int argc, 
 
   // Cleanup
   arena_free(&arena);
+  return true;
+}
+
+static bool cli_run(command_t *self, const char *programName, int argc, char **argv)
+{
+  bool help = false;
+
+  void *c = flag_c_new(programName);
+  flag_c_bool_var(c, &help, "h", false, "Print this help message");
+  char **linkerFileName = flag_c_str(c, "l", NULL, "Used for linking to external variables");
+
+  if (!flag_c_parse(c, argc, argv))
+  {
+    print_command_usage(stderr, self, programName, c);
+    flag_c_print_error(c, stderr);
+
+    // Cleanup
+    flag_c_free(c);
+    return false;
+  }
+
+  argc = flag_c_rest_argc(c);
+  argv = flag_c_rest_argv(c);
+
+  // Used for printing a help menu.
+  if (help)
+  {
+    if (argc != 0)
+    {
+      print_command_usage(stderr, self, programName, c);
+      fprintf(stderr, "ERROR: Invalid arguments!\n");
+
+      // Cleanup
+      flag_c_free(c);
+      return false;
+    }
+
+    print_command_usage(stderr, self, programName, c);
+
+    // Cleanup
+    flag_c_free(c);
+    return true;
+  }
+
+  if (argc != 0)
+  {
+    print_command_usage(stderr, self, programName, c);
+    fprintf(stderr, "ERROR: Invalid arguments!\n");
+
+    // Cleanup
+    flag_c_free(c);
+    return false;
+  }
+
+  printf("CCALC - CLI MODE\n");
+  printf("Enter expressions and store variables.\n");
+  printf("Commands:\n");
+  printf("exit   - Exits the program.\n");
+  printf("show   - Print all variables without values.\n");
+  printf("showex - Print all variables with values.\n");
+  printf("\n");
+
+  arena_t arena = {0};
+  node_variable_stack_t vs = {0};
+
+  // Check if the linker should loads all variables from a given linker file.
+  if (*linkerFileName)
+  {
+    string_slice_t linkerInput = {0};
+
+    if (!load_file_into_string_slice(&arena, *linkerFileName, &linkerInput))
+      return_defer();
+
+    change_global_program_mode(GPM_LINKER_FILE);
+    load_linker_file(&arena, &linkerInput, &vs, false);
+
+    printf("LINKER(%s): File loaded!\n", *linkerFileName);
+    printf("\n");
+  }
+
+  change_global_program_mode(GPM_FULL_CLI);
+
+  while (true)
+  {
+    printf("#> ");
+
+    char *input = NULL;
+    size_t size = 0;
+    if (getline(&input, &size, stdin) == -1)
+    {
+      fprintf(stderr, "ERROR: Couldn't read the current line!\n");
+      free(input);
+      break;
+    }
+
+    // Line needs to be stored in memory for referencing because the program only uses views into that string.
+    const char *currentLine = arena_strdup(&arena, input);
+
+    free(input);
+
+    if (strncmp(currentLine, "exit", 4) == 0)
+      break;
+
+    if (strncmp(currentLine, "showex", 6) == 0)
+    {
+      print_variables(&arena, &vs, true, true);
+      continue;
+    }
+
+    if (strncmp(currentLine, "show", 4) == 0)
+    {
+      print_variables(&arena, &vs, false, true);
+      continue;
+    }
+
+    tokenizer_t tokenizer = tokenizer_execute_cstr(&arena, currentLine);
+    if (tokenizer.isError)
+    {
+      fprintf(stderr, "ERROR: Tokenization failed!\n");
+      continue;
+    }
+
+    lexer_t lexer = lexer_execute(&arena, &tokenizer);
+    if (lexer.isError)
+    {
+      fprintf(stderr, "ERROR: Lexing failed!\n");
+      continue;
+    }
+
+    size_t oldVarCount = vs.count;
+    parser_t parser = parser_execute_ex(&arena, &lexer, &vs, false);
+
+    if (parser_contains_variables(&parser) && oldVarCount != vs.count)
+    {
+      printf("New variable stored!\n");
+      continue;
+    }
+
+    if (parser_contains_expressions(&parser))
+      node_print_result(&arena, &vs, *parser.exprs.items);
+  }
+
+  printf("Stopping program.\n");
+
+defer:
+  arena_free(&arena);
+  flag_c_free(c);
   return true;
 }
 

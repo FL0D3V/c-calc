@@ -391,97 +391,6 @@ static inline void vs_set_expression(node_variable_t *var, node_t *root)
 
 typedef struct
 {
-  string_slice_t **items;
-  size_t count;
-  size_t capacity;
-} vs_call_stack_t;
-
-static inline bool vs_call_stack_name_exists(vs_call_stack_t *stack, string_slice_t *name);
-static inline string_slice_t *vs_call_stack_at(vs_call_stack_t *stack, size_t index);
-static inline string_slice_t *vs_call_stack_current(vs_call_stack_t *stack);
-static inline bool vs_call_stack_can_pop(vs_call_stack_t *stack);
-static inline void vs_call_stack_pop(vs_call_stack_t *stack);
-static inline void vs_call_stack_push(arena_t *arena, vs_call_stack_t *stack, string_slice_t *name);
-static inline void print_vs_call_stack(vs_call_stack_t *stack);
-
-static inline void vs_call_stack_push(arena_t *arena, vs_call_stack_t *stack, string_slice_t *name)
-{
-  ASSERT_NULL(arena);
-  ASSERT_NULL(stack);
-  ASSERT_NULL(name);
-
-  arena_da_append(arena, stack, name);
-}
-
-static inline bool vs_call_stack_can_pop(vs_call_stack_t *stack)
-{
-  ASSERT_NULL(stack);
-  return stack->count != 0;
-}
-
-static inline void vs_call_stack_pop(vs_call_stack_t *stack)
-{
-  ASSERT_NULL(stack);
-  assert(vs_call_stack_can_pop(stack));
-  stack->count--;
-}
-
-static inline string_slice_t *vs_call_stack_current(vs_call_stack_t *stack)
-{
-  ASSERT_NULL(stack);
-
-  if (stack->count == 0)
-    return NULL;
-
-  return stack->items[stack->count - 1];
-}
-
-static inline string_slice_t *vs_call_stack_at(vs_call_stack_t *stack, size_t index)
-{
-  ASSERT_NULL(stack);
-  if (stack->count == 0)
-    return NULL;
-  assert(index < stack->count);
-
-  return stack->items[index];
-}
-
-static bool vs_call_stack_name_exists(vs_call_stack_t *stack, string_slice_t *name)
-{
-  ASSERT_NULL(stack);
-
-  for (size_t i = 0; i < stack->count; ++i)
-  {
-    string_slice_t *curr = vs_call_stack_at(stack, stack->count - 1 - i);
-
-    if (ss_compare(name, curr))
-      return true;
-  }
-
-  return false;
-}
-
-static void print_vs_call_stack(vs_call_stack_t *stack)
-{
-  ASSERT_NULL(stack);
-
-  printf("Printing Call-Stack:\n");
-
-  if (stack->count == 0)
-  {
-    printf("\n");
-    printf("Call-Stack is empty!\n");
-    return;
-  }
-
-  for (size_t i = 0; i < stack->count; ++i)
-  {
-    printf("STACK(%zu) = '" SS_FMT "'\n", i, SS_ARG(vs_call_stack_at(stack, i)));
-  }
-}
-
-typedef struct
-{
   node_variable_t *items;
   size_t capacity;
   size_t count;
@@ -539,6 +448,136 @@ typedef enum
 } e_find_var_mode;
 
 static_assert(FVM_COUNT == 4, "Amount of find node var modes have changed!");
+
+typedef struct
+{
+  string_slice_t **items;
+  size_t count;
+  size_t capacity;
+} vs_call_stack_t;
+
+static inline bool vs_call_stack_name_exists(vs_call_stack_t *stack, string_slice_t *name);
+static inline string_slice_t *vs_call_stack_at(vs_call_stack_t *stack, size_t index);
+static inline string_slice_t *vs_call_stack_current(vs_call_stack_t *stack);
+static inline bool vs_call_stack_can_pop(vs_call_stack_t *stack);
+static inline void vs_call_stack_pop(vs_call_stack_t *stack);
+static inline void vs_call_stack_push(arena_t *arena, vs_call_stack_t *stack, string_slice_t *name);
+static inline void print_vs_call_stack(vs_call_stack_t *stack);
+
+static inline string_slice_t *vs_call_stack_at(vs_call_stack_t *stack, size_t index)
+{
+  ASSERT_NULL(stack);
+  if (stack->count == 0)
+    return NULL;
+  assert(index < stack->count);
+
+  return stack->items[index];
+}
+
+static inline string_slice_t *vs_call_stack_current(vs_call_stack_t *stack)
+{
+  ASSERT_NULL(stack);
+
+  if (stack->count == 0)
+    return NULL;
+
+  string_slice_t *current = stack->items[stack->count - 1];
+
+  // printf("\nDEBUG: Current item in the stack is '" SS_FMT "'\n", SS_ARG(current));
+
+  return current;
+}
+
+static inline void vs_call_stack_push(arena_t *arena, vs_call_stack_t *stack, string_slice_t *name)
+{
+  ASSERT_NULL(arena);
+  ASSERT_NULL(stack);
+  ASSERT_NULL(name);
+
+  // printf("\nDEBUG: Pushing '" SS_FMT "' to the stack\n", SS_ARG(name));
+
+  arena_da_append(arena, stack, name);
+}
+
+static inline bool vs_call_stack_can_pop(vs_call_stack_t *stack)
+{
+  ASSERT_NULL(stack);
+  return stack->count != 0;
+}
+
+static inline void vs_call_stack_pop(vs_call_stack_t *stack)
+{
+  ASSERT_NULL(stack);
+  assert(vs_call_stack_can_pop(stack));
+
+  // printf("\nDEBUG: Popping '" SS_FMT "' from the stack\n", SS_ARG(vs_call_stack_at(stack, stack->count - 1)));
+
+  stack->count--;
+}
+
+static bool vs_call_stack_name_exists(vs_call_stack_t *stack, string_slice_t *name)
+{
+  ASSERT_NULL(stack);
+  ASSERT_NULL(name);
+
+  for (size_t i = 0; i < stack->count; ++i)
+  {
+    string_slice_t *curr = vs_call_stack_at(stack, stack->count - 1 - i);
+
+    if (ss_compare(name, curr))
+      return true;
+  }
+
+  return false;
+}
+
+static void print_vs_call_stack(vs_call_stack_t *stack)
+{
+  ASSERT_NULL(stack);
+
+  printf("Printing Call-Stack:\n");
+
+  if (stack->count == 0)
+  {
+    printf("\n");
+    printf("Call-Stack is empty!\n");
+    return;
+  }
+
+  for (size_t i = 0; i < stack->count; ++i)
+  {
+    string_slice_t *curr = vs_call_stack_at(stack, i);
+
+    printf("STACK(%zu) = '" SS_FMT "'\n", i, SS_ARG(curr));
+  }
+}
+
+static node_variable_t *vs_find_variable_func_arg(node_variable_stack_t *vs, string_slice_t *name, vs_call_stack_t *callStack)
+{
+  ASSERT_NULL(vs);
+  ASSERT_NULL(name);
+  ASSERT_NULL(callStack);
+
+  node_variable_t *curr = NULL;
+
+  for (size_t csi = 0; csi < callStack->count; ++csi)
+  {
+    string_slice_t *currItem = vs_call_stack_at(callStack, csi);
+
+    for (size_t vsi = 0; vsi < vs->count; ++vsi)
+    {
+      curr = vs_at(vs, vsi);
+
+      if (curr->type != NV_FUNCTION_ARG_DEFINITION)
+        continue;
+
+      if (ss_compare(currItem, &curr->as.funcArgDef.funcName))
+        return curr;
+    }
+  }
+
+  return NULL;
+}
 
 static node_variable_t *vs_find_variable_ex(node_variable_stack_t *vs, string_slice_t *name, string_slice_t *funcName, e_find_var_mode mode)
 {
@@ -671,6 +710,38 @@ static inline string_slice_t *vs_get_variable_name(node_variable_t *variable)
   default:
     UNREACHABLE("Invalid node-variable-type!");
   }
+}
+
+void vs_set_func_arg_expression(node_variable_stack_t *vs, string_slice_t *funcName, string_slice_t *argName, node_t *expression)
+{
+  ASSERT_NULL(vs);
+  ASSERT_NULL(funcName);
+  ASSERT_NULL(argName);
+
+  node_variable_t *argVar = vs_find_variable_ex(vs, argName, funcName, FVM_FUNC_ARG);
+  assert(argVar);
+
+  vs_set_expression(argVar, expression);
+}
+
+void vs_set_func_args(node_variable_stack_t *vs, node_function_definition_t *varFuncDef, node_func_args_t *funcArgs)
+{
+  ASSERT_NULL(vs);
+  ASSERT_NULL(varFuncDef);
+  ASSERT_NULL(funcArgs);
+  assert(varFuncDef->args.count == funcArgs->count);
+
+  for (size_t i = 0; i < funcArgs->count; ++i)
+    vs_set_func_arg_expression(vs, &varFuncDef->name, &varFuncDef->args.items[i], funcArgs->items[i]);
+}
+
+void vs_reset_func_args(node_variable_stack_t *vs, node_function_definition_t *varFuncDef)
+{
+  ASSERT_NULL(vs);
+  ASSERT_NULL(varFuncDef);
+
+  for (size_t i = 0; i < varFuncDef->args.count; ++i)
+    vs_set_func_arg_expression(vs, &varFuncDef->name, &varFuncDef->args.items[i], NULL);
 }
 
 static bool try_parse_const_variable(node_variable_stack_t *vs, arena_t *arena, lexer_t *lexer, bool *isError);
@@ -873,8 +944,10 @@ static bool try_parse_func_variable(node_variable_stack_t *vs, arena_t *arena, l
       break;
     else
     {
-      S_ERROR(lex_current_cursor(lexer), "Unexpected token!");
-      *isError = true;
+      // TODO: Rethink!
+      // Probably not a function var defintion, but a function call.
+      // S_ERROR(lex_current_cursor(lexer), "Unexpected token!");
+      // *isError = true;
       return false;
     }
 
@@ -1448,7 +1521,7 @@ static node_t *try_parse_func(arena_t *arena, lexer_t *lexer, size_t *stackSize,
 }
 
 // Example input: "10 * 5 + PI"
-static node_t *try_parse_expression_base(arena_t *arena, lexer_t *lexer, bool *isError)
+node_t *try_parse_expression_without_equals(arena_t *arena, lexer_t *lexer, bool *isError)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
@@ -1464,6 +1537,47 @@ static node_t *try_parse_expression_base(arena_t *arena, lexer_t *lexer, bool *i
   size_t stackSize = 0;
   node_t *root = try_parse_binop(arena, lexer, &stackSize, BP_LINE, isError);
   assert(stackSize == 0);
+
+  if (*isError)
+    return NULL;
+
+  return root;
+}
+
+node_t *try_parse_expression_with_equals(arena_t *arena, lexer_t *lexer, bool *isError)
+{
+  ASSERT_NULL(arena);
+  ASSERT_NULL(lexer);
+  ASSERT_NULL(isError);
+  assert(lex_is_valid(lexer));
+
+  if (*isError)
+    return false;
+
+  if (lex_at_end(lexer))
+    return false;
+
+  // TODO: Rethink! Maybe throw error when not at the start of the line.
+  if (lex_at_start_of_line(lexer))
+  {
+    if (!lex_current_is_specific_literal(lexer, CLT_EQUALS))
+    {
+      S_ERROR(lex_current_cursor(lexer), "First token must be an equals sign!");
+      *isError = true;
+      return false;
+    }
+
+    if (!lex_can_peek(lexer))
+    {
+      S_ERROR(lex_current_cursor(lexer), "Expected an expression after the equals sign!");
+      *isError = true;
+      return false;
+    }
+
+    lex_seek(lexer);
+  }
+
+  node_t *root = try_parse_expression_without_equals(arena, lexer, isError);
 
   if (*isError)
     return NULL;
@@ -1496,7 +1610,7 @@ static inline void node_exprs_add(arena_t *arena, node_expressions_list_t *resul
 }
 
 // Example input: "= 10 * 5 + PI"
-static bool try_parse_expression(node_expressions_list_t *exprs, arena_t *arena, lexer_t *lexer, bool *isError)
+bool try_parse_expression(node_expressions_list_t *exprs, arena_t *arena, lexer_t *lexer, bool *isError, bool usePrefixEqualsSign)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
@@ -1510,26 +1624,12 @@ static bool try_parse_expression(node_expressions_list_t *exprs, arena_t *arena,
   if (lex_at_end(lexer))
     return false;
 
-  if (lex_at_start_of_line(lexer))
-  {
-    if (!lex_current_is_specific_literal(lexer, CLT_EQUALS))
-    {
-      S_ERROR(lex_current_cursor(lexer), "First token must be an equals sign!");
-      *isError = true;
-      return false;
-    }
+  node_t *root = NULL;
 
-    if (!lex_can_peek(lexer))
-    {
-      S_ERROR(lex_current_cursor(lexer), "Expected an expression after the equals sign!");
-      *isError = true;
-      return false;
-    }
-
-    lex_seek(lexer);
-  }
-
-  node_t *root = try_parse_expression_base(arena, lexer, isError);
+  if (usePrefixEqualsSign)
+    root = try_parse_expression_with_equals(arena, lexer, isError);
+  else
+    root = try_parse_expression_without_equals(arena, lexer, isError);
 
   if (!root || *isError)
     return false;
@@ -1559,7 +1659,7 @@ static inline bool parser_contains_expressions(parser_t *parser)
   return parser->exprs.count > 0;
 }
 
-parser_t parser_execute_ex(arena_t *arena, lexer_t *lexer, node_variable_stack_t *vs)
+parser_t parser_execute_ex(arena_t *arena, lexer_t *lexer, node_variable_stack_t *vs, bool usePrefixEqualsSign)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
@@ -1586,7 +1686,7 @@ parser_t parser_execute_ex(arena_t *arena, lexer_t *lexer, node_variable_stack_t
           {
             lex_reset_to_start_of_line(lexer);
 
-            if (!try_parse_expression(&exprs, arena, lexer, &isError))
+            if (!try_parse_expression(&exprs, arena, lexer, &isError, usePrefixEqualsSign))
             {
               // Unhandled tokens or new-lines will be handled here.
               lex_seek_till_end(lexer);
@@ -1613,7 +1713,7 @@ parser_t parser_execute_ex(arena_t *arena, lexer_t *lexer, node_variable_stack_t
   };
 }
 
-parser_t parser_execute(arena_t *arena, lexer_t *lexer)
+parser_t parser_execute(arena_t *arena, lexer_t *lexer, bool usePrefixEqualsSign)
 {
   ASSERT_NULL(arena);
   ASSERT_NULL(lexer);
@@ -1621,7 +1721,7 @@ parser_t parser_execute(arena_t *arena, lexer_t *lexer)
 
   node_variable_stack_t vs = {0};
 
-  return parser_execute_ex(arena, lexer, &vs);
+  return parser_execute_ex(arena, lexer, &vs, usePrefixEqualsSign);
 }
 
 static double node_constant_to_value(arena_t *arena, node_variable_stack_t *vs, node_t *node, vs_call_stack_t *callStack, bool *isError)
@@ -1665,7 +1765,11 @@ static double node_constant_to_value(arena_t *arena, node_variable_stack_t *vs, 
 
     // Check if the variable is a local function argument.
     if (!variable)
-      variable = vs_find_variable_ex(vs, varName, vs_call_stack_current(callStack), FVM_FUNC_ARG);
+    {
+      // TODO: This could be the failing recursion problem.
+      // variable = vs_find_variable_ex(vs, varName, vs_call_stack_current(callStack), FVM_FUNC_ARG);
+      variable = vs_find_variable_func_arg(vs, varName, callStack);
+    }
 
     if (!variable)
     {
@@ -1994,38 +2098,6 @@ static node_t *ast_eval_buildin_func(arena_t *arena, node_variable_stack_t *vs, 
   }
 }
 
-void vs_set_func_arg_expression(node_variable_stack_t *vs, string_slice_t *funcName, string_slice_t *argName, node_t *expression)
-{
-  ASSERT_NULL(vs);
-  ASSERT_NULL(funcName);
-  ASSERT_NULL(argName);
-
-  node_variable_t *argVar = vs_find_variable_ex(vs, argName, funcName, FVM_FUNC_ARG);
-  assert(argVar);
-
-  vs_set_expression(argVar, expression);
-}
-
-void vs_set_func_args(node_variable_stack_t *vs, node_function_definition_t *varFuncDef, node_func_args_t *funcArgs)
-{
-  ASSERT_NULL(vs);
-  ASSERT_NULL(varFuncDef);
-  ASSERT_NULL(funcArgs);
-  assert(varFuncDef->args.count == funcArgs->count);
-
-  for (size_t i = 0; i < funcArgs->count; ++i)
-    vs_set_func_arg_expression(vs, &varFuncDef->name, &varFuncDef->args.items[i], funcArgs->items[i]);
-}
-
-void vs_reset_func_args(node_variable_stack_t *vs, node_function_definition_t *varFuncDef)
-{
-  ASSERT_NULL(vs);
-  ASSERT_NULL(varFuncDef);
-
-  for (size_t i = 0; i < varFuncDef->args.count; ++i)
-    vs_set_func_arg_expression(vs, &varFuncDef->name, &varFuncDef->args.items[i], NULL);
-}
-
 node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr, vs_call_stack_t *callStack)
 {
   ASSERT_NULL(arena);
@@ -2130,6 +2202,7 @@ node_t *ast_eval_ex(arena_t *arena, node_variable_stack_t *vs, node_t *expr, vs_
         return NULL;
       }
 
+      // TODO: FIX! Recursion detection does currently sometimes not work correctly when evaluating.
       if (vs_call_stack_name_exists(callStack, funcName))
       {
         E_ERROR_SS(expr->cursor, "Recursion in '" SS_FMT "' detected!", funcName);
@@ -2193,6 +2266,20 @@ ast_eval_res_t ast_eval(arena_t *arena, node_variable_stack_t *vs, node_t *expr)
   return ast_eval_res_success(result);
 }
 
+void node_print_result(arena_t *arena, node_variable_stack_t *vs, node_t *node)
+{
+  ASSERT_NULL(arena);
+  ASSERT_NULL(vs);
+  ASSERT_NULL(node);
+
+  ast_eval_res_t evalRes = ast_eval(arena, vs, node);
+
+  if (evalRes.isError)
+    printf(">>> \033[31mERROR\033[0m\n");
+  else
+    printf(">>> " DOUBLE_PRINT_FORMAT "\n", evalRes.value);
+}
+
 void parser_eval(arena_t *arena, parser_t *parser)
 {
   ASSERT_NULL(arena);
@@ -2223,9 +2310,6 @@ static void print_node_ex(arena_t *arena, node_variable_stack_t *vs, node_t *nod
   ASSERT_NULL(vs);
   ASSERT_NULL(node);
   ASSERT_NULL(callStack);
-
-  if (!callStack)
-    ASSERT_NULL(node);
 
   switch (node->type)
   {
@@ -2306,7 +2390,7 @@ static void print_node_ex(arena_t *arena, node_variable_stack_t *vs, node_t *nod
       }
       else
       {
-        variable = vs_find_variable_ex(vs, &node->as.constant.as.variableName, vs_call_stack_current(callStack), FVM_FUNC_ARG);
+        variable = vs_find_variable_func_arg(vs, &node->as.constant.as.variableName, callStack);
 
         // Function argument.
         if (variable)
@@ -2608,7 +2692,7 @@ bool execute_test(arena_t *arena, node_variable_stack_t *vs, node_test_t *test, 
   }
 
   bool isError = false;
-  node_t *generatedTree = try_parse_expression_base(arena, &lexer, &isError);
+  node_t *generatedTree = try_parse_expression_without_equals(arena, &lexer, &isError);
   if (!generatedTree || isError)
   {
     if (freeArena)

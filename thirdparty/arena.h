@@ -29,7 +29,25 @@ void region_free(region_t *region);
 
 void *arena_alloc(arena_t *arena, size_t size_bytes);
 void *arena_realloc(arena_t *arena, void *oldptr, size_t oldsz, size_t newsz);
+char *arena_strdup(arena_t *arena, const char *s);
 void arena_free(arena_t *arena);
+
+typedef enum
+{
+  FILE_OK,
+  FILE_NOT_EXIST,
+  FILE_TOO_LARGE,
+  FILE_READ_ERROR,
+} e_read_file_err_codes;
+
+typedef struct
+{
+  const char *value;
+  size_t length;
+} string_view_t;
+
+e_read_file_err_codes arena_read_file(arena_t *arena, const char *fileName, string_view_t *output);
+void print_read_file_error(const char *fileName, e_read_file_err_codes errorCode);
 
 #define ARENA_DA_INIT_CAP 256
 
@@ -73,14 +91,16 @@ region_t *region_alloc(size_t capacity)
 
 void region_free(region_t *region)
 {
+  assert(region);
+
   free(region);
 }
 
 void *arena_alloc(arena_t *arena, size_t size_bytes)
 {
-  size_t size = (size_bytes + sizeof(uintptr_t) - 1) / sizeof(uintptr_t);
-
   assert(arena);
+
+  size_t size = (size_bytes + sizeof(uintptr_t) - 1) / sizeof(uintptr_t);
 
   if (!arena->end)
   {
@@ -123,9 +143,21 @@ void *arena_realloc(arena_t *arena, void *oldptr, size_t oldsz, size_t newsz)
   return newptr;
 }
 
+char *arena_strdup(arena_t *arena, const char *cstr)
+{
+  assert(arena);
+  assert(cstr);
+
+  size_t len = strlen(cstr);
+  char *res = arena_alloc(arena, len);
+  strcpy(res, cstr);
+  return res;
+}
+
 void arena_free(arena_t *arena)
 {
   assert(arena);
+
   region_t *region = arena->begin;
 
   while (region)
@@ -138,20 +170,6 @@ void arena_free(arena_t *arena)
   arena->begin = NULL;
   arena->end = NULL;
 }
-
-typedef enum
-{
-  FILE_OK,
-  FILE_NOT_EXIST,
-  FILE_TOO_LARGE,
-  FILE_READ_ERROR,
-} e_read_file_err_codes;
-
-typedef struct
-{
-  const char *value;
-  size_t length;
-} string_view_t;
 
 e_read_file_err_codes arena_read_file(arena_t *arena, const char *fileName, string_view_t *output)
 {
